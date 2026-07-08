@@ -1,0 +1,13 @@
+{
+	"tick_rate": 60,
+	"court_width_px": 640,
+	"court_height_px": 360,
+	"floor_y_px": 320,
+	"gravity_px_s2": 1400,
+	"move_speed_px_s": 180,
+	"jump_speed_px_s": 430,
+	"ball_radius_px": 8,
+	"ball_bounce_pct": 78,
+	"points_to_win": 15,
+	"deuce": 1
+}
