@@ -14,7 +14,7 @@ const TICKS := 3600
 #     静的スキャン(test_no_float_in_sim.gd)が併走している
 # 物理を意図的に変更した場合はGOLDEN_FINAL_HASHを新しい値に更新すること
 
-const GOLDEN_FINAL_HASH := 6089113294468396581
+const GOLDEN_FINAL_HASH := 6541896883349730321
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
@@ -24,27 +24,19 @@ func _next_rand(s: int) -> int:
 	return s
 
 func _run_once() -> Array[int]:
+	# フルゲーム(サーブ→ラリー→得点→再サーブ)を人間2系統のランダム入力で回す。
+	# 全入力ビット(0-31)を含み、切替・ヒット・CPU相方も検証対象に入る
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	for p in s.players:
-		p.y = cfg.floor_y
-	s.players[0].x = FP.from_int(100)
-	s.players[1].x = FP.from_int(220)
-	s.players[2].x = FP.from_int(420)
-	s.players[3].x = FP.from_int(540)
-	s.ball_x = FP.from_int(320)
-	s.ball_y = FP.from_int(60)
-	# 初速を与えて左右壁・天井・床の全反射経路を踏ませる
-	s.ball_vx = FP.from_int(3)
-	s.ball_vy = -FP.from_int(2)
+	Simulation.reset_rally(s, cfg, 0)
 	var hashes: Array[int] = []
 	var rng := 123456789
 	for t in TICKS:
 		var inputs: Array[int] = []
-		for i in 4:
+		for i in 2:
 			rng = _next_rand(rng)
-			inputs.append(rng & 7)
-		Simulation.step(s, inputs, cfg)
+			inputs.append(rng & 31)
+		Simulation.tick(s, inputs, cfg)
 		if t % 60 == 0:
 			hashes.append(s.state_hash())
 	hashes.append(s.state_hash())

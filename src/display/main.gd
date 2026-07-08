@@ -37,15 +37,24 @@ func _physics_process(_delta: float) -> void:
 	if Input.is_key_pressed(KEY_C):
 		input |= Simulation.IN_SWITCH
 	Simulation.tick(state, [input, 0], cfg)
-	label.text = "SIM DEBUG VIEW (開発用計器)\ntick=%d\nhash=%s\n矢印キーで移動 Zでジャンプ" % [
-		state.tick, String.num_uint64(state.state_hash(), 16)]
+	label.text = "SIM DEBUG VIEW (開発用計器)\n%d - %d  phase=%d touches=%d\ntick=%d\n矢印:移動 Z:ジャンプ X:アクション C:交代" % [
+		state.score_l, state.score_r, state.phase, state.touches, state.tick]
 	queue_redraw()
 
 func _draw() -> void:
 	var fy := float(FP.to_int(cfg.floor_y))
 	draw_line(Vector2(0, fy), Vector2(640, fy), Color(0.4, 0.4, 0.55))
-	for p in state.players:
-		draw_circle(Vector2(FP.to_int(p.x), FP.to_int(p.y)), 6.0, Color(0.9, 0.8, 0.3))
+	var nx := float(FP.to_int(cfg.net_x))
+	var nty := float(FP.to_int(cfg.net_top_y))
+	draw_line(Vector2(nx, nty), Vector2(nx, fy), Color(0.6, 0.6, 0.7))
+	for i in state.players.size():
+		var p = state.players[i]
+		var team := Simulation.team_of(i)
+		var color := Color(0.9, 0.8, 0.3) if team == 0 else Color(0.4, 0.8, 0.9)
+		var controlled: int = state.controlled_l if team == 0 else state.controlled_r
+		if i % 2 == controlled:
+			color = color.lightened(0.3)
+		draw_circle(Vector2(FP.to_int(p.x), FP.to_int(p.y)), 6.0, color)
 	draw_circle(
 		Vector2(FP.to_int(state.ball_x), FP.to_int(state.ball_y)),
 		float(FP.to_int(cfg.ball_radius)), Color(0.95, 0.95, 0.95))
