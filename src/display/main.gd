@@ -18,14 +18,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	state = SimState.new()
-	for p in state.players:
-		p.y = cfg.floor_y
-	state.players[0].x = FP.from_int(100)
-	state.players[1].x = FP.from_int(220)
-	state.players[2].x = FP.from_int(420)
-	state.players[3].x = FP.from_int(540)
-	state.ball_x = FP.from_int(320)
-	state.ball_y = FP.from_int(60)
+	Simulation.reset_rally(state, cfg, 0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	label = Label.new()
 	label.position = Vector2(4, 4)
@@ -39,7 +32,11 @@ func _physics_process(_delta: float) -> void:
 		input |= Simulation.IN_RIGHT
 	if Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_SPACE):
 		input |= Simulation.IN_JUMP
-	Simulation.step(state, [input, 0, 0, 0], cfg)
+	if Input.is_key_pressed(KEY_X):
+		input |= Simulation.IN_ACTION
+	if Input.is_key_pressed(KEY_C):
+		input |= Simulation.IN_SWITCH
+	Simulation.tick(state, [input, 0], cfg)
 	label.text = "SIM DEBUG VIEW (開発用計器)\ntick=%d\nhash=%s\n矢印キーで移動 Zでジャンプ" % [
 		state.tick, String.num_uint64(state.state_hash(), 16)]
 	queue_redraw()

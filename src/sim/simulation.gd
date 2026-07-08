@@ -18,6 +18,38 @@ static func team_of(i: int) -> int:
 static func _dir_of_team(team: int) -> int:
 	return 1 if team == 0 else -1
 
+# 公開API: チーム単位入力(人間2系統)から各プレイヤー入力を組み立てて1tick進める
+# CPU相方の入力はsim_cpu.gdが決定論的に生成する
+static func tick(state, team_inputs: Array[int], cfg) -> void:
+	var in_l: int = team_inputs[0] if team_inputs.size() > 0 else 0
+	var in_r: int = team_inputs[1] if team_inputs.size() > 1 else 0
+	_handle_switch(state, in_l, in_r)
+	var per_player: Array[int] = [0, 0, 0, 0]
+	for team in 2:
+		var human: int = in_l if team == 0 else in_r
+		var controlled: int = state.controlled_l if team == 0 else state.controlled_r
+		for slot in 2:
+			var idx: int = team * 2 + slot
+			if slot == controlled:
+				per_player[idx] = human & ~IN_SWITCH
+			else:
+				per_player[idx] = _cpu_input(state, idx, cfg)
+	step(state, per_player, cfg)
+
+static func _handle_switch(state, in_l: int, in_r: int) -> void:
+	var press_l: int = 1 if (in_l & IN_SWITCH) else 0
+	if press_l == 1 and state.switch_latch_l == 0:
+		state.controlled_l = 1 - state.controlled_l
+	state.switch_latch_l = press_l
+	var press_r: int = 1 if (in_r & IN_SWITCH) else 0
+	if press_r == 1 and state.switch_latch_r == 0:
+		state.controlled_r = 1 - state.controlled_r
+	state.switch_latch_r = press_r
+
+static func _cpu_input(_state, _idx: int, _cfg) -> int:
+	# Task 7でsim_cpu.gdに委譲する。暫定は入力なし
+	return 0
+
 static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
