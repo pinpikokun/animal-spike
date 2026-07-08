@@ -20,6 +20,23 @@ var ball_bounce_num: int
 var ball_bounce_den: int
 var points_to_win: int
 var deuce: bool
+var net_x: int
+var net_top_y: int
+var net_half_w: int
+var player_reach: int
+var serve_hold_height: int
+var bump_up_speed: int
+var bump_fwd_speed: int
+var spike_vx: int
+var spike_vy: int
+var serve_vx: int
+var serve_vy: int
+var hit_cooldown_ticks: int
+var point_pause_ticks: int
+var serve_delay_ticks: int
+var max_touches: int
+var spawn_back_px: int
+var spawn_front_px: int
 
 func _init(path: String = DEFAULT_PATH) -> void:
 	var text := FileAccess.get_file_as_string(path)
@@ -44,6 +61,23 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	ball_bounce_den = 100
 	points_to_win = _int_of(raw, "points_to_win")
 	deuce = _int_of(raw, "deuce") != 0
+	net_x = FP.from_int(_int_of(raw, "net_x_px"))
+	net_top_y = FP.from_int(_int_of(raw, "net_top_y_px"))
+	net_half_w = FP.from_int(_int_of(raw, "net_half_w_px"))
+	player_reach = FP.from_int(_int_of(raw, "player_reach_px"))
+	serve_hold_height = FP.from_int(_int_of(raw, "serve_hold_height_px"))
+	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
+	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
+	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
+	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
+	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate
+	serve_vy = FP.from_int(_int_of(raw, "serve_vy_px_s")) / tick_rate
+	hit_cooldown_ticks = _int_of(raw, "hit_cooldown_ticks")
+	point_pause_ticks = _int_of(raw, "point_pause_ticks")
+	serve_delay_ticks = _int_of(raw, "serve_delay_ticks")
+	max_touches = _int_of(raw, "max_touches")
+	spawn_back_px = _int_of(raw, "spawn_back_px")
+	spawn_front_px = _int_of(raw, "spawn_front_px")
 
 func _int_of(raw: Dictionary, key: String) -> int:
 	if not raw.has(key):

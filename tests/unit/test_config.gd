@@ -19,6 +19,15 @@ func test_invalid_rules_detected() -> void:
 	var cfg = SimConfig.new("res://tests/fixtures/bad_rules.json")
 	check_eq(cfg.valid, false, "floatを含むルールはinvalidになる")
 
+func test_m1a_keys_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.net_x, FP.from_int(320), "net_x")
+	check_eq(cfg.max_touches, 3, "max_touches")
+	check(cfg.spike_vx > 0, "spike_vxが正")
+	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
+	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
+	check_eq(cfg.spawn_back_px, 80, "spawn_back_px")
+
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()
 	check(typeof(cfg.gravity) == TYPE_INT, "gravityがint")
