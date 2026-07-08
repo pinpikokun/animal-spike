@@ -8,17 +8,30 @@ const Simulation := preload("res://src/sim/simulation.gd")
 func _serve_world(serving: int) -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_rally(s, cfg, serving)
+	Simulation.reset_match(s, cfg, serving)
 	return [s, cfg]
 
-func test_reset_positions() -> void:
+func test_reset_match_positions() -> void:
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	check_eq(s.phase, SimState.PHASE_SERVE, "SERVEフェーズ")
-	check_eq(s.players[0].x, FP.from_int(cfg.spawn_back_px), "左後衛の位置")
-	check_eq(s.players[2].x, cfg.court_width - FP.from_int(cfg.spawn_back_px), "右後衛の位置")
+	check_eq(s.players[0].x, FP.from_int(cfg.spawn_back_px), "左後衛の初期位置")
+	check_eq(s.players[2].x, cfg.court_width - FP.from_int(cfg.spawn_back_px), "右後衛の初期位置")
 	check_eq(s.touches, 0, "タッチ0")
+
+func test_reset_rally_keeps_player_positions() -> void:
+	# ラリー再開でキャラをワープさせない(気持ちよさ優先、ユーザー決定)。
+	# キャラは自分の足でしか動かない。定位置への帰還はCPUの歩行が担う
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var moved_x: int = FP.from_int(123)
+	s.players[0].x = moved_x
+	Simulation.reset_rally(s, cfg, 1)
+	check_eq(s.players[0].x, moved_x, "reset_rallyでキャラ位置が変わらない")
+	check_eq(s.phase, SimState.PHASE_SERVE, "フェーズはSERVEに戻る")
+	check_eq(s.touches, 0, "タッチはリセット")
 
 func test_ball_held_by_server() -> void:
 	var w := _serve_world(0)

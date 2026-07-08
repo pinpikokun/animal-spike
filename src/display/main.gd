@@ -19,7 +19,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	state = SimState.new()
-	Simulation.reset_rally(state, cfg, 0)
+	Simulation.reset_match(state, cfg, 0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	label = Label.new()
 	label.position = Vector2(4, 4)

@@ -16,7 +16,7 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-const GOLDEN_COMBINED_HASH := -3761300548452098744
+const GOLDEN_COMBINED_HASH := -7502362350904739611
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
@@ -30,7 +30,7 @@ func _run_once() -> Array[int]:
 	# 全入力ビット(0-31)を含み、切替・ヒット・CPU相方も検証対象に入る
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_rally(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0)
 	var hashes: Array[int] = []
 	var rng := 123456789
 	for t in TICKS:

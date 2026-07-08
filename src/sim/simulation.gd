@@ -81,11 +81,19 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		_try_hit(state, i, input, cfg)
 
 static func reset_rally(s, cfg, serving_team: int) -> void:
+	# ラリーの再開。キャラはワープさせない(気持ちよさ優先、ユーザー決定)。
+	# 定位置への帰還はポーズ中のCPU歩行が担い、人間は自由に立ち回れる
 	s.phase = SimStateScript.PHASE_SERVE
 	s.serving_team = serving_team
 	s.touches = 0
 	s.last_touch_team = -1
 	s.timer = cfg.serve_delay_ticks
+	s.ball_vx = 0
+	s.ball_vy = 0
+	_hold_ball_on_server(s, cfg)
+
+static func reset_match(s, cfg, serving_team: int) -> void:
+	# 試合開始時のみキャラを初期配置に置く
 	var back: int = FP.from_int(cfg.spawn_back_px)
 	var front: int = FP.from_int(cfg.spawn_front_px)
 	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
@@ -97,9 +105,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.vy = 0
 		p.on_ground = 1
 		p.hit_cooldown = 0
-	s.ball_vx = 0
-	s.ball_vy = 0
-	_hold_ball_on_server(s, cfg)
+	reset_rally(s, cfg, serving_team)
 
 static func _server_index(s) -> int:
 	return s.serving_team * 2

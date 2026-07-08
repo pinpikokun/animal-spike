@@ -8,7 +8,7 @@ const Simulation := preload("res://src/sim/simulation.gd")
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_rally(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0)
 	s.phase = SimState.PHASE_RALLY
 	s.ball_x = FP.from_int(600)
 	s.ball_y = FP.from_int(50)

@@ -9,7 +9,7 @@ const SimCpu := preload("res://src/sim/sim_cpu.gd")
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_rally(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0)
 	return [s, cfg]
 
 func test_cpu_chases_ball_on_own_side() -> void:
@@ -64,7 +64,7 @@ func test_cpu_team_serves_via_team_input() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
-	Simulation.reset_rally(s, cfg, 1)
+	Simulation.reset_match(s, cfg, 1)
 	var served := false
 	for i in cfg.serve_delay_ticks + 10:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)

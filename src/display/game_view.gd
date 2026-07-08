@@ -23,8 +23,9 @@ func _ready() -> void:
 		push_error("rules.jsonの読み込みに失敗したため起動を中止する")
 		return
 	state = SimState.new()
-	Simulation.reset_rally(state, cfg, 0)
+	Simulation.reset_match(state, cfg, 0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
+	$Court.setup(cfg)
 	var fox := SpriteFactory.build_fox()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
