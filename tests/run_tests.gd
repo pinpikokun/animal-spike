@@ -22,6 +22,13 @@ func _init() -> void:
 	names.sort()
 	for name in names:
 		var script: GDScript = load(TEST_DIR + "/" + name)
+		if script == null or not script.can_instantiate():
+			# パースエラー等で読めないテストはFAIL扱いで続行する
+			# ここでabortするとquit()に到達せずGodotが居座るため絶対に止めない
+			failed += 1
+			total += 1
+			print("FAIL  %s (load error)" % name)
+			continue
 		var t: Object = script.new()
 		for m in script.get_script_method_list():
 			var method: String = m["name"]
