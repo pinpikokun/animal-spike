@@ -14,7 +14,7 @@ const TICKS := 3600
 #     静的スキャン(test_no_float_in_sim.gd)が併走している
 # 物理を意図的に変更した場合はGOLDEN_FINAL_HASHを新しい値に更新すること
 
-const GOLDEN_FINAL_HASH := -6498240215135575413
+const GOLDEN_FINAL_HASH := 6089113294468396581
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

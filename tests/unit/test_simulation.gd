@@ -77,6 +77,7 @@ func test_ball_wall_bounce() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
 	s.ball_x = cfg.ball_radius + FP.from_int(2)
 	s.ball_y = FP.from_int(100)
 	s.ball_vx = -FP.from_int(5)
@@ -88,6 +89,7 @@ func test_ball_right_wall_bounce() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
 	s.ball_x = cfg.court_width - cfg.ball_radius - FP.from_int(2)
 	s.ball_y = FP.from_int(100)
 	s.ball_vx = FP.from_int(5)
@@ -99,20 +101,12 @@ func test_ball_ceiling_bounce() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.ball_x = FP.from_int(320)
+	s.phase = SimState.PHASE_RALLY
+	s.ball_x = FP.from_int(100)
 	s.ball_y = cfg.ball_radius + FP.from_int(1)
 	s.ball_vy = -FP.from_int(6)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "天井で反射して下向きになる")
 	check(s.ball_y >= cfg.ball_radius, "天井にめり込まない")
 
-func test_ball_floor_bounce_decays() -> void:
-	var w := _new_world()
-	var s = w[0]
-	var cfg = w[1]
-	s.ball_x = FP.from_int(320)
-	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
-	s.ball_vy = FP.from_int(6)
-	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(s.ball_vy < 0, "床で反射して上向きになる")
-	check(-s.ball_vy < FP.from_int(6), "反発で減衰する")
+# 床バウンドのテストは削除(仕様変更: RALLY中の床接触は得点。test_rally.gdが検証する)

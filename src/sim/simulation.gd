@@ -19,12 +19,91 @@ static func _dir_of_team(team: int) -> int:
 	return 1 if team == 0 else -1
 
 static func step(state, inputs: Array[int], cfg) -> void:
+	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
+	if state.phase == SimStateScript.PHASE_SERVE:
+		state.timer -= 1
+		_step_players_and_hits(state, inputs, cfg)
+		_hold_ball_on_server(state, cfg)
+		_try_serve(state, inputs, cfg)
+	elif state.phase == SimStateScript.PHASE_RALLY:
+		_step_players_and_hits(state, inputs, cfg)
+		_step_ball(state, cfg)
+		_check_floor_point(state, cfg)
+	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
+		state.timer -= 1
+		if state.timer <= 0:
+			reset_rally(state, cfg, state.serving_team)
+	# PHASE_GAME_OVERは何もしない
+
+static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		_step_player(state.players[i], input, cfg, team_of(i))
 		_try_hit(state, i, input, cfg)
-	_step_ball(state, cfg)
+
+static func reset_rally(s, cfg, serving_team: int) -> void:
+	s.phase = SimStateScript.PHASE_SERVE
+	s.serving_team = serving_team
+	s.touches = 0
+	s.last_touch_team = -1
+	s.timer = cfg.serve_delay_ticks
+	var back: int = FP.from_int(cfg.spawn_back_px)
+	var front: int = FP.from_int(cfg.spawn_front_px)
+	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
+	for i in s.players.size():
+		var p = s.players[i]
+		p.x = positions[i]
+		p.y = cfg.floor_y
+		p.vx = 0
+		p.vy = 0
+		p.on_ground = 1
+		p.hit_cooldown = 0
+	s.ball_vx = 0
+	s.ball_vy = 0
+	_hold_ball_on_server(s, cfg)
+
+static func _server_index(s) -> int:
+	return s.serving_team * 2
+
+static func _hold_ball_on_server(s, cfg) -> void:
+	var server = s.players[_server_index(s)]
+	s.ball_x = server.x
+	s.ball_y = server.y - cfg.serve_hold_height
+
+static func _try_serve(s, inputs: Array[int], cfg) -> void:
+	var idx: int = _server_index(s)
+	var input: int = inputs[idx] if idx < inputs.size() else 0
+	if not (input & IN_ACTION):
+		return
+	var dir: int = _dir_of_team(s.serving_team)
+	s.ball_vx = dir * cfg.serve_vx
+	s.ball_vy = -cfg.serve_vy
+	s.touches = 0
+	s.last_touch_team = s.serving_team
+	s.phase = SimStateScript.PHASE_RALLY
+
+static func _check_floor_point(s, cfg) -> void:
+	if s.ball_y < cfg.floor_y - cfg.ball_radius:
+		return
+	var landed_left: bool = s.ball_x < cfg.net_x
+	_award_point(s, 1 if landed_left else 0, cfg)
+
+static func _award_point(s, team: int, cfg) -> void:
+	if team == 0:
+		s.score_l += 1
+	else:
+		s.score_r += 1
+	s.serving_team = team
+	var lead: int = s.score_l - s.score_r if team == 0 else s.score_r - s.score_l
+	var score: int = s.score_l if team == 0 else s.score_r
+	var won: bool = score >= cfg.points_to_win and (not cfg.deuce or lead >= 2)
+	if won:
+		s.winner = team
+		s.phase = SimStateScript.PHASE_GAME_OVER
+	else:
+		s.phase = SimStateScript.PHASE_POINT_PAUSE
+		s.timer = cfg.point_pause_ticks
 
 static func _try_hit(s, i: int, input: int, cfg) -> void:
 	if s.phase != SimStateScript.PHASE_RALLY:
@@ -55,6 +134,8 @@ static func _try_hit(s, i: int, input: int, cfg) -> void:
 	else:
 		s.touches = 1
 	s.last_touch_team = team
+	if s.touches > cfg.max_touches:
+		_award_point(s, 1 - team, cfg)
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
 	p.vx = 0
@@ -95,10 +176,7 @@ static func _step_ball(s, cfg) -> void:
 	elif s.ball_x > right:
 		s.ball_x = right - (s.ball_x - right)
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-	var floor_limit: int = cfg.floor_y - cfg.ball_radius
-	if s.ball_y > floor_limit:
-		s.ball_y = floor_limit - (s.ball_y - floor_limit)
-		s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
+	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する
 	var ceil_limit: int = cfg.ball_radius
 	if s.ball_y < ceil_limit:
 		s.ball_y = ceil_limit + (ceil_limit - s.ball_y)
