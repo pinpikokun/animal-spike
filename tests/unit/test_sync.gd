@@ -12,9 +12,11 @@ const TICKS := 3600
 # (2) ゴールデンハッシュ = 挙動の意図しない変化を検出。マシンをまたげばfloat差異も
 #     いずれ露見する。なお同一プロセス内のfloat混入は(1)では捕まらないため、
 #     静的スキャン(test_no_float_in_sim.gd)が併走している
-# 物理を意図的に変更した場合はGOLDEN_FINAL_HASHを新しい値に更新すること
+# ゴールデンは全チェックポイント(60tickごと+最終)の合成ハッシュで比較する。
+# 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
+# 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-const GOLDEN_FINAL_HASH := 6541896883349730321
+const GOLDEN_COMBINED_HASH := 4323080219420577554
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
@@ -53,7 +55,17 @@ func test_synctest_60_seconds() -> void:
 			break
 	check_eq(mismatch, -1, "デシンクなし(検出indexは-1)")
 
+func _combined(hashes: Array[int]) -> int:
+	# チェックポイント群をFNV-1a 64bitで1本に畳む(state_hashと同じ方式)
+	var h := -3750763034362895579
+	for v in hashes:
+		for i in 8:
+			h ^= (v >> (i * 8)) & 0xFF
+			h *= 1099511628211
+	return h
+
 func test_golden_hash_regression() -> void:
 	var a := _run_once()
-	check_eq(a[a.size() - 1], GOLDEN_FINAL_HASH,
-		"ゴールデンハッシュ一致(物理を意図的に変えた場合のみ更新する)")
+	check_eq(a.size(), 61, "チェックポイント数(60tickごと+最終)")
+	check_eq(_combined(a), GOLDEN_COMBINED_HASH,
+		"合成ゴールデンハッシュ一致(物理を意図的に変えた場合のみ更新する)")

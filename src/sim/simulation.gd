@@ -64,9 +64,13 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
+		# ポーズ中も操作は生かす(ヒットは_try_hitのフェーズ判定で無効)
+		_step_players_and_hits(state, inputs, cfg)
 		if state.timer <= 0:
 			reset_rally(state, cfg, state.serving_team)
-	# PHASE_GAME_OVERは何もしない
+	elif state.phase == SimStateScript.PHASE_GAME_OVER:
+		# 勝敗確定後もキャラの移動・ジャンプは生かす
+		_step_players_and_hits(state, inputs, cfg)
 
 static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
@@ -166,7 +170,7 @@ static func _try_hit(s, i: int, input: int, cfg) -> void:
 	else:
 		s.touches = 1
 	s.last_touch_team = team
-	if s.touches > cfg.max_touches:
+	if s.touches >= cfg.max_touches:
 		_award_point(s, 1 - team, cfg)
 
 static func _step_player(p, input: int, cfg, team: int) -> void:

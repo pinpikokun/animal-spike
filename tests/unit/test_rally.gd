@@ -64,6 +64,36 @@ func test_pause_then_new_serve_by_scorer() -> void:
 	check_eq(s.phase, SimState.PHASE_SERVE, "ポーズ後は次のサーブ")
 	check_eq(s.serving_team, 1, "得点チームがサーブ")
 
+func test_players_move_during_point_pause() -> void:
+	# 得点後のポーズ中も操作は生かす(操作が死ぬ時間を作らない)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	var x0: int = s.players[0].x
+	Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check(s.players[0].x > x0, "ポーズ中も右移動できる")
+
+func test_players_jump_during_point_pause() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	Simulation.step(s, [Simulation.IN_JUMP, 0, 0, 0], cfg)
+	check_eq(s.players[0].on_ground, 0, "ポーズ中もジャンプできる")
+
+func test_players_move_after_game_over() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_GAME_OVER
+	s.winner = 1
+	var x0: int = s.players[0].x
+	Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check(s.players[0].x > x0, "ゲームオーバー後も移動できる")
+
 func test_touch_over_scores_opponent() -> void:
 	var w := _serve_world(0)
 	var s = w[0]
