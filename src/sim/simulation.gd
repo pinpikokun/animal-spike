@@ -3,10 +3,14 @@
 extends RefCounted
 
 const FP := preload("res://src/sim/fp.gd")
+const SimInput := preload("res://src/sim/sim_input.gd")
+const SimStateScript := preload("res://src/sim/sim_state.gd")
 
-const IN_LEFT := 1
-const IN_RIGHT := 2
-const IN_JUMP := 4
+const IN_LEFT := SimInput.IN_LEFT
+const IN_RIGHT := SimInput.IN_RIGHT
+const IN_JUMP := SimInput.IN_JUMP
+const IN_ACTION := SimInput.IN_ACTION
+const IN_SWITCH := SimInput.IN_SWITCH
 
 static func team_of(i: int) -> int:
 	return i / 2
@@ -19,7 +23,38 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		_step_player(state.players[i], input, cfg, team_of(i))
+		_try_hit(state, i, input, cfg)
 	_step_ball(state, cfg)
+
+static func _try_hit(s, i: int, input: int, cfg) -> void:
+	if s.phase != SimStateScript.PHASE_RALLY:
+		return
+	if not (input & IN_ACTION):
+		return
+	var p = s.players[i]
+	if p.hit_cooldown > 0:
+		return
+	var dx: int = s.ball_x - p.x
+	var dy: int = s.ball_y - p.y
+	var reach: int = cfg.player_reach
+	# 両辺ともfp生値の積((fp)^2単位)で比較しスケールを揃える。
+	# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
+	if dx * dx + dy * dy > reach * reach:
+		return
+	var team: int = team_of(i)
+	var dir: int = _dir_of_team(team)
+	if p.on_ground == 1:
+		s.ball_vy = -cfg.bump_up_speed
+		s.ball_vx = dir * cfg.bump_fwd_speed
+	else:
+		s.ball_vy = cfg.spike_vy
+		s.ball_vx = dir * cfg.spike_vx
+	p.hit_cooldown = cfg.hit_cooldown_ticks
+	if s.last_touch_team == team:
+		s.touches += 1
+	else:
+		s.touches = 1
+	s.last_touch_team = team
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
 	p.vx = 0
