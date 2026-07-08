@@ -60,6 +60,7 @@ func test_no_double_jump() -> void:
 
 func test_player_stays_in_court() -> void:
 	# 境界の内側から出発して両端のクランプを検証する(境界から始めると空振りする)
+	# 右端は右チームのプレイヤー2で検証する(左チームはネットで止まるため)
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -67,10 +68,10 @@ func test_player_stays_in_court() -> void:
 	for i in 600:
 		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
 	check_eq(s.players[0].x, 0, "左端で止まる")
-	s.players[0].x = cfg.court_width - FP.from_int(50)
+	s.players[2].x = cfg.court_width - FP.from_int(50)
 	for i in 600:
-		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(s.players[0].x, cfg.court_width, "右端で止まる")
+		Simulation.step(s, [0, 0, Simulation.IN_RIGHT, 0], cfg)
+	check_eq(s.players[2].x, cfg.court_width, "右端で止まる")
 
 func test_ball_wall_bounce() -> void:
 	var w := _new_world()
