@@ -66,11 +66,13 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		state.timer -= 1
 		# ポーズ中も操作は生かす(ヒットは_try_hitのフェーズ判定で無効)
 		_step_players_and_hits(state, inputs, cfg)
+		_step_ball_loose(state, cfg)
 		if state.timer <= 0:
 			reset_rally(state, cfg, state.serving_team)
 	elif state.phase == SimStateScript.PHASE_GAME_OVER:
 		# 勝敗確定後もキャラの移動・ジャンプは生かす
 		_step_players_and_hits(state, inputs, cfg)
+		_step_ball_loose(state, cfg)
 
 static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
@@ -218,6 +220,17 @@ static func _step_ball(s, cfg) -> void:
 		s.ball_y = ceil_limit + (ceil_limit - s.ball_y)
 		s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
 	_ball_vs_net(s, cfg, prev_x)
+
+static func _step_ball_loose(s, cfg) -> void:
+	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる
+	_step_ball(s, cfg)
+	var floor_limit: int = cfg.floor_y - cfg.ball_radius
+	if s.ball_y > floor_limit:
+		s.ball_y = floor_limit - (s.ball_y - floor_limit)
+		if s.ball_vy > 0:
+			s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
+		# 床接触のたびに横速度も減衰(転がって自然に止まる)
+		s.ball_vx = s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 
 static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 	var net_left: int = cfg.net_x - cfg.net_half_w - cfg.ball_radius

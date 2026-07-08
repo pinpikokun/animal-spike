@@ -74,6 +74,17 @@ func test_cpu_team_serves_via_team_input() -> void:
 			break
 	check(served, "右チーム(完全CPU)のサーブで試合が進む")
 
+func test_cpu_walks_home_during_pause() -> void:
+	# 得点後のポーズ中、CPUは棒立ちせず持ち場へ歩いて戻る
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	s.players[1].x = FP.from_int(100)
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=250)へ戻る")
+
 func test_cpu_returns_to_spawn() -> void:
 	var w := _world()
 	var s = w[0]

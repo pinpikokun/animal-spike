@@ -84,6 +84,47 @@ func test_players_jump_during_point_pause() -> void:
 	Simulation.step(s, [Simulation.IN_JUMP, 0, 0, 0], cfg)
 	check_eq(s.players[0].on_ground, 0, "ポーズ中もジャンプできる")
 
+func test_ball_bounces_on_floor_during_pause() -> void:
+	# 得点後のポーズ中、ボールは凍結せず床で減衰バウンドする(得点はしない)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	s.ball_x = FP.from_int(300)
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
+	s.ball_vy = FP.from_int(10)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vy < 0, "ポーズ中の床接触で上向きに反射")
+	check_eq(s.score_l, 0, "ポーズ中の床接触は得点にならない(左)")
+	check_eq(s.score_r, 0, "ポーズ中の床接触は得点にならない(右)")
+
+func test_ball_bounce_damps_during_pause() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	s.ball_x = FP.from_int(300)
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
+	var v0: int = FP.from_int(100)
+	s.ball_vy = v0
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(-s.ball_vy < v0, "バウンドで速度が減衰する")
+
+func test_ball_rolls_into_wall_during_pause() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	s.ball_x = cfg.ball_radius + FP.from_int(1)
+	s.ball_y = cfg.floor_y - cfg.ball_radius
+	s.ball_vx = -FP.from_int(5)
+	s.ball_vy = 0
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "ポーズ中も壁で跳ね返る(慣性維持)")
+
 func test_players_move_after_game_over() -> void:
 	var w := _serve_world(0)
 	var s = w[0]

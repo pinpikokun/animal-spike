@@ -7,14 +7,31 @@ const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 
+static func _spawn_x(idx: int, cfg) -> int:
+	var back: int = FP.from_int(cfg.spawn_back_px)
+	var front: int = FP.from_int(cfg.spawn_front_px)
+	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
+	return positions[idx]
+
+static func _walk_to(p, target_x: int, deadzone: int) -> int:
+	if p.x < target_x - deadzone:
+		return SimInput.IN_RIGHT
+	elif p.x > target_x + deadzone:
+		return SimInput.IN_LEFT
+	return 0
+
 static func decide(s, idx: int, cfg) -> int:
 	var team: int = idx / 2
 	var p = s.players[idx]
+	var deadzone: int = cfg.player_reach / 2
 	if s.phase == SimStateScript.PHASE_SERVE:
 		# サーブ遅延タイマーはsimulation.gdのstep()が減算する(ここは読むだけ)
 		if idx == s.serving_team * 2 and s.timer <= 0:
 			return SimInput.IN_ACTION
 		return 0
+	if s.phase == SimStateScript.PHASE_POINT_PAUSE:
+		# ポーズ中は棒立ちせず持ち場へ歩いて戻る(次ラリーの準備)
+		return _walk_to(p, _spawn_x(idx, cfg), deadzone)
 	if s.phase != SimStateScript.PHASE_RALLY:
 		return 0
 	var on_own_side: bool = (s.ball_x < cfg.net_x) == (team == 0)
@@ -22,16 +39,8 @@ static func decide(s, idx: int, cfg) -> int:
 	if on_own_side:
 		target_x = s.ball_x
 	else:
-		var back: int = FP.from_int(cfg.spawn_back_px)
-		var front: int = FP.from_int(cfg.spawn_front_px)
-		var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
-		target_x = positions[idx]
-	var input := 0
-	var deadzone: int = cfg.player_reach / 2
-	if p.x < target_x - deadzone:
-		input |= SimInput.IN_RIGHT
-	elif p.x > target_x + deadzone:
-		input |= SimInput.IN_LEFT
+		target_x = _spawn_x(idx, cfg)
+	var input: int = _walk_to(p, target_x, deadzone)
 	if on_own_side:
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
