@@ -5,6 +5,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const SimCpu := preload("res://src/sim/sim_cpu.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -46,9 +47,8 @@ static func _handle_switch(state, in_l: int, in_r: int) -> void:
 		state.controlled_r = 1 - state.controlled_r
 	state.switch_latch_r = press_r
 
-static func _cpu_input(_state, _idx: int, _cfg) -> int:
-	# Task 7でsim_cpu.gdに委譲する。暫定は入力なし
-	return 0
+static func _cpu_input(state, idx: int, cfg) -> int:
+	return SimCpu.decide(state, idx, cfg)
 
 static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
