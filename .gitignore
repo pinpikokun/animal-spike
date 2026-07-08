@@ -1,0 +1,13 @@
+# ブレインストーミング用の一時ファイル
+.superpowers/
+
+# Godot (M0以降で使用)
+.godot/
+*.import
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# 作業用一時ファイル
+*.tmp
