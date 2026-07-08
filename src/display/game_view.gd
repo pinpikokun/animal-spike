@@ -59,6 +59,7 @@ func _physics_process(_delta: float) -> void:
 	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)
 	Simulation.tick(state, [input, cpu_r], cfg)
 	_sync_sprites()
+	$ScoreUI.update_from(state)
 
 func _sync_sprites() -> void:
 	for i in _sprites.size():

@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/display/root.gd" id="1_root"]
+[ext_resource type="Shader" path="res://src/display/crt.gdshader" id="2_crt"]
+[ext_resource type="Script" path="res://src/display/options_menu.gd" id="3_menu"]
+
+[sub_resource type="ShaderMaterial" id="crt_mat"]
+shader = ExtResource("2_crt")
+
+[node name="Root" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_root")
+
+[node name="Black" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 1)
+
+[node name="Container" type="SubViewportContainer" parent="."]
+material = SubResource("crt_mat")
+stretch = true
+
+[node name="Viewport" type="SubViewport" parent="Container"]
+handle_input_locally = false
+size = Vector2i(640, 360)
+render_target_update_mode = 4
+
+[node name="OptionsMenu" type="CanvasLayer" parent="."]
+script = ExtResource("3_menu")
