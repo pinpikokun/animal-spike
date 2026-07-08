@@ -14,3 +14,8 @@ Desktop.ini
 
 # Godotバイナリ(各自ダウンロード)
 tools/
+
+# エクスポート出力(M5以降)
+build/
+export/
+export_presets.cfg

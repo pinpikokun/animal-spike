@@ -1,0 +1,15 @@
+# 改行コードの統一(Godot資産はLF)
+*.gd text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
+*.gdshader text eol=lf
+*.uid text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# バイナリ
+*.png binary
+*.zip binary
+*.exe binary
