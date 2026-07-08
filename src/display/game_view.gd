@@ -32,8 +32,10 @@ func _ready() -> void:
 		var s := AnimatedSprite2D.new()
 		# チーム0(左, index0,1)=キツネ、チーム1(右)=カエル
 		s.sprite_frames = fox if Simulation.team_of(i) == 0 else frog
-		s.centered = true
-		s.offset = Vector2(0, -SPRITE_HALF_H)
+		# 奇数幅(33px)のセンター配置は常に半ピクセルずれてぼやける。
+		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする
+		s.centered = false
+		s.offset = Vector2(-16, -32)
 		s.play("idle")
 		$Players.add_child(s)
 		_sprites.append(s)
@@ -65,9 +67,10 @@ func _sync_sprites() -> void:
 	for i in _sprites.size():
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
-		spr.position = ViewTransform.pos_of(p)
+		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
+		spr.position = ViewTransform.pos_of(p).round()
 		spr.flip_h = AnimSelect.flip_for_team(Simulation.team_of(i))
 		var anim := AnimSelect.anim_for(p)
 		if spr.animation != anim:
 			spr.play(anim)
-	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
+	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y)).round()
