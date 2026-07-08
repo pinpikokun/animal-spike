@@ -11,6 +11,14 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.points_to_win, 15, "15点先取")
 	check_eq(cfg.deuce, true, "デュース有")
 
+func test_default_rules_valid() -> void:
+	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")
+
+func test_invalid_rules_detected() -> void:
+	# 下のUSER ERROR出力はこのテストが意図的に出させているもの(異常系の検証)
+	var cfg = SimConfig.new("res://tests/fixtures/bad_rules.json")
+	check_eq(cfg.valid, false, "floatを含むルールはinvalidになる")
+
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()
 	check(typeof(cfg.gravity) == TYPE_INT, "gravityがint")

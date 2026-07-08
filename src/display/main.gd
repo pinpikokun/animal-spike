@@ -13,6 +13,10 @@ var label: Label
 
 func _ready() -> void:
 	cfg = SimConfig.new()
+	if not cfg.valid:
+		push_error("rules.jsonの読み込みに失敗したため起動を中止する")
+		get_tree().quit(1)
+		return
 	state = SimState.new()
 	for p in state.players:
 		p.y = cfg.floor_y

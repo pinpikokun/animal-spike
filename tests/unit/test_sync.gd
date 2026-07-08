@@ -7,8 +7,14 @@ const Simulation := preload("res://src/sim/simulation.gd")
 
 const TICKS := 3600
 
-# 決定論の生命線。同一入力列を2回流して全ハッシュが一致すること
-# ここが落ちたら最優先で直す。floatや未初期化状態の混入が疑わしい
+# 2段構えの決定論検証:
+# (1) 同一入力2回実行のハッシュ一致 = プロセス内の非決定要素(グローバルRNG等)を検出
+# (2) ゴールデンハッシュ = 挙動の意図しない変化を検出。マシンをまたげばfloat差異も
+#     いずれ露見する。なお同一プロセス内のfloat混入は(1)では捕まらないため、
+#     静的スキャン(test_no_float_in_sim.gd)が併走している
+# 物理を意図的に変更した場合はGOLDEN_FINAL_HASHを新しい値に更新すること
+
+const GOLDEN_FINAL_HASH := 7599335529640848415
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
@@ -28,6 +34,9 @@ func _run_once() -> Array[int]:
 	s.players[3].x = FP.from_int(540)
 	s.ball_x = FP.from_int(320)
 	s.ball_y = FP.from_int(60)
+	# 初速を与えて左右壁・天井・床の全反射経路を踏ませる
+	s.ball_vx = FP.from_int(3)
+	s.ball_vy = -FP.from_int(2)
 	var hashes: Array[int] = []
 	var rng := 123456789
 	for t in TICKS:
@@ -45,7 +54,14 @@ func test_synctest_60_seconds() -> void:
 	var a := _run_once()
 	var b := _run_once()
 	check_eq(a.size(), b.size(), "チェックポイント数が一致")
+	var mismatch := -1
 	for i in a.size():
 		if a[i] != b[i]:
-			check(false, "デシンク検出 checkpoint=" + str(i))
-			return
+			mismatch = i
+			break
+	check_eq(mismatch, -1, "デシンクなし(検出indexは-1)")
+
+func test_golden_hash_regression() -> void:
+	var a := _run_once()
+	check_eq(a[a.size() - 1], GOLDEN_FINAL_HASH,
+		"ゴールデンハッシュ一致(物理を意図的に変えた場合のみ更新する)")

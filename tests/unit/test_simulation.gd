@@ -25,6 +25,15 @@ func test_move_right_speed() -> void:
 	var moved := FP.to_int(s.players[0].x)
 	check(moved >= 175 and moved <= 185, "1秒で約180px移動 actual=" + str(moved))
 
+func test_move_left_speed() -> void:
+	var w := _new_world()
+	var s = w[0]
+	s.players[0].x = FP.from_int(300)
+	for i in 60:
+		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], w[1])
+	var moved := 300 - FP.to_int(s.players[0].x)
+	check(moved >= 175 and moved <= 185, "1秒で約180px左移動 actual=" + str(moved))
+
 func test_jump_and_land() -> void:
 	var w := _new_world()
 	var s = w[0]
@@ -50,11 +59,18 @@ func test_no_double_jump() -> void:
 	check(s.players[0].vy > vy_air, "空中で再ジャンプできない(重力で減速のみ)")
 
 func test_player_stays_in_court() -> void:
+	# 境界の内側から出発して両端のクランプを検証する(境界から始めると空振りする)
 	var w := _new_world()
 	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = FP.from_int(50)
 	for i in 600:
-		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], w[1])
+		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
 	check_eq(s.players[0].x, 0, "左端で止まる")
+	s.players[0].x = cfg.court_width - FP.from_int(50)
+	for i in 600:
+		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.players[0].x, cfg.court_width, "右端で止まる")
 
 func test_ball_wall_bounce() -> void:
 	var w := _new_world()
@@ -66,6 +82,28 @@ func test_ball_wall_bounce() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "左壁で反射して右向きになる")
 	check(s.ball_x >= cfg.ball_radius, "壁にめり込まない")
+
+func test_ball_right_wall_bounce() -> void:
+	var w := _new_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = cfg.court_width - cfg.ball_radius - FP.from_int(2)
+	s.ball_y = FP.from_int(100)
+	s.ball_vx = FP.from_int(5)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx < 0, "右壁で反射して左向きになる")
+	check(s.ball_x <= cfg.court_width - cfg.ball_radius, "右壁にめり込まない")
+
+func test_ball_ceiling_bounce() -> void:
+	var w := _new_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = FP.from_int(320)
+	s.ball_y = cfg.ball_radius + FP.from_int(1)
+	s.ball_vy = -FP.from_int(6)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vy > 0, "天井で反射して下向きになる")
+	check(s.ball_y >= cfg.ball_radius, "天井にめり込まない")
 
 func test_ball_floor_bounce_decays() -> void:
 	var w := _new_world()
