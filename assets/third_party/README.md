@@ -20,6 +20,14 @@
 - ライセンス: CC0
 - 内容: クマ/イノシシ/シカ/キツネ/ウサギ/オオカミ (Idle/Walk/Run、ウサギはHop付き)
 
+## ball_collection/
+
+- 出典: Ball Collection by hayashi19
+- 入手元: https://opengameart.org/content/ball-collection
+- ライセンス: CC0 (Creative Commons Zero v1.0 Universal)。クレジット不要
+- 内容: バレーボール(グレー単色)・ビーチボール(カラー)。元素材balls_3.zipの
+  144x144球体から抜粋。ゲーム内でボールとして使用し、表示時に縮小する
+
 ## 調査記録
 
 その他の候補(Pixel Adventure、Sport Balls、Beach Volley等)の調査結果は

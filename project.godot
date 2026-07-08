@@ -4,7 +4,7 @@ config_version=5
 [application]
 
 config/name="Animal Spike"
-run/main_scene="res://src/display/main.tscn"
+run/main_scene="res://src/display/game_view.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [display]
