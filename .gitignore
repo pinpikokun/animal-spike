@@ -11,3 +11,6 @@ Desktop.ini
 
 # 作業用一時ファイル
 *.tmp
+
+# Godotバイナリ(各自ダウンロード)
+tools/
