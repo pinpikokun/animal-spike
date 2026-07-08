@@ -1,8 +1,13 @@
 # シミュレーションの全状態。全フィールドint(fp)。float禁止
-# フィールドを増やしたら必ずto_int_arrayにも足すこと(ハッシュ対象漏れはデシンクの温床)
+# フィールドを増やしたら必ずto_int_arrayにも足すこと(test_state_coverageが強制する)
 extends RefCounted
 
 const PLAYER_COUNT := 4
+
+const PHASE_SERVE := 0
+const PHASE_RALLY := 1
+const PHASE_POINT_PAUSE := 2
+const PHASE_GAME_OVER := 3
 
 class Player:
 	var x: int = 0
@@ -10,6 +15,7 @@ class Player:
 	var vx: int = 0
 	var vy: int = 0
 	var on_ground: int = 1
+	var hit_cooldown: int = 0
 
 var tick: int = 0
 var players: Array[Player] = []
@@ -17,6 +23,18 @@ var ball_x: int = 0
 var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
+var phase: int = PHASE_SERVE
+var serving_team: int = 0
+var score_l: int = 0
+var score_r: int = 0
+var touches: int = 0
+var last_touch_team: int = -1
+var timer: int = 0
+var controlled_l: int = 0
+var controlled_r: int = 0
+var switch_latch_l: int = 0
+var switch_latch_r: int = 0
+var winner: int = -1
 
 func _init() -> void:
 	for i in PLAYER_COUNT:
@@ -30,10 +48,23 @@ func to_int_array() -> Array[int]:
 		out.append(p.vx)
 		out.append(p.vy)
 		out.append(p.on_ground)
+		out.append(p.hit_cooldown)
 	out.append(ball_x)
 	out.append(ball_y)
 	out.append(ball_vx)
 	out.append(ball_vy)
+	out.append(phase)
+	out.append(serving_team)
+	out.append(score_l)
+	out.append(score_r)
+	out.append(touches)
+	out.append(last_touch_team)
+	out.append(timer)
+	out.append(controlled_l)
+	out.append(controlled_r)
+	out.append(switch_latch_l)
+	out.append(switch_latch_r)
+	out.append(winner)
 	return out
 
 func state_hash() -> int:

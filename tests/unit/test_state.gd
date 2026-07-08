@@ -17,5 +17,5 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != c.state_hash(), "プレイヤー差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick(1) + プレイヤー4体x5 + ボール4 = 25
-	check_eq(SimState.new().to_int_array().size(), 25, "シリアライズ長")
+	# tick(1) + プレイヤー4体x6 + ボール4 + フェーズ系(12) = 41
+	check_eq(SimState.new().to_int_array().size(), 41, "シリアライズ長")
