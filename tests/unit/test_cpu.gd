@@ -58,6 +58,22 @@ func test_cpu_auto_serves() -> void:
 			break
 	check(served, "CPUサーバーが自動サーブする")
 
+func test_cpu_team_serves_via_team_input() -> void:
+	# 1人プレイの配線(左=人間、右=完全CPU)で右チームにサーブ権が移っても
+	# 試合が止まらないことの回帰テスト。表示層はこのパターンでtickを呼ぶ
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.reset_rally(s, cfg, 1)
+	var served := false
+	for i in cfg.serve_delay_ticks + 10:
+		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
+		Simulation.tick(s, [0, cpu_r], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			served = true
+			break
+	check(served, "右チーム(完全CPU)のサーブで試合が進む")
+
 func test_cpu_returns_to_spawn() -> void:
 	var w := _world()
 	var s = w[0]

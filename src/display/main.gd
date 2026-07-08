@@ -6,6 +6,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const SimCpu := preload("res://src/sim/sim_cpu.gd")
 
 var cfg
 var state
@@ -36,7 +37,9 @@ func _physics_process(_delta: float) -> void:
 		input |= Simulation.IN_ACTION
 	if Input.is_key_pressed(KEY_C):
 		input |= Simulation.IN_SWITCH
-	Simulation.tick(state, [input, 0], cfg)
+	# 右チームは完全CPU。操作キャラ枠の入力もCPUが生成する(サーブ止まり防止)
+	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)
+	Simulation.tick(state, [input, cpu_r], cfg)
 	label.text = "SIM DEBUG VIEW (開発用計器)\n%d - %d  phase=%d touches=%d\ntick=%d\n矢印:移動 Z:ジャンプ X:アクション C:交代" % [
 		state.score_l, state.score_r, state.phase, state.touches, state.tick]
 	queue_redraw()

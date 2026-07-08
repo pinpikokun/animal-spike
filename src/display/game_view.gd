@@ -4,9 +4,10 @@ extends Node2D
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const ViewTransform := preload("res://src/display/view_transform.gd")
 const SpriteFactory := preload("res://src/display/sprite_factory.gd")
-# const AnimSelect := preload("res://src/display/anim_select.gd")  # Task2で有効化
+const AnimSelect := preload("res://src/display/anim_select.gd")
 
 const BALL_SRC_PX := 144.0  # ボール素材(volleyball_144.png)の実寸
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
@@ -53,7 +54,9 @@ func _physics_process(_delta: float) -> void:
 		input |= Simulation.IN_ACTION
 	if Input.is_key_pressed(KEY_C):
 		input |= Simulation.IN_SWITCH
-	Simulation.tick(state, [input, 0], cfg)
+	# 右チームは完全CPU(1人プレイ)。操作キャラ枠の入力もsim層のCPUが決定論的に生成する
+	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)
+	Simulation.tick(state, [input, cpu_r], cfg)
 	_sync_sprites()
 
 func _sync_sprites() -> void:
@@ -61,5 +64,8 @@ func _sync_sprites() -> void:
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
 		spr.position = ViewTransform.pos_of(p)
-		# Task2でアニメ選択・左右反転を接続する。Task1では位置反映とidle固定のみ
+		spr.flip_h = AnimSelect.flip_for_team(Simulation.team_of(i))
+		var anim := AnimSelect.anim_for(p)
+		if spr.animation != anim:
+			spr.play(anim)
 	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
