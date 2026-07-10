@@ -8,6 +8,7 @@ const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const ViewTransform := preload("res://src/display/view_transform.gd")
 const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
+const InputPoll := preload("res://src/display/input_poll.gd")
 
 const BALL_SRC_PX := 144.0  # ボール素材(volleyball_144.png)の実寸
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
@@ -46,17 +47,7 @@ func _ready() -> void:
 	_ball.scale = Vector2.ONE * (ball_px / BALL_SRC_PX)
 
 func _physics_process(_delta: float) -> void:
-	var input := 0
-	if Input.is_key_pressed(KEY_LEFT):
-		input |= Simulation.IN_LEFT
-	if Input.is_key_pressed(KEY_RIGHT):
-		input |= Simulation.IN_RIGHT
-	if Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_SPACE):
-		input |= Simulation.IN_JUMP
-	if Input.is_key_pressed(KEY_X):
-		input |= Simulation.IN_ACTION
-	if Input.is_key_pressed(KEY_C):
-		input |= Simulation.IN_SWITCH
+	var input := InputPoll.poll()
 	# 右チームは完全CPU(1人プレイ)。操作キャラ枠の入力もsim層のCPUが決定論的に生成する
 	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)
 	Simulation.tick(state, [input, cpu_r], cfg)
