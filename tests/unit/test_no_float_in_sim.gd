@@ -10,11 +10,15 @@ const BANNED := [
 	"lerp", "sin(", "cos(", "tan(", "sqrt(", "exp(",
 	"floor(", "ceil(", "round(",
 	"pow(", "atan2(", "fmod(", "smoothstep(", "ease(", "deg_to_rad(",
+	# float返しの組込み。整数引数でもTYPE_FLOATを返すので網に入れる
+	"clampf(", "minf(", "maxf(", "absf(", "snappedf(", "wrapf(",
+	"fposmod(", "pingpong(", "remap(", "move_toward(",
 ]
 
 var _string_re: RegEx
 var _decimal_re: RegEx
 var _const_re: RegEx
+var _log_re: RegEx
 
 func test_sim_sources_are_float_free() -> void:
 	_string_re = RegEx.new()
@@ -25,6 +29,9 @@ func test_sim_sources_are_float_free() -> void:
 	# float定数。containsだと他の識別子に誤爆するため単語境界で判定
 	_const_re = RegEx.new()
 	_const_re.compile("\\b(PI|TAU|INF|NAN)\\b")
+	# 自然対数log(。debug_log(等は_が単語文字なので\bで弾かれず誤爆しない
+	_log_re = RegEx.new()
+	_log_re.compile("\\blog\\(")
 	var scanned := _scan_dir(SIM_DIR)
 	check(scanned >= 4, "simファイルの走査数=" + str(scanned))
 
@@ -66,3 +73,5 @@ func _scan_file(path: String) -> void:
 			check(false, "%s:%d 小数/指数リテラル: %s" % [path, i + 1, line.strip_edges()])
 		if _const_re.search(code) != null:
 			check(false, "%s:%d float定数(PI/TAU/INF/NAN): %s" % [path, i + 1, line.strip_edges()])
+		if _log_re.search(code) != null:
+			check(false, "%s:%d float返しlog(: %s" % [path, i + 1, line.strip_edges()])
