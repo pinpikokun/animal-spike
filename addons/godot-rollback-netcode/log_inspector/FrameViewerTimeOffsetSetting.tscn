@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://3i8alnfuaspa"]
+
+[ext_resource type="Script" uid="uid://cjj11fo2uneuu" path="res://addons/godot-rollback-netcode/log_inspector/FrameViewerTimeOffsetSetting.gd" id="1"]
+
+[node name="FrameViewerTimeOffsetSetting" type="HBoxContainer" unique_id=195305598]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 24.0
+script = ExtResource("1")
+
+[node name="PeerLabel" type="Label" parent="." unique_id=1640485321]
+layout_mode = 2
+text = "Peer X"
+
+[node name="OffsetValue" type="SpinBox" parent="." unique_id=321012592]
+layout_mode = 2
+min_value = -10000.0
+max_value = 10000.0
+rounded = true
+allow_greater = true
+allow_lesser = true
+
+[node name="MillisecondsLabel" type="Label" parent="." unique_id=1198271506]
+layout_mode = 2
+size_flags_horizontal = 9
+text = "ms"
+
+[connection signal="value_changed" from="OffsetValue" to="." method="_on_OffsetValue_value_changed"]

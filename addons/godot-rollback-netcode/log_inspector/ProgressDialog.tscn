@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://teh77pd0ah27"]
+
+[ext_resource type="Script" uid="uid://k82icje1nndx" path="res://addons/godot-rollback-netcode/log_inspector/ProgressDialog.gd" id="1"]
+
+[node name="ProgressDialog" type="Popup" unique_id=364125976]
+oversampling_override = 1.0
+visible = true
+exclusive = true
+script = ExtResource("1")
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=2143242810]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=399385936]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=690816521]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1531074058]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "Filename"
+
+[node name="ProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=695869725]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3

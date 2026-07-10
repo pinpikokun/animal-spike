@@ -62,7 +62,7 @@ M2実装計画の資料。調査エージェントによるWeb調査の結果(�
 ## 5. 代替案の現状
 
 - netfox: 状態同期系(CSP+ラグ補償)。決定論ロールバックではない
-- Delta Rollback(BimDav): Snopek版のGodot 4向け最適化フォークとの言及あり、詳細未確認(GitLab 403)
+- Delta Rollback(BimDav): Snopek版のGodot 4向け最適化フォークとの言及あり。M2-T2で再確認(2026-07-11)も https://gitlab.com/BimDav/delta_rollback は403で不可視。仮に入手できても本作のstateは41int(約328バイト)と極小で、デルタ圧縮の帯域メリットは無視できる。採用しない(本家v1.0.0で確定)
 - Klotho(xpTURN): C#製決定論フレームワーク(FP64固定小数点、ECS)。Unity & Godotを謳う新顔、成熟度不明
 - Photon Quantum 3: 3.0.11 (2026-04-27)。Unity専用のまま=撤退計画の前提は有効
 - 新事実: Photon FusionがGodot対応を発表(状態同期系、Quantumとは別製品)。撤退判断時に「Godot継続+非決定論」の中間選択肢として一度だけ再評価の価値あり

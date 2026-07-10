@@ -7,6 +7,14 @@ config/name="Animal Spike"
 run/main_scene="res://src/display/root.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
+[autoload]
+
+SyncManager="*res://addons/godot-rollback-netcode/SyncManager.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot-rollback-netcode/plugin.cfg")
+
 [display]
 
 window/size/viewport_width=640
