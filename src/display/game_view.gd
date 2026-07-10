@@ -17,14 +17,24 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
+# ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
+# ここは状態を読んでスプライトを駆動する表示専任になる
+var external_sim := false
+
+func attach_external(cfg_in, state_ref) -> void:
+	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
+	external_sim = true
+	cfg = cfg_in
+	state = state_ref
 
 func _ready() -> void:
-	cfg = SimConfig.new()
-	if not cfg.valid:
-		push_error("rules.jsonの読み込みに失敗したため起動を中止する")
-		return
-	state = SimState.new()
-	Simulation.reset_match(state, cfg, 0)
+	if not external_sim:
+		cfg = SimConfig.new()
+		if not cfg.valid:
+			push_error("rules.jsonの読み込みに失敗したため起動を中止する")
+			return
+		state = SimState.new()
+		Simulation.reset_match(state, cfg, 0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
 	var fox := SpriteFactory.build_fox()
@@ -47,6 +57,11 @@ func _ready() -> void:
 	_ball.scale = Vector2.ONE * (ball_px / BALL_SRC_PX)
 
 func _physics_process(_delta: float) -> void:
+	if external_sim:
+		# ネット対戦: tickはSimRootがSyncManager経由で回す。ここは表示だけ
+		_sync_sprites()
+		$ScoreUI.update_from(state)
+		return
 	var input := InputPoll.poll()
 	# 右チームは完全CPU(1人プレイ)。操作キャラ枠の入力もsim層のCPUが決定論的に生成する
 	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)

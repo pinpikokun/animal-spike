@@ -19,7 +19,12 @@ var _settings: Dictionary
 func _ready() -> void:
 	_container = $Container
 	_viewport = $Container/Viewport
-	_game = preload("res://src/display/game_view.tscn").instantiate()
+	# 起動引数 -- 以降に host/join があればネット対戦シーンへ差し替える(M2検証)
+	var uargs := OS.get_cmdline_user_args()
+	if uargs.has("host") or uargs.has("join"):
+		_game = preload("res://src/net/net_match.tscn").instantiate()
+	else:
+		_game = preload("res://src/display/game_view.tscn").instantiate()
 	_viewport.add_child(_game)
 	_settings = DisplayOptions.load_or_default()
 	_menu = $OptionsMenu
