@@ -67,6 +67,34 @@ func to_int_array() -> Array[int]:
 	out.append(winner)
 	return out
 
+func load_int_array(arr: Array) -> void:
+	# to_int_arrayの逆。順序を変えるときは必ず両方同時に変える
+	var k := 0
+	tick = arr[k]; k += 1
+	for p in players:
+		p.x = arr[k]; k += 1
+		p.y = arr[k]; k += 1
+		p.vx = arr[k]; k += 1
+		p.vy = arr[k]; k += 1
+		p.on_ground = arr[k]; k += 1
+		p.hit_cooldown = arr[k]; k += 1
+	ball_x = arr[k]; k += 1
+	ball_y = arr[k]; k += 1
+	ball_vx = arr[k]; k += 1
+	ball_vy = arr[k]; k += 1
+	phase = arr[k]; k += 1
+	serving_team = arr[k]; k += 1
+	score_l = arr[k]; k += 1
+	score_r = arr[k]; k += 1
+	touches = arr[k]; k += 1
+	last_touch_team = arr[k]; k += 1
+	timer = arr[k]; k += 1
+	controlled_l = arr[k]; k += 1
+	controlled_r = arr[k]; k += 1
+	switch_latch_l = arr[k]; k += 1
+	switch_latch_r = arr[k]; k += 1
+	winner = arr[k]; k += 1
+
 func state_hash() -> int:
 	# FNV-1a 64bit。オフセット値はint64符号付き表現
 	# GDScriptのint64はオーバーフロー時にラップするのでそのまま使える

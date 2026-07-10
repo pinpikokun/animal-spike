@@ -19,3 +19,30 @@ func test_hash_changes_on_diff() -> void:
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x6 + ボール4 + フェーズ系(12) = 41
 	check_eq(SimState.new().to_int_array().size(), 41, "シリアライズ長")
+
+func test_load_int_array_roundtrip() -> void:
+	# to_int_array→load_int_arrayの往復で全フィールドが復元される(ロールバックの土台)
+	var a = SimState.new()
+	a.tick = 123
+	a.ball_x = 456789
+	a.phase = SimState.PHASE_RALLY
+	a.score_l = 7
+	a.winner = 1
+	a.players[2].x = 999
+	a.players[3].hit_cooldown = 5
+	var b = SimState.new()
+	b.load_int_array(a.to_int_array())
+	check_eq(b.state_hash(), a.state_hash(), "往復でハッシュ一致")
+	check_eq(b.players[2].x, 999, "プレイヤー座標の復元")
+	check_eq(b.tick, 123, "tickの復元")
+
+func test_load_int_array_overwrites_everything() -> void:
+	# 汚れた状態に読み込んでも完全に上書きされる(ロールバック時は必ず過去へ戻す)
+	var clean = SimState.new()
+	var snapshot: Array[int] = clean.to_int_array()
+	var dirty = SimState.new()
+	dirty.tick = 555
+	dirty.ball_vy = -777
+	dirty.players[0].on_ground = 0
+	dirty.load_int_array(snapshot)
+	check_eq(dirty.state_hash(), clean.state_hash(), "汚れが完全に消える")
