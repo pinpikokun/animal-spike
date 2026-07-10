@@ -78,7 +78,7 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		_step_player(state.players[i], input, cfg, team_of(i))
-		_try_hit(state, i, input, cfg)
+	_resolve_hit(state, inputs, cfg)
 
 static func reset_rally(s, cfg, serving_team: int) -> void:
 	# ラリーの再開。キャラはワープさせない(気持ちよさ優先、ユーザー決定)。
@@ -128,6 +128,9 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	s.phase = SimStateScript.PHASE_RALLY
 
 static func _check_floor_point(s, cfg) -> void:
+	# 同一tick内でタッチ超過などが先に得点しフェーズが変わっていたら加点しない(1ラリー2点の禁止)
+	if s.phase != SimStateScript.PHASE_RALLY:
+		return
 	if s.ball_y < cfg.floor_y - cfg.ball_radius:
 		return
 	var landed_left: bool = s.ball_x < cfg.net_x
@@ -149,21 +152,42 @@ static func _award_point(s, team: int, cfg) -> void:
 		s.phase = SimStateScript.PHASE_POINT_PAUSE
 		s.timer = cfg.point_pause_ticks
 
-static func _try_hit(s, i: int, input: int, cfg) -> void:
+# 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
+# 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
+# 負けた側も硬直だけ食らう不公平があった。
+# 同距離ならボールがある側のチームを優先、それも同点ならインデックス小。全て整数比較で決定論
+static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 	if s.phase != SimStateScript.PHASE_RALLY:
 		return
-	if not (input & IN_ACTION):
-		return
-	var p = s.players[i]
-	if p.hit_cooldown > 0:
-		return
-	var dx: int = s.ball_x - p.x
-	var dy: int = s.ball_y - p.y
 	var reach: int = cfg.player_reach
-	# 両辺ともfp生値の積((fp)^2単位)で比較しスケールを揃える。
-	# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
-	if dx * dx + dy * dy > reach * reach:
-		return
+	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
+	var best_i: int = -1
+	var best_d2: int = 0
+	for i in s.players.size():
+		var input: int = inputs[i] if i < inputs.size() else 0
+		if not (input & IN_ACTION):
+			continue
+		var p = s.players[i]
+		if p.hit_cooldown > 0:
+			continue
+		var dx: int = s.ball_x - p.x
+		var dy: int = s.ball_y - p.y
+		# 両辺ともfp生値の積((fp)^2単位)で比較しスケールを揃える。
+		# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
+		var d2: int = dx * dx + dy * dy
+		if d2 > reach * reach:
+			continue
+		var better: bool = best_i < 0 or d2 < best_d2
+		if not better and d2 == best_d2:
+			better = team_of(i) == side_team and team_of(best_i) != side_team
+		if better:
+			best_i = i
+			best_d2 = d2
+	if best_i >= 0:
+		_apply_hit(s, best_i, cfg)
+
+static func _apply_hit(s, i: int, cfg) -> void:
+	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
 	if p.on_ground == 1:
@@ -178,7 +202,7 @@ static func _try_hit(s, i: int, input: int, cfg) -> void:
 	else:
 		s.touches = 1
 	s.last_touch_team = team
-	if s.touches >= cfg.max_touches:
+	if s.touches > cfg.max_touches:
 		_award_point(s, 1 - team, cfg)
 
 static func _step_player(p, input: int, cfg, team: int) -> void:

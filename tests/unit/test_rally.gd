@@ -160,6 +160,67 @@ func test_touch_over_scores_opponent() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.score_r, 1, "4タッチ目で相手の得点")
 
+func test_third_touch_is_legal() -> void:
+	# 仕様2.3「3回以内に相手コートへ返球」= 3タッチ目は合法、4タッチ目が反則
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.touches = cfg.max_touches - 1
+	s.last_touch_team = 0
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = s.players[0].y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.touches, cfg.max_touches, "3タッチ目が数えられる")
+	check_eq(s.score_r, 0, "3タッチ目では失点しない")
+	check_eq(s.phase, SimState.PHASE_RALLY, "ラリーは続行する")
+
+func test_touch_over_at_floor_scores_once() -> void:
+	# タッチ超過失点と床接触が同一tickに重なっても得点は1回だけ(1ラリー2点の禁止)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.touches = cfg.max_touches
+	s.last_touch_team = 0
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(10)
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.score_r, 1, "同一tickの床接触で二重得点しない")
+
+func test_hit_disabled_during_point_pause() -> void:
+	# 掟1の但し書き: ポーズ中は移動・ジャンプ可でもヒットは無効(転がり演出と得点整合を守る)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = cfg.point_pause_ticks
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = s.players[0].y - FP.from_int(10)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "ポーズ中はタッチが増えない")
+	check_eq(s.players[0].hit_cooldown, 0, "ポーズ中は硬直も付かない")
+	check_eq(s.ball_vx, 0, "ポーズ中のヒット入力でボールが加速しない")
+
+func test_hit_disabled_after_game_over() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_GAME_OVER
+	s.winner = 0
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = s.players[0].y - FP.from_int(10)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "勝敗確定後はタッチが増えない")
+	check_eq(s.ball_vx, 0, "勝敗確定後のヒット入力でボールが加速しない")
+
 func test_win_at_15() -> void:
 	var w := _serve_world(0)
 	var s = w[0]

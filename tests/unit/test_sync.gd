@@ -69,3 +69,39 @@ func test_golden_hash_regression() -> void:
 	check_eq(a.size(), 61, "チェックポイント数(60tickごと+最終)")
 	check_eq(_combined(a), GOLDEN_COMBINED_HASH,
 		"合成ゴールデンハッシュ一致(物理を意図的に変えた場合のみ更新する)")
+
+func _run_endgame() -> Array[int]:
+	# 3600tickの主走行はGAME_OVERに到達しないため、勝敗決定(デュース2点差)と
+	# GAME_OVERフェーズの決定論はこの終盤戦シナリオで別途検証する
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	Simulation.reset_match(s, cfg, 0)
+	# 14-0開始: CPU同士は点の取り合いが交互に近く、僅差デュースだと決着しないため
+	# 大差から確実に勝利遷移へ到達させる(左の1点で15点・2点差以上が確定する)
+	s.score_l = cfg.points_to_win - 1
+	var out: Array[int] = []
+	var rng := 987654321
+	for t in 3600:
+		var inputs: Array[int] = []
+		for i in 2:
+			rng = _next_rand(rng)
+			inputs.append(rng & 31)
+		Simulation.tick(s, inputs, cfg)
+		if t % 60 == 0:
+			out.append(s.state_hash())
+	out.append(s.state_hash())
+	out.append(s.phase)
+	out.append(s.winner)
+	return out
+
+func test_endgame_reaches_game_over_deterministically() -> void:
+	var a := _run_endgame()
+	check_eq(a[a.size() - 2], SimState.PHASE_GAME_OVER, "3600tick以内に勝敗が付く")
+	check(a[a.size() - 1] >= 0, "勝者が確定している")
+	var b := _run_endgame()
+	var mismatch := -1
+	for i in a.size():
+		if a[i] != b[i]:
+			mismatch = i
+			break
+	check_eq(mismatch, -1, "終盤戦デシンクなし(検出indexは-1)")

@@ -68,6 +68,34 @@ func test_cooldown_blocks_double_hit() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "クールダウン中は再ヒットしない")
 
+func test_same_tick_closest_teammate_wins() -> void:
+	# 同tickに複数人がリーチ内なら最も近い1人だけがヒットする(1tick1ヒット)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = FP.from_int(100)
+	s.players[1].x = FP.from_int(110)
+	s.ball_x = FP.from_int(103)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, Simulation.IN_ACTION, 0, 0], cfg)
+	check_eq(s.touches, 1, "同チーム同時タッチでも1タッチ")
+	check(s.players[0].hit_cooldown > 0, "近い方がヒットする")
+	check_eq(s.players[1].hit_cooldown, 0, "負けた側は硬直しない")
+
+func test_same_tick_tie_ball_side_team_wins() -> void:
+	# 距離が同点なら、ボールがある側のチームが優先(ネット際ジョストの公平化)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[1].x = cfg.net_x - cfg.net_half_w - FP.from_int(4)
+	s.players[2].x = cfg.net_x + cfg.net_half_w + FP.from_int(4)
+	s.ball_x = cfg.net_x
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [0, Simulation.IN_ACTION, Simulation.IN_ACTION, 0], cfg)
+	check_eq(s.last_touch_team, 1, "ボール側(右)のチームが同距離タイを制す")
+	check(s.players[2].hit_cooldown > 0, "右前衛がヒットする")
+	check_eq(s.players[1].hit_cooldown, 0, "左前衛は硬直しない")
+
 func test_touch_count_resets_on_team_change() -> void:
 	var w := _rally_world()
 	var s = w[0]
