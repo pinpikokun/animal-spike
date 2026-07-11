@@ -10,7 +10,6 @@ const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
 
-const BALL_SRC_PX := 128.0  # ボール素材(volleyball.svg)のviewBox実寸(scale1でラスタ)
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 
 var cfg
@@ -52,12 +51,13 @@ func _ready() -> void:
 		_sprites.append(s)
 	_ball = $Ball
 	_ball.centered = true
-	# ボールだけは線形フィルタで滑らかに縮小(ドット絵キャラはニアレスト維持)。
-	# 素材を実寸まで潰すニアレストだとガビガビになるため
-	_ball.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	# 当たり判定半径(fp)から表示直径pxを求め、素材実寸に対する縮小率を決める
+	# ボール素材はscripts/gen_ball.gdがゲーム実寸へ直接ラスタした焼き込みPNG。
+	# 実寸一致ならscale=1でニアレスト描画され、縮小ぼやけが出ない。
+	# rules.jsonのball_radius_pxを変えたらジェネレーター再実行が必要
 	var ball_px := ViewTransform.to_px(cfg.ball_radius) * 2.0
-	_ball.scale = Vector2.ONE * (ball_px / BALL_SRC_PX)
+	if _ball.texture.get_width() != int(ball_px):
+		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball.texture.get_width(), int(ball_px)])
+	_ball.scale = Vector2.ONE * (ball_px / float(_ball.texture.get_width()))
 
 func _physics_process(_delta: float) -> void:
 	if external_sim:

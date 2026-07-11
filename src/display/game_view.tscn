@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://src/display/game_view.gd" id="1_gv"]
 [ext_resource type="Script" path="res://src/display/court.gd" id="2_court"]
-[ext_resource type="Texture2D" path="res://assets/ball/volleyball.svg" id="3_ball"]
+[ext_resource type="Texture2D" path="res://assets/ball/volleyball_game.png" id="3_ball"]
 [ext_resource type="Script" path="res://src/display/score_ui.gd" id="4_score"]
 
 [node name="GameView" type="Node2D"]
