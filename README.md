@@ -39,6 +39,21 @@
 - 気持ちよさの掟: 世界は止まらない(ポーズ中もボールは慣性で転がり、キャラは動ける)。
   キャラはワープしない(ラリー再開でも位置リセットなし。初期配置は試合開始時のみ)
 
+## ネット対戦 (M2検証)
+
+決定論sim(src/sim/)を godot-rollback-netcode v1.0.0 に薄皮アダプタ(src/net/)で載せている。
+rollback対象は3ノード(InputL/InputR/SimRoot)のみ。SimRootが`_network_postprocess`で
+`Simulation.tick`を1回回し、SimStateのint配列(41整数)を保存/復元する。
+
+- フェーズ1(同一PC2プロセス、AI検証済み):
+  - 無人ソーク(両側CPU): `powershell -File scripts\run_net_test.ps1 -Bot`
+  - 手動対戦: `powershell -File scripts\run_net_test.ps1`(前面ウィンドウのキーが効く)
+  - 起動引数(`--`以降): `host` | `join [address]` | `bot` | `rbdebug`(毎tick強制ロールバック)
+  - localhostでtickロックステップ一致・デシンクゼロを確認済み
+- フェーズ2(2台実PC+Steam、ユーザー協働): 本ゲート。GodotSteam導入後に実施。
+  前提=2台目Windows PC+Steamアカウント2つ(フレンド登録済み)
+- 合否基準と手順: docs/superpowers/plans/2026-07-11-m2-gate-procedure.md
+
 ## ライセンス
 
 - 本リポジトリのコード・データは All Rights Reserved(Steam販売予定の商用プロジェクト)。
