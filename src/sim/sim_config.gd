@@ -30,6 +30,8 @@ var bump_fwd_speed: int
 var toss_fwd_vy: int
 var toss_fwd_vx: int
 var toss_mid_vx: int
+var hit_inertia_num: int
+var hit_inertia_den: int
 var spike_vx: int
 var spike_vy: int
 var serve_vx: int
@@ -74,6 +76,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	toss_fwd_vy = FP.from_int(_int_of(raw, "toss_fwd_vy_px_s")) / tick_rate
 	toss_fwd_vx = FP.from_int(_int_of(raw, "toss_fwd_vx_px_s")) / tick_rate
 	toss_mid_vx = FP.from_int(_int_of(raw, "toss_mid_vx_px_s")) / tick_rate
+	hit_inertia_num = _int_of(raw, "hit_inertia_pct")
+	hit_inertia_den = 100
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate

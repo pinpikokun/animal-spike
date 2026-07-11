@@ -193,7 +193,7 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
 	if p.on_ground == 1:
-		# 地上ヒット=トス/レシーブ。押している方向でトス方向を打ち分ける。
+		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
 		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
 		var hdir: int = 0
 		if input & IN_LEFT:
@@ -201,22 +201,29 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 		if input & IN_RIGHT:
 			hdir += 1
 		var up: bool = (input & IN_UP) != 0
+		var desired_vx: int = 0
+		var desired_vy: int = 0
 		if hdir != 0 and not up:
 			# 横のみ: 前へ低く遠く
-			s.ball_vy = -cfg.toss_fwd_vy
-			s.ball_vx = hdir * cfg.toss_fwd_vx
+			desired_vy = -cfg.toss_fwd_vy
+			desired_vx = hdir * cfg.toss_fwd_vx
 		elif hdir != 0 and up:
 			# 上+横: 中間(高く+そこそこ前)
-			s.ball_vy = -cfg.bump_up_speed
-			s.ball_vx = hdir * cfg.toss_mid_vx
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = hdir * cfg.toss_mid_vx
 		elif up:
 			# 上のみ: 真上へ高く
-			s.ball_vy = -cfg.bump_up_speed
-			s.ball_vx = 0
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = 0
 		else:
-			# ニュートラル: 現行(少し前へ=素レシーブ)
-			s.ball_vy = -cfg.bump_up_speed
-			s.ball_vx = dir * cfg.bump_fwd_speed
+			# ニュートラル: 少し前へ=素レシーブ
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = dir * cfg.bump_fwd_speed
+		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
+		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
+		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
+		s.ball_vx = desired_vx - s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
+		s.ball_vy = desired_vy - s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
 	else:
 		s.ball_vy = cfg.spike_vy
 		s.ball_vx = dir * cfg.spike_vx

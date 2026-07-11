@@ -76,6 +76,28 @@ func test_toss_mid_is_between() -> void:
 	check_eq(s.ball_vx, cfg.toss_mid_vx, "中間トスの横は中程度")
 	check(s.ball_vx < cfg.toss_fwd_vx, "中間トスは前トスより横が小さい")
 
+func test_receive_reflects_incoming_inertia() -> void:
+	# 相手の強打(横入射)を真上狙いで受けても、慣性が反発して前へ逸れる
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = -FP.from_int(8)  # 右から左へ来る強打
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "真上狙いでも入射の反発で前(右)へ逸れる")
+
+func test_no_incoming_toss_stays_on_aim() -> void:
+	# 入射速度ゼロなら慣性成分ゼロ=狙いどおり真上(横成分ゼロ)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = 0
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.ball_vx, 0, "入射ゼロなら真上狙いは横ゼロのまま")
+
 func test_no_hit_out_of_reach() -> void:
 	var w := _rally_world()
 	var s = w[0]
