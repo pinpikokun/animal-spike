@@ -10,7 +10,7 @@ const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
 
-const BALL_SRC_PX := 64.0  # ボール素材(volleyball_white64.png)の実寸
+const BALL_SRC_PX := 128.0  # ボール素材(volleyball.svg)のviewBox実寸(scale1でラスタ)
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 
 var cfg

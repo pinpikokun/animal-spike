@@ -26,10 +26,9 @@
 - 入手元: https://opengameart.org/content/ball-collection
 - ライセンス: CC0 (Creative Commons Zero v1.0 Universal)。クレジット不要
 - 内容: バレーボール(グレー単色)・ビーチボール(カラー)。元素材balls_3.zipの
-  144x144球体から抜粋。ゲーム内でボールとして使用し、表示時に縮小する
-- 派生: volleyball_white64.png は volleyball_144.png(CC0)を高品質縮小(Lanczos 64x64)+
-  白寄せして生成した実使用素材。144pxを実寸まで潰すとガビガビになるため、事前縮小+
-  表示時は線形フィルタで滑らかに。CC0の派生物につき同じくCC0扱い
+  144x144球体から抜粋
+- 注: ゲーム内で使うボールは網目が多く輪郭も太かったため不採用。代わりに
+  assets/ball/volleyball.svg(自作・シンプルな網目/細い輪郭/色替え可)を使用中
 
 ## 調査記録
 
