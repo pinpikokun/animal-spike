@@ -4,6 +4,8 @@
 # Godot (M0以降で使用)
 .godot/
 *.import
+# スクリプトUID(本作はpreloadのパス参照でUID不使用、Godotが都度生成する)
+*.uid
 
 # OS
 Thumbs.db
