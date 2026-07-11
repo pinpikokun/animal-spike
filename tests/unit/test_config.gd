@@ -6,7 +6,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 func test_loads_default_rules() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.tick_rate, 60, "tick_rate")
-	check_eq(cfg.court_width, FP.from_int(640), "court_width")
+	check_eq(cfg.court_width, FP.from_int(448), "court_width")
 	check_eq(cfg.floor_y, FP.from_int(320), "floor_y")
 	check_eq(cfg.points_to_win, 15, "15点先取")
 	check_eq(cfg.deuce, true, "デュース有")
@@ -21,12 +21,12 @@ func test_invalid_rules_detected() -> void:
 
 func test_m1a_keys_loaded() -> void:
 	var cfg = SimConfig.new()
-	check_eq(cfg.net_x, FP.from_int(320), "net_x")
+	check_eq(cfg.net_x, FP.from_int(224), "net_x")
 	check_eq(cfg.max_touches, 3, "max_touches")
 	check(cfg.spike_vx > 0, "spike_vxが正")
 	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
 	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
-	check_eq(cfg.spawn_back_px, 80, "spawn_back_px")
+	check_eq(cfg.spawn_back_px, 56, "spawn_back_px")
 
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()

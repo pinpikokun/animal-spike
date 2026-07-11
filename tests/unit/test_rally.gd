@@ -314,7 +314,7 @@ func test_deuce_requires_two_point_lead() -> void:
 	s.score_l = cfg.points_to_win - 1
 	s.score_r = cfg.points_to_win - 1
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(500)
+	s.ball_x = FP.from_int(350)
 	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(10)
 	Simulation.step(s, [0, 0, 0, 0], cfg)

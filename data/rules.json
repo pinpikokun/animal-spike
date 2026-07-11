@@ -1,6 +1,6 @@
 {
 	"tick_rate": 60,
-	"court_width_px": 640,
+	"court_width_px": 448,
 	"court_height_px": 360,
 	"floor_y_px": 320,
 	"gravity_px_s2": 1150,
@@ -10,7 +10,7 @@
 	"ball_bounce_pct": 78,
 	"points_to_win": 15,
 	"deuce": 1,
-	"net_x_px": 320,
+	"net_x_px": 224,
 	"net_top_y_px": 275,
 	"net_half_w_px": 3,
 	"player_reach_px": 28,
@@ -31,6 +31,6 @@
 	"point_pause_ticks": 90,
 	"serve_delay_ticks": 60,
 	"max_touches": 3,
-	"spawn_back_px": 80,
-	"spawn_front_px": 250
+	"spawn_back_px": 56,
+	"spawn_front_px": 157
 }

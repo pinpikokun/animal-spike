@@ -17,9 +17,9 @@ func test_cpu_chases_ball_on_own_side() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(200)
+	s.ball_x = FP.from_int(100)
 	s.ball_y = FP.from_int(100)
-	# players[1](左チーム相方、spawn_front=250)から見てボールは左
+	# players[1](左チーム相方、spawn_front=157)から見てボールは左
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_LEFT, "ボールへ向かって左移動")
 
@@ -38,7 +38,7 @@ func test_cpu_ignores_ball_on_other_side() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(500)
+	s.ball_x = FP.from_int(350)
 	s.ball_y = FP.from_int(100)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_ACTION), "敵陣のボールは打たない")
@@ -133,15 +133,15 @@ func test_cpu_walks_home_during_pause() -> void:
 	s.timer = cfg.point_pause_ticks
 	s.players[1].x = FP.from_int(100)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=250)へ戻る")
+	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=157)へ戻る")
 
 func test_cpu_returns_to_spawn() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(500)
+	s.ball_x = FP.from_int(350)
 	s.ball_y = FP.from_int(100)
 	s.players[1].x = FP.from_int(100)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=250)へ戻る")
+	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=157)へ戻る")

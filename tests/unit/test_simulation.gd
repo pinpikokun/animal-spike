@@ -33,10 +33,10 @@ func test_move_right_speed() -> void:
 func test_move_left_speed() -> void:
 	var w := _new_world()
 	var s = w[0]
-	s.players[0].x = FP.from_int(300)
+	s.players[0].x = FP.from_int(220)
 	for i in 60:
 		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], w[1])
-	var moved := 300 - FP.to_int(s.players[0].x)
+	var moved := 220 - FP.to_int(s.players[0].x)
 	check(moved >= 175 and moved <= 185, "1秒で約180px左移動 actual=" + str(moved))
 
 func test_jump_and_land() -> void:

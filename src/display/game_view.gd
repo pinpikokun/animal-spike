@@ -30,8 +30,6 @@ func attach_external(cfg_in, state_ref) -> void:
 	state = state_ref
 
 func _ready() -> void:
-	# 原作準拠: コートを画面下に寄せる(表示のみの一括シフト。ScoreUIはCanvasLayerで不動)
-	position.y = 16.0
 	if not external_sim:
 		cfg = SimConfig.new()
 		if not cfg.valid:
@@ -39,6 +37,9 @@ func _ready() -> void:
 			return
 		state = SimState.new()
 		Simulation.reset_match(state, cfg, 0)
+	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
+	# 下寄せ(原作準拠)+コートが画面より狭いぶん中央寄せ
+	position = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, 16.0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
 	var fox := SpriteFactory.build_fox()

@@ -12,9 +12,9 @@ func _rally_world() -> Array:
 	for p in s.players:
 		p.y = cfg.floor_y
 	s.players[0].x = FP.from_int(100)
-	s.players[1].x = FP.from_int(250)
-	s.players[2].x = FP.from_int(540)
-	s.players[3].x = FP.from_int(390)
+	s.players[1].x = FP.from_int(175)
+	s.players[2].x = FP.from_int(380)
+	s.players[3].x = FP.from_int(270)
 	return [s, cfg]
 
 func test_bump_on_ground() -> void:

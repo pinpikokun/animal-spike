@@ -35,19 +35,23 @@ func _draw() -> void:
 	var wall_y := fy - WALL_Y_OFF
 	var back_y := fy - COURT_BACK
 	var front_y := fy + COURT_FRONT
+	var mgn := (640.0 - w) * 0.5  # コートが画面より狭いぶんの場外マージン(左右)
 
-	# 奥壁(濃い青): 薄い横線+縦パネル線(原作の壁パネル風)
-	draw_rect(Rect2(0.0, -TOP_EXT, w, wall_y + TOP_EXT), Color(0.13, 0.13, 0.50))
+	# 奥壁(濃い青): 薄い横線+縦パネル線(原作の壁パネル風)。場外まで画面全域に描く
+	draw_rect(Rect2(-mgn, -TOP_EXT, w + mgn * 2.0, wall_y + TOP_EXT), Color(0.13, 0.13, 0.50))
 	var wy := 12.0 - TOP_EXT
 	while wy < wall_y:
-		draw_line(Vector2(0.0, wy), Vector2(w, wy), Color(0.18, 0.19, 0.58), 1.0)
+		draw_line(Vector2(-mgn, wy), Vector2(w + mgn, wy), Color(0.18, 0.19, 0.58), 1.0)
 		wy += 24.0
 	for i in 5:
-		var px := 64.0 + 128.0 * float(i)
+		var px := -mgn + 64.0 + 128.0 * float(i)
 		draw_line(Vector2(px, -TOP_EXT), Vector2(px, wall_y), Color(0.55, 0.55, 0.62), 2.0)
 
-	# 床(明るい青の帯)
-	draw_rect(Rect2(0.0, wall_y, w, VIEW_H - wall_y), Color(0.15, 0.31, 0.78))
+	# 床(明るい青の帯)。場外まで敷き、場外は一段暗くする
+	draw_rect(Rect2(-mgn, wall_y, w + mgn * 2.0, VIEW_H - wall_y), Color(0.15, 0.31, 0.78))
+	var out_col := Color(0.10, 0.21, 0.55)
+	draw_rect(Rect2(-mgn, wall_y, mgn, VIEW_H - wall_y), out_col)
+	draw_rect(Rect2(w, wall_y, mgn, VIEW_H - wall_y), out_col)
 	# 床タイルの横線(水平・等間隔)
 	var grid_col := Color(0.36, 0.62, 0.96)  # 原作の明るいシアン寄りの格子
 	# 横線はコート奥ラインに揃えて敷く(白線が格子に乗る=車線がコートと一致する)
@@ -63,6 +67,9 @@ func _draw() -> void:
 			Vector2(_px(lx, wall_y, fy, cx), wall_y),
 			grid_col, 1.0)
 		lx += LANE_W
+	# 場外との境界: サイドボード(ボールはここで跳ね返る)
+	_draw_side_board(0.0, fy, cx)
+	_draw_side_board(w, fy, cx)
 
 	# コートの白線(原作準拠): 矩形の囲い+中央線。サイドラインはサーブ線と同一
 	var sx := ViewTransform.to_px(cfg.serve_line)
@@ -129,6 +136,16 @@ func _draw() -> void:
 	draw_line(Vector2(cx - mesh_hw, front_y - 2.0), Vector2(cx + mesh_hw, front_y - 2.0), Color(0.78, 0.81, 0.90), 1.0)
 	# 手前ポール(太め・明るめ=近い)
 	_draw_pole(cx, pole_top, net_h, 8.0, 1.0)
+
+func _draw_side_board(x: float, fy: float, cx: float) -> void:
+	# コート側端に立つボード(場外との仕切り。ボールはここで反射する)
+	var h := 22.0
+	var a := Vector2(_px(x, VIEW_H, fy, cx), VIEW_H)
+	var b := Vector2(_px(x, fy - WALL_Y_OFF, fy, cx), fy - WALL_Y_OFF)
+	var pts := PackedVector2Array([a, b, b + Vector2(0, -h), a + Vector2(0, -h)])
+	draw_colored_polygon(pts, Color(0.20, 0.32, 0.72))
+	draw_line(a + Vector2(0, -h), b + Vector2(0, -h), Color(0.62, 0.72, 0.95), 2.0)
+	draw_line(a, b, Color(0.08, 0.14, 0.40), 2.0)
 
 func _draw_pole(cx: float, top: float, h: float, w: float, lum: float) -> void:
 	# 円柱らしい縦の陰影4段+赤い頭(ハイライト付き)+銀の継ぎ目リング+台座

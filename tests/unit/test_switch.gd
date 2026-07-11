@@ -10,7 +10,7 @@ func _world() -> Array:
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0)
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(600)
+	s.ball_x = FP.from_int(420)
 	s.ball_y = FP.from_int(50)
 	return [s, cfg]
 
