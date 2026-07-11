@@ -80,13 +80,19 @@ func _draw() -> void:
 	# ネット: 中央で傾かない。奥ポール+網メッシュ+手前ポール(配置は原作準拠、質感は作り込む)
 	var nty := ViewTransform.to_px(cfg.net_top_y)
 	var net_h := fy - nty
-	var back_top := back_y - net_h    # 奥ポール上端(奥=画面上方向)
-	var pole_top := front_y - net_h   # 手前ポール上端(手前ラインに立つ)
+	# ポールは白線の外に立つ(実際のバレーコートと同じ)。
+	# 奥ポールは奥ラインの奥、手前ポールは手前ラインの手前。
+	# 遠いものは小さく: 奥ポールの見かけ高さには奥行き縮尺を掛ける
+	var back_base := back_y - 3.0
+	var back_h := net_h * 0.85
+	var back_top := back_base - back_h   # 奥ポール上端
+	var front_base := front_y + 4.0
+	var pole_top := front_base - net_h   # 手前ポール上端
 	# 天井まで伸びる細いケーブル(原作: ネットの上から画面上端まで)
 	draw_line(Vector2(cx, -TOP_EXT), Vector2(cx, back_top + 2.0), Color(0.50, 0.50, 0.58), 1.0)
 	draw_line(Vector2(cx + 1.0, -TOP_EXT), Vector2(cx + 1.0, back_top + 2.0), Color(0.30, 0.30, 0.40), 1.0)
-	# 奥ポール(細め・暗め=遠い)。頭が網の上に覗く
-	_draw_pole(cx, back_top, net_h, 5.0, 0.72)
+	# 奥ポール(細め・暗め・低め=遠い)。頭が網の上に覗く
+	_draw_pole(cx, back_top, back_h, 5.0, 0.72)
 	# 網: 上端の白テープリボン(奥ポール頭→手前ポール頭の奥行き)に網目を透かす
 	var tape_col := Color(0.93, 0.94, 0.98)
 	var rib_top := back_top + 2.0
