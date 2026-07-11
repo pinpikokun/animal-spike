@@ -121,12 +121,13 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	var dir: int = _dir_of_team(s.serving_team)
-	s.ball_vx = dir * cfg.serve_vx
-	s.ball_vy = -cfg.serve_vy
-	s.touches = 0
-	s.last_touch_team = s.serving_team
+	# サーブ=セルフトス。地上ヒットと同じ方向打ち分けを反映する。
+	# 真上トス(↑orニュートラル)→ジャンプ→アタックでアタックサーブ、
+	# 前トス(横=ネット方向)はそのままネットを越える緩いサーブになる。
+	# 保持中ボールは静止=慣性成分ゼロなので狙いどおりのトスになる。
+	# 先にRALLYへ遷移(万一のタッチ超過得点はaward側のphaseが優先される)
 	s.phase = SimStateScript.PHASE_RALLY
+	_apply_hit(s, idx, cfg, input)
 
 static func _check_floor_point(s, cfg) -> void:
 	# 同一tick内でタッチ超過などが先に得点しフェーズが変わっていたら加点しない(1ラリー2点の禁止)

@@ -74,6 +74,30 @@ func test_cpu_team_serves_via_team_input() -> void:
 			break
 	check(served, "右チーム(完全CPU)のサーブで試合が進む")
 
+func test_cpu_serve_crosses_net() -> void:
+	# セルフトス方式のサーブでも、CPUは前トス(ネット方向)で確実にネットを越え自滅しない
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	# 左=人間が相方(index1)操作、CPUサーバー(index0)が自動サーブする配線
+	s.controlled_l = 1
+	var served := false
+	for i in cfg.serve_delay_ticks + 5:
+		Simulation.tick(s, [0, 0], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			served = true
+			break
+	check(served, "CPUがサーブ(トス)を実行")
+	var crossed := false
+	for i in 300:
+		Simulation.tick(s, [0, 0], cfg)
+		if s.ball_x > cfg.net_x:
+			crossed = true
+			break
+		if s.phase != SimState.PHASE_RALLY:
+			break
+	check(crossed, "CPUのサーブがネットを越え相手コートへ渡る(自滅しない)")
+
 func test_cpu_walks_home_during_pause() -> void:
 	# 得点後のポーズ中、CPUは棒立ちせず持ち場へ歩いて戻る
 	var w := _world()
