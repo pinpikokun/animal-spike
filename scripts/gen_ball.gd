@@ -22,6 +22,7 @@ const SHADOW_DEEP := "M115.66 88.09 A 57 57 0 0 1 12.34 88.09 A 75 75 0 0 0 115.
 
 const SEAM_HIRES := 8        # 連続マスク生成の高解像度倍率
 const SEAM_STROKE_HI := 2.1  # 高解像度側のシーム線幅(細線化前)
+const ROLL_FRAMES := 16      # 転がり回転の焼き込みフレーム数(0〜360度を等分)
 
 # 白ボールのシーム色: ③=薄い(採用)、②=やや濃い(キープ。切替はPALETTESの該当行)
 const WHITE_SEAM := "#c6c1ba"      # ③採用
@@ -67,19 +68,21 @@ func build_body_svg(cols: Array) -> String:
 	svg += '</svg>'
 	return svg
 
-func build_seam_svg() -> String:
+func build_seam_svg(rot_deg: float) -> String:
+	# rot_deg=転がり回転(シームだけ回す。光沢・影・輪郭は固定=本体側で描く)
 	var svg := '<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">'
+	svg += '<g transform="rotate(%s 64 64)">' % rot_deg
 	svg += '<g fill="none" stroke="#000000" stroke-width="%s" stroke-linecap="round">' % SEAM_STROKE_HI
 	for deg in [0, 120, 240]:
 		var t: String = "" if deg == 0 else ' transform="rotate(%d 64 64)"' % deg
 		svg += '<g%s><path d="%s"/><path d="%s"/><path d="%s"/></g>' % [t, ARM, D1, D2]
-	svg += '</g></svg>'
+	svg += '</g></g></svg>'
 	return svg
 
 # 高解像度描画→8x8マックスプールで連続した太めシームマスクを得る
-func seam_mask_thick(n: int) -> Array:
+func seam_mask_thick(n: int, rot_deg: float) -> Array:
 	var hs := Image.new()
-	hs.load_svg_from_string(build_seam_svg(), float(n * SEAM_HIRES) / 128.0)
+	hs.load_svg_from_string(build_seam_svg(rot_deg), float(n * SEAM_HIRES) / 128.0)
 	var m := []
 	for y in n:
 		m.append([])
@@ -146,7 +149,7 @@ func zhang_suen(m: Array, n: int) -> Array:
 				changed = true
 	return m
 
-func build_game_png(cols: Array, n: int) -> Image:
+func build_game_png(cols: Array, n: int, rot_deg: float) -> Image:
 	var outline := Color(cols[4])
 	var seam := Color(cols[3])
 	var body := Image.new()
@@ -160,8 +163,8 @@ func build_game_png(cols: Array, n: int) -> Image:
 			else:
 				c.a = 1.0
 				ball.set_pixel(x, y, c)
-	# シーム: 連続マスク→1px細線化→塗り(球内のみ)
-	var mask := zhang_suen(seam_mask_thick(n), n)
+	# シーム: 連続マスク→1px細線化→塗り(球内のみ)。rot_degでシームだけ回転
+	var mask := zhang_suen(seam_mask_thick(n, rot_deg), n)
 	for y in n:
 		for x in n:
 			if ball.get_pixel(x, y).a >= 0.5 and mask[y][x]:
@@ -194,7 +197,15 @@ func _init() -> void:
 		var sf := FileAccess.open(BALL_DIR + "volleyball" + str(suffix) + ".svg", FileAccess.WRITE)
 		sf.store_string(svg)
 		sf.close()
-		var png := build_game_png(cols, game_px)
+		var png := build_game_png(cols, game_px, 0.0)
 		png.save_png(BALL_DIR + "volleyball" + str(suffix) + "_game.png")
-	print("GEN BALL OK size=" + str(game_px))
+		# 転がり回転シート: ROLL_FRAMES枚を横並びに焼き込む。実行時回転を避け、
+		# 表示層は状態から選んだクリーンなドット絵フレームを差し替えるだけにする
+		var sheet := Image.create(game_px * ROLL_FRAMES, game_px, false, Image.FORMAT_RGBA8)
+		for fidx in ROLL_FRAMES:
+			var ang := 360.0 * float(fidx) / float(ROLL_FRAMES)
+			var frame := build_game_png(cols, game_px, ang)
+			sheet.blit_rect(frame, Rect2i(0, 0, game_px, game_px), Vector2i(fidx * game_px, 0))
+		sheet.save_png(BALL_DIR + "volleyball" + str(suffix) + "_roll.png")
+	print("GEN BALL OK size=" + str(game_px) + " roll_frames=" + str(ROLL_FRAMES))
 	quit()

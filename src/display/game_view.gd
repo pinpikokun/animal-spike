@@ -17,6 +17,8 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
+var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
+var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
 # ここは状態を読んでスプライトを駆動する表示専任になる
 var external_sim := false
@@ -53,12 +55,19 @@ func _ready() -> void:
 	_ball = $Ball
 	_ball.centered = true
 	# ボール素材はscripts/gen_ball.gdがゲーム実寸へ直接ラスタした焼き込みPNG。
-	# 実寸一致ならscale=1でニアレスト描画され、縮小ぼやけが出ない。
+	# 転がり回転は焼き込みフレームを差し替える方式(実行時回転はドット絵が
+	# ガビガビになるため使わない)。シートは横並びROLL_FRAMES枚、フレームは正方。
 	# rules.jsonのball_radius_pxを変えたらジェネレーター再実行が必要
+	var roll: Texture2D = load("res://assets/ball/volleyball_roll.png")
+	_ball.texture = roll
+	_ball.region_enabled = true
+	_ball_frame_w = roll.get_height()  # フレームは正方なので高さ=1フレーム辺
+	_ball_roll_frames = int(roll.get_width() / _ball_frame_w)
+	_ball.region_rect = Rect2(0, 0, _ball_frame_w, _ball_frame_w)
 	var ball_px := ViewTransform.to_px(cfg.ball_radius) * 2.0
-	if _ball.texture.get_width() != int(ball_px):
-		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball.texture.get_width(), int(ball_px)])
-	_ball.scale = Vector2.ONE * (ball_px / float(_ball.texture.get_width()))
+	if _ball_frame_w != int(ball_px):
+		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
+	_ball.scale = Vector2.ONE * (ball_px / float(_ball_frame_w))
 
 func _physics_process(_delta: float) -> void:
 	if external_sim:
@@ -91,8 +100,14 @@ func _sync_sprites() -> void:
 		if spr.animation != anim:
 			spr.play(anim)
 	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y)).round()
-	# ラリー中のボール回転(原作準拠): 転がり角を水平位置から一意に導く。右へ進むほど
-	# 角度が増え時計回り=右回転、左へ進めば左回転。状態から導出しビューに角度を溜めない
-	var radius_px := ViewTransform.to_px(cfg.ball_radius)
-	if radius_px > 0.0:
-		_ball.rotation = ViewTransform.to_px(state.ball_x) / radius_px
+	# 転がり回転(原作準拠): 保持中(サーブ)は回さず、飛行/転がり中だけ水平位置から
+	# フレームを選ぶ。角度=位置px/半径px→フレーム番号。右へ進むほど番号が進み時計回り
+	# =右回転、左へ進めば左回転。状態から導出しビューに角度を溜めない(ロールバック安全)
+	var frame := 0
+	if state.phase != SimState.PHASE_SERVE:
+		var radius_px := ViewTransform.to_px(cfg.ball_radius)
+		if radius_px > 0.0:
+			var angle := ViewTransform.to_px(state.ball_x) / radius_px
+			var step := TAU / float(_ball_roll_frames)
+			frame = posmod(roundi(angle / step), _ball_roll_frames)
+	_ball.region_rect = Rect2(frame * _ball_frame_w, 0, _ball_frame_w, _ball_frame_w)
