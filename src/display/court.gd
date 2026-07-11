@@ -77,21 +77,80 @@ func _draw() -> void:
 	draw_line(fr, br, line_col, 2.0)  # 右サイドライン(右斜め)
 	draw_line(Vector2(cx, front_y), Vector2(cx, back_y), line_col, 2.0)  # 中央線(垂直)
 
-	# ネット: 中央で傾かない。奥ポール+網の帯+手前ポール(原作準拠)
+	# ネット: 中央で傾かない。奥ポール+網メッシュ+手前ポール(配置は原作準拠、質感は作り込む)
 	var nty := ViewTransform.to_px(cfg.net_top_y)
 	var net_h := fy - nty
 	var back_top := back_y - net_h    # 奥ポール上端(奥=画面上方向)
+	var pole_top := front_y - net_h   # 手前ポール上端(手前ラインに立つ)
 	# 天井まで伸びる細いケーブル(原作: ネットの上から画面上端まで)
-	draw_line(Vector2(cx, -TOP_EXT), Vector2(cx, back_top + 2.0), Color(0.55, 0.55, 0.62), 2.0)
-	# 奥ポール(青)。網より上に頭が少し覗く=ネットが壁まで続いて見えない
-	draw_rect(Rect2(cx - 2.0, back_top, 4.0, net_h), Color(0.22, 0.36, 0.82))
-	# 網の帯(奥ポールの頭を少し残して手前まで)
-	draw_rect(Rect2(cx - 2.0, back_top + 6.0, 4.0, front_y - (back_top + 6.0)), Color(0.72, 0.75, 0.86))
-	# 手前ポール: 手前ラインに立ち、高さはネット高ぶん(奥行きで間延びさせない)
-	var pole_top := front_y - net_h
-	draw_rect(Rect2(cx - 3.0, pole_top, 6.0, net_h), Color(0.25, 0.42, 0.95))
-	draw_rect(Rect2(cx - 3.0, pole_top, 2.0, net_h), Color(0.55, 0.70, 1.0))    # 左の光
-	draw_rect(Rect2(cx + 2.0, pole_top, 1.0, net_h), Color(0.12, 0.22, 0.55))  # 右の影
-	draw_rect(Rect2(cx - 3.0, pole_top, 6.0, 3.0), Color(0.92, 0.93, 0.97))    # 白い頭
-	draw_rect(Rect2(cx - 3.0, pole_top + 3.0, 6.0, 9.0), Color(0.90, 0.18, 0.12))  # 赤帯
-	draw_rect(Rect2(cx + 1.0, pole_top + 3.0, 2.0, 9.0), Color(0.60, 0.10, 0.08))  # 赤帯の影
+	draw_line(Vector2(cx, -TOP_EXT), Vector2(cx, back_top + 2.0), Color(0.50, 0.50, 0.58), 1.0)
+	draw_line(Vector2(cx + 1.0, -TOP_EXT), Vector2(cx + 1.0, back_top + 2.0), Color(0.30, 0.30, 0.40), 1.0)
+	# 奥ポール(細め・暗め=遠い)。頭が網の上に覗く
+	_draw_pole(cx, back_top, net_h, 5.0, 0.72)
+	# 網: 上端の白テープリボン(奥ポール頭→手前ポール頭の奥行き)に網目を透かす
+	var tape_col := Color(0.93, 0.94, 0.98)
+	var rib_top := back_top + 2.0
+	draw_rect(Rect2(cx - 2.0, rib_top, 4.0, pole_top - rib_top), tape_col)
+	draw_rect(Rect2(cx + 1.0, rib_top, 1.0, pole_top - rib_top), Color(0.68, 0.70, 0.80))
+	var ry2 := rib_top + 3.0
+	while ry2 < pole_top - 1.0:
+		draw_line(Vector2(cx - 2.0, ry2), Vector2(cx + 2.0, ry2), Color(0.72, 0.75, 0.86), 1.0)
+		ry2 += 3.0
+	# 網目メッシュ: 手前ポールの両脇に覗く(網はポールより奥に垂れている)
+	var mesh_top := pole_top + 2.0
+	var mesh_hw := 6.0
+	draw_rect(Rect2(cx - mesh_hw, mesh_top, mesh_hw * 2.0, front_y - 2.0 - mesh_top), Color(0.85, 0.88, 0.96, 0.28))
+	# 菱形の網目: 45度の斜線クロスハッチを帯の中にクリップして描く
+	var mcol := Color(0.90, 0.92, 0.99, 0.70)
+	var xl := cx - mesh_hw
+	var xr := cx + mesh_hw
+	var mh := front_y - 2.0 - mesh_top
+	var x0 := xl - mh
+	while x0 <= xr:
+		# 右下がり: (x0+t, mesh_top+t)
+		var t1 := maxf(0.0, xl - x0)
+		var t2 := minf(mh, xr - x0)
+		if t2 > t1:
+			draw_line(Vector2(x0 + t1, mesh_top + t1), Vector2(x0 + t2, mesh_top + t2), mcol, 1.0)
+		# 左下がり: (x0r-t, mesh_top+t)
+		var x0r := xl + (x0 - xl) + mh  # 対称の始点
+		var s1 := maxf(0.0, x0r - xr)
+		var s2 := minf(mh, x0r - xl)
+		if s2 > s1:
+			draw_line(Vector2(x0r - s1, mesh_top + s1), Vector2(x0r - s2, mesh_top + s2), mcol, 1.0)
+		x0 += 4.0
+	# 網の下端の縁ロープ
+	draw_line(Vector2(cx - mesh_hw, front_y - 2.0), Vector2(cx + mesh_hw, front_y - 2.0), Color(0.78, 0.81, 0.90), 1.0)
+	# 手前ポール(太め・明るめ=近い)
+	_draw_pole(cx, pole_top, net_h, 8.0, 1.0)
+
+func _draw_pole(cx: float, top: float, h: float, w: float, lum: float) -> void:
+	# 円柱らしい縦の陰影4段+赤い頭(ハイライト付き)+銀の継ぎ目リング+台座
+	var hw := w * 0.5
+	var bottom := top + h
+	var c_dark := Color(0.10 * lum, 0.19 * lum, 0.48 * lum)
+	var c_mid := Color(0.22 * lum, 0.40 * lum, 0.92 * lum)
+	var c_lit := Color(0.48 * lum, 0.66 * lum, 1.0 * lum)
+	var c_spec := Color(0.72 * lum, 0.84 * lum, 1.0 * lum)
+	# シャフト: 左から 影・スペキュラ・明・中・影 の縦帯
+	draw_rect(Rect2(cx - hw, top, w, h), c_mid)
+	draw_rect(Rect2(cx - hw, top, 1.0, h), c_dark)
+	draw_rect(Rect2(cx - hw + 1.0, top, 1.0, h), c_spec)
+	draw_rect(Rect2(cx - hw + 2.0, top, 1.0, h), c_lit)
+	draw_rect(Rect2(cx + hw - 2.0, top, 2.0, h), c_dark)
+	# 継ぎ目リング(銀): 高さ1/3ごと
+	for k in 2:
+		var ryy := top + h * (0.38 + 0.30 * float(k))
+		draw_rect(Rect2(cx - hw, ryy, w, 1.0), Color(0.80 * lum, 0.83 * lum, 0.90 * lum))
+		draw_rect(Rect2(cx - hw, ryy + 1.0, w, 1.0), Color(0.08, 0.15, 0.38))
+	# 赤い頭: 丸み(上1px窄める)+左ハイライト+右影+下の銀カラー
+	var rh := maxf(7.0, h * 0.20)
+	draw_rect(Rect2(cx - hw + 1.0, top, w - 2.0, 1.0), Color(1.0, 0.45, 0.38))
+	draw_rect(Rect2(cx - hw, top + 1.0, w, rh - 1.0), Color(0.82, 0.14, 0.10))
+	draw_rect(Rect2(cx - hw + 1.0, top + 1.0, 1.0, rh - 1.0), Color(1.0, 0.50, 0.42))
+	draw_rect(Rect2(cx + hw - 2.0, top + 1.0, 2.0, rh - 1.0), Color(0.52, 0.07, 0.05))
+	draw_rect(Rect2(cx - hw, top + rh, w, 2.0), Color(0.85 * lum, 0.87 * lum, 0.93 * lum))
+	# 台座: ひと回り広い暗色プレート+接地の影
+	draw_rect(Rect2(cx - hw - 2.0, bottom - 3.0, w + 4.0, 3.0), Color(0.13, 0.22, 0.52))
+	draw_rect(Rect2(cx - hw - 2.0, bottom - 3.0, w + 4.0, 1.0), Color(0.35 * lum, 0.50 * lum, 0.90 * lum))
+	draw_rect(Rect2(cx - hw - 3.0, bottom, w + 6.0, 1.0), Color(0.06, 0.10, 0.30, 0.55))
