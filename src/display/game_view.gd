@@ -82,12 +82,12 @@ func _physics_process(_delta: float) -> void:
 	_sync_sprites()
 	$ScoreUI.update_from(state)
 
-# 2軸の見た目(原作準拠): 後衛slotは手前(下+左)、前衛slotは奥(上+右)。
-# court.gdのオブリーク(SHEAR=0.5)に沿った表示専用オフセット。simには影響しない
+# 2軸の見た目(原作準拠): 後衛slotは手前(下)、前衛slotは奥(上)。
+# court.gdの中央対称収束に沿った表示専用の上下オフセット。simには影響しない
 static func _depth_offset(i: int) -> Vector2:
 	if i % 2 == 0:
-		return Vector2(-2.0, 4.0)
-	return Vector2(2.0, -4.0)
+		return Vector2(0.0, 6.0)
+	return Vector2(0.0, -6.0)
 
 func _sync_sprites() -> void:
 	for i in _sprites.size():
