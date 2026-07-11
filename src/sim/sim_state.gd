@@ -23,6 +23,7 @@ var ball_x: int = 0
 var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
+var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -53,6 +54,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_y)
 	out.append(ball_vx)
 	out.append(ball_vy)
+	out.append(ball_spin)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -82,6 +84,7 @@ func load_int_array(arr: Array) -> void:
 	ball_y = arr[k]; k += 1
 	ball_vx = arr[k]; k += 1
 	ball_vy = arr[k]; k += 1
+	ball_spin = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1

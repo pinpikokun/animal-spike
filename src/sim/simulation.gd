@@ -109,6 +109,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.timer = cfg.serve_delay_ticks
 	s.ball_vx = 0
 	s.ball_vy = 0
+	s.ball_spin = 0
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
@@ -336,6 +337,8 @@ static func _step_ball(s, cfg) -> void:
 	s.ball_vy += cfg.gravity
 	s.ball_x += s.ball_vx
 	s.ball_y += s.ball_vy
+	# 回転は横の勢いに比例して累積する(真上のトスはほぼ無回転、前へ飛ぶほど回る)
+	s.ball_spin += s.ball_vx
 	var left: int = cfg.ball_radius
 	var right: int = cfg.court_width - cfg.ball_radius
 	if s.ball_x < left:

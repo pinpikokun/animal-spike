@@ -120,14 +120,42 @@ func _sync_sprites() -> void:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(state.serving_team * 2)
 	_ball.position = ball_pos.round()
-	# 転がり回転(原作準拠): 保持中(サーブ)は回さず、飛行/転がり中だけ水平位置から
-	# フレームを選ぶ。角度=位置px/半径px→フレーム番号。右へ進むほど番号が進み時計回り
-	# =右回転、左へ進めば左回転。状態から導出しビューに角度を溜めない(ロールバック安全)
+	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
+	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。
+	# 状態から導出しビューに角度を溜めない(ロールバック安全)
 	var frame := 0
 	if state.phase != SimState.PHASE_SERVE:
 		var radius_px := ViewTransform.to_px(cfg.ball_radius)
 		if radius_px > 0.0:
-			var angle := ViewTransform.to_px(state.ball_x) / radius_px
+			var angle := ViewTransform.to_px(state.ball_spin) / radius_px
 			var step := TAU / float(_ball_roll_frames)
 			frame = posmod(roundi(angle / step), _ball_roll_frames)
 	_ball.region_rect = Rect2(frame * _ball_frame_w, 0, _ball_frame_w, _ball_frame_w)
+	queue_redraw()  # 壁バリアの波紋はボール位置から毎フレーム導出する
+
+func _draw() -> void:
+	# 透明な壁(コート端)の「ブイン」: 壁で跳ね返った直後=壁の近くで壁から離れる向きに
+	# 飛んでいる時だけ、壁に波紋を描く。強さは壁からの距離で減衰。
+	# 全てsim状態からの導出でビュー側に状態を持たない(ロールバック安全)
+	if state == null or cfg == null:
+		return
+	var w := ViewTransform.to_px(cfg.court_width)
+	var bx := ViewTransform.to_px(state.ball_x)
+	var by := ViewTransform.to_px(state.ball_y)
+	var vx := ViewTransform.to_px(state.ball_vx)
+	var reach := 34.0
+	if bx < reach and vx > 0.01:
+		_draw_wall_ripple(0.0, by, 1.0 - bx / reach, 1.0)
+	elif bx > w - reach and vx < -0.01:
+		_draw_wall_ripple(w, by, 1.0 - (w - bx) / reach, -1.0)
+
+func _draw_wall_ripple(wall_x: float, y: float, strength: float, dir: float) -> void:
+	# 同心の弧が壁からふわっと膨らむ(ブイン)。strength 0..1
+	var s := clampf(strength, 0.0, 1.0)
+	for k in 3:
+		var r := 10.0 + 9.0 * float(k) + 8.0 * (1.0 - s)
+		var a := s * (0.5 - 0.13 * float(k))
+		if a <= 0.0:
+			continue
+		var center_angle := 0.0 if dir > 0.0 else PI  # 弧はコート内側へ膨らむ
+		draw_arc(Vector2(wall_x, y), r, center_angle - 0.9, center_angle + 0.9, 20, Color(0.75, 0.88, 1.0, a), 2.0)
