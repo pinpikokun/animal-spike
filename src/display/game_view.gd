@@ -10,7 +10,7 @@ const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
 
-const BALL_SRC_PX := 144.0  # ボール素材(volleyball_144.png)の実寸
+const BALL_SRC_PX := 64.0  # ボール素材(volleyball_white64.png)の実寸
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 
 var cfg
@@ -52,6 +52,9 @@ func _ready() -> void:
 		_sprites.append(s)
 	_ball = $Ball
 	_ball.centered = true
+	# ボールだけは線形フィルタで滑らかに縮小(ドット絵キャラはニアレスト維持)。
+	# 素材を実寸まで潰すニアレストだとガビガビになるため
+	_ball.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	# 当たり判定半径(fp)から表示直径pxを求め、素材実寸に対する縮小率を決める
 	var ball_px := ViewTransform.to_px(cfg.ball_radius) * 2.0
 	_ball.scale = Vector2.ONE * (ball_px / BALL_SRC_PX)
