@@ -37,6 +37,9 @@ func test_save_load_state_roundtrip() -> void:
 
 func test_team_inputs_reach_sim() -> void:
 	var r = _make_root()
+	# サーバーは SERVE で位置固定されるため、移動が生きる POINT_PAUSE で入力配線を検証
+	r.state.phase = SimState.PHASE_POINT_PAUSE
+	r.state.timer = 100000000
 	var x0: int = r.state.players[0].x
 	r.set_team_input(0, 2)  # IN_RIGHT
 	r.set_team_input(1, 0)
@@ -47,6 +50,9 @@ func test_team_inputs_reach_sim() -> void:
 func test_inputs_reset_after_tick() -> void:
 	# tick後は_team_inputsが0に戻り、書き込みの無いチームは無入力になる(ステイル入力の混入防止)
 	var r = _make_root()
+	# サーバー位置固定を避け、移動でステイル入力の有無を判定するため POINT_PAUSE
+	r.state.phase = SimState.PHASE_POINT_PAUSE
+	r.state.timer = 100000000
 	r.set_team_input(0, 2)  # IN_RIGHT
 	r._network_postprocess({})
 	var x1: int = r.state.players[0].x

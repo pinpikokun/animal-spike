@@ -25,6 +25,8 @@ var net_top_y: int
 var net_half_w: int
 var player_reach: int
 var serve_hold_height: int
+var serve_line: int
+var ball_rest_speed: int
 var bump_up_speed: int
 var bump_fwd_speed: int
 var toss_fwd_vy: int
@@ -71,6 +73,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	net_half_w = FP.from_int(_int_of(raw, "net_half_w_px"))
 	player_reach = FP.from_int(_int_of(raw, "player_reach_px"))
 	serve_hold_height = FP.from_int(_int_of(raw, "serve_hold_height_px"))
+	serve_line = FP.from_int(_int_of(raw, "serve_line_px"))
+	ball_rest_speed = FP.from_int(_int_of(raw, "ball_rest_speed_px_s")) / tick_rate
 	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
 	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
 	toss_fwd_vy = FP.from_int(_int_of(raw, "toss_fwd_vy_px_s")) / tick_rate

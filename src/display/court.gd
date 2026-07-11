@@ -25,6 +25,10 @@ func _draw() -> void:
 	# 地面帯(土)と草のライン
 	draw_rect(Rect2(0.0, fy, w, VIEW_H - fy), Color(0.36, 0.28, 0.20))
 	draw_line(Vector2(0.0, fy), Vector2(w, fy), Color(0.45, 0.62, 0.30), 2.0)
+	# サービスライン(白線): サーバーはこの線の端側からサーブする
+	var sl := ViewTransform.to_px(cfg.serve_line)
+	draw_line(Vector2(sl, fy - 16.0), Vector2(sl, fy), Color(0.95, 0.95, 0.98), 1.0)
+	draw_line(Vector2(w - sl, fy - 16.0), Vector2(w - sl, fy), Color(0.95, 0.95, 0.98), 1.0)
 	# 仮ネット: 支柱+網目(横糸と縦糸)。本格的な見た目はトラックB段階で差し替え
 	var nx := ViewTransform.to_px(cfg.net_x)
 	var nty := ViewTransform.to_px(cfg.net_top_y)

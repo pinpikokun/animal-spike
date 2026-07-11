@@ -10,6 +10,11 @@ func _new_world() -> Array:
 	var s = SimState.new()
 	for p in s.players:
 		p.y = cfg.floor_y
+	# 移動/クランプ/ジャンプ検証は POINT_PAUSE で行う。プレイヤーは動くが、
+	# サーバーの位置固定(SERVE)や床得点によるフェーズ遷移(RALLY)に邪魔されない。
+	# タイマーは十分大きくしてテスト中に reset_rally へ入らないようにする
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = 100000000
 	return [s, cfg]
 
 func test_tick_advances() -> void:

@@ -57,6 +57,8 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	if state.phase == SimStateScript.PHASE_SERVE:
 		state.timer -= 1
 		_step_players_and_hits(state, inputs, cfg)
+		# サーバーは白線の後ろで横移動できない(原作準拠。打つまで位置固定)
+		state.players[_server_index(state)].x = _serve_x(state, cfg)
 		_hold_ball_on_server(state, cfg)
 		_try_serve(state, inputs, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
@@ -82,8 +84,9 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	_resolve_hit(state, inputs, cfg)
 
 static func reset_rally(s, cfg, serving_team: int) -> void:
-	# ラリーの再開。キャラはワープさせない(気持ちよさ優先、ユーザー決定)。
-	# 定位置への帰還はポーズ中のCPU歩行が担い、人間は自由に立ち回れる
+	# ラリーの再開。非サーバーはワープさせない(気持ちよさ優先、ユーザー決定)。
+	# 定位置への帰還はポーズ中のCPU歩行が担い、人間は自由に立ち回れる。
+	# サーバーだけは原作準拠で白線の後ろに着いてサーブする(位置固定)
 	s.phase = SimStateScript.PHASE_SERVE
 	s.serving_team = serving_team
 	s.touches = 0
@@ -91,6 +94,13 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.timer = cfg.serve_delay_ticks
 	s.ball_vx = 0
 	s.ball_vy = 0
+	var srv = s.players[serving_team * 2]
+	srv.x = _serve_x(s, cfg)
+	srv.y = cfg.floor_y
+	srv.vx = 0
+	srv.vy = 0
+	srv.on_ground = 1
+	srv.hit_cooldown = 0
 	_hold_ball_on_server(s, cfg)
 
 static func reset_match(s, cfg, serving_team: int) -> void:
@@ -111,6 +121,12 @@ static func reset_match(s, cfg, serving_team: int) -> void:
 static func _server_index(s) -> int:
 	return s.serving_team * 2
 
+static func _serve_x(s, cfg) -> int:
+	# サービスライン(コート端寄りの白線)。サーバーはこの位置からサーブする
+	if s.serving_team == 0:
+		return cfg.serve_line
+	return cfg.court_width - cfg.serve_line
+
 static func _hold_ball_on_server(s, cfg) -> void:
 	var server = s.players[_server_index(s)]
 	s.ball_x = server.x
@@ -121,13 +137,25 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# サーブ=セルフトス。地上ヒットと同じ方向打ち分けを反映する。
-	# 真上トス(↑orニュートラル)→ジャンプ→アタックでアタックサーブ、
-	# 前トス(横=ネット方向)はそのままネットを越える緩いサーブになる。
-	# 保持中ボールは静止=慣性成分ゼロなので狙いどおりのトスになる。
-	# 先にRALLYへ遷移(万一のタッチ超過得点はaward側のphaseが優先される)
+	# サーブ=セルフトス。方向で打ち分ける。白線後方から打つため前サーブは専用パワー。
+	var hdir: int = 0
+	if input & IN_LEFT:
+		hdir -= 1
+	if input & IN_RIGHT:
+		hdir += 1
+	var up: bool = (input & IN_UP) != 0
+	if hdir != 0 and not up:
+		# 前サーブ(緩いサーブ): 白線後方からネットを越えて届く専用の強さ
+		s.ball_vx = hdir * cfg.serve_vx
+		s.ball_vy = -cfg.serve_vy
+	else:
+		# 真上/中間トス: アタックサーブ用。高く上げてジャンプ+アタックで叩く
+		s.ball_vy = -cfg.bump_up_speed
+		s.ball_vx = hdir * cfg.toss_mid_vx
+	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
+	s.touches = 1
+	s.last_touch_team = s.serving_team
 	s.phase = SimStateScript.PHASE_RALLY
-	_apply_hit(s, idx, cfg, input)
 
 static func _check_floor_point(s, cfg) -> void:
 	# 同一tick内でタッチ超過などが先に得点しフェーズが変わっていたら加点しない(1ラリー2点の禁止)
@@ -291,6 +319,13 @@ static func _step_ball_loose(s, cfg) -> void:
 			s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
 		# 床接触のたびに横速度も減衰(転がって自然に止まる)
 		s.ball_vx = s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+		# 微小な跳ね/転がりは静止させる(いつまでも小刻みに跳ね続けないように)。
+		# 閾値は重力1tick分の反発を上回る値にして、床上で完全停止させる
+		if absi(s.ball_vy) < cfg.ball_rest_speed:
+			s.ball_vy = 0
+			s.ball_y = floor_limit
+		if absi(s.ball_vx) < cfg.ball_rest_speed:
+			s.ball_vx = 0
 
 static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 	var net_left: int = cfg.net_x - cfg.net_half_w - cfg.ball_radius

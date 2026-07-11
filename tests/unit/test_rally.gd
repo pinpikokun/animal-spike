@@ -16,7 +16,8 @@ func test_reset_match_positions() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	check_eq(s.phase, SimState.PHASE_SERVE, "SERVEフェーズ")
-	check_eq(s.players[0].x, FP.from_int(cfg.spawn_back_px), "左後衛の初期位置")
+	# サーバー(左後衛)は白線(サービスライン)に着く。相手側の後衛は通常スポーン
+	check_eq(s.players[0].x, cfg.serve_line, "サーバーはサービスライン")
 	check_eq(s.players[2].x, cfg.court_width - FP.from_int(cfg.spawn_back_px), "右後衛の初期位置")
 	check_eq(s.touches, 0, "タッチ0")
 
@@ -43,13 +44,24 @@ func test_ball_held_by_server() -> void:
 	check_eq(s.ball_y, s.players[0].y - cfg.serve_hold_height, "ボールはサーバー頭上に固定(y)")
 
 func test_serve_launches_ball() -> void:
+	# 前サーブ(横=ネット方向入力)。左チームはネット方向=右へ、上向き成分あり
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
+	check(s.ball_vx > 0, "左の前サーブは右向き(ネット方向)")
+	check(s.ball_vy < 0, "サーブは上向き成分")
+
+func test_serve_up_toss_is_vertical() -> void:
+	# 真上サーブ(方向なし): アタックサーブ用に真上へ上げる(横成分ゼロ)
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check(s.ball_vx > 0, "左サーブは右向き")
-	check(s.ball_vy < 0, "サーブは上向き成分")
+	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
+	check(s.ball_vy < 0, "真上サーブは上向き")
 
 func test_floor_scores_opponent() -> void:
 	var w := _serve_world(0)
@@ -124,6 +136,23 @@ func test_ball_bounce_damps_during_pause() -> void:
 	s.ball_vy = v0
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(-s.ball_vy < v0, "バウンドで速度が減衰する")
+
+func test_ball_settles_at_rest_during_pause() -> void:
+	# ポーズ中、転がるボールは小刻みに跳ね続けず、いずれ床上で完全静止する
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = 1000000  # 収束を観察するためポーズを維持(reset_rallyに入らない)
+	s.ball_x = FP.from_int(150)
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(40)
+	s.ball_vx = FP.from_int(3)
+	s.ball_vy = FP.from_int(2)
+	for i in 600:
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+	check_eq(s.ball_vy, 0, "縦速度が完全に止まる")
+	check_eq(s.ball_vx, 0, "横速度が完全に止まる")
+	check_eq(s.ball_y, cfg.floor_y - cfg.ball_radius, "床にスナップして静止")
 
 func test_ball_rolls_into_wall_during_pause() -> void:
 	var w := _serve_world(0)
