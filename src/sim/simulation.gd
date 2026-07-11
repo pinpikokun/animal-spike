@@ -57,8 +57,14 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	if state.phase == SimStateScript.PHASE_SERVE:
 		state.timer -= 1
 		_step_players_and_hits(state, inputs, cfg)
-		# サーバーは白線の後ろで横移動できない(原作準拠。打つまで位置固定)
-		state.players[_server_index(state)].x = _serve_x(state, cfg)
+		# サーバーは外線(サービスライン)を越えられない(最初のトスまで)。線の後ろでは動ける。
+		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる
+		var srv = state.players[_server_index(state)]
+		var line: int = _serve_x(state, cfg)
+		if state.serving_team == 0:
+			srv.x = mini(srv.x, line)
+		else:
+			srv.x = maxi(srv.x, line)
 		_hold_ball_on_server(state, cfg)
 		_try_serve(state, inputs, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
@@ -221,15 +227,16 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
+	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
+	var hdir: int = 0
+	if input & IN_LEFT:
+		hdir -= 1
+	if input & IN_RIGHT:
+		hdir += 1
+	var up: bool = (input & IN_UP) != 0
 	if p.on_ground == 1:
 		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
 		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
-		var hdir: int = 0
-		if input & IN_LEFT:
-			hdir -= 1
-		if input & IN_RIGHT:
-			hdir += 1
-		var up: bool = (input & IN_UP) != 0
 		var desired_vx: int = 0
 		var desired_vy: int = 0
 		if hdir != 0 and not up:
@@ -253,7 +260,13 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
 		s.ball_vx = desired_vx - s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
 		s.ball_vy = desired_vy - s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
+	elif up:
+		# ジャンプトス: 空中でも上入力なら叩き下ろさず上げる(セルフセット/相方へ)。
+		# 横入力があればその方向へ、無ければ真上
+		s.ball_vy = -cfg.bump_up_speed
+		s.ball_vx = hdir * cfg.toss_mid_vx
 	else:
+		# スパイク: 空中・上入力なしは叩き下ろす
 		s.ball_vy = cfg.spike_vy
 		s.ball_vx = dir * cfg.spike_vx
 	p.hit_cooldown = cfg.hit_cooldown_ticks

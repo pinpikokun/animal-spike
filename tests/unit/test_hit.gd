@@ -121,6 +121,19 @@ func test_spike_in_air() -> void:
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
 	check(s.ball_vx >= cfg.spike_vx, "スパイクは速い")
 
+func test_jump_toss_lifts_instead_of_spike() -> void:
+	# 空中でも上入力ならスパイク(下向き)でなくジャンプトス(上向き)になる
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - FP.from_int(5)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check(s.ball_vy < 0, "ジャンプトスは上向き(スパイクの下向きと逆)")
+
 func test_cooldown_blocks_double_hit() -> void:
 	var w := _rally_world()
 	var s = w[0]
