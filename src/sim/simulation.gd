@@ -244,11 +244,9 @@ static func _step_ball(s, cfg) -> void:
 	elif s.ball_x > right:
 		s.ball_x = right - (s.ball_x - right)
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する
-	var ceil_limit: int = cfg.ball_radius
-	if s.ball_y < ceil_limit:
-		s.ball_y = ceil_limit + (ceil_limit - s.ball_y)
-		s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
+	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
+	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
+	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
 	_ball_vs_net(s, cfg, prev_x)
 
 static func _step_ball_loose(s, cfg) -> void:

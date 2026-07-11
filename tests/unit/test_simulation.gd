@@ -97,7 +97,8 @@ func test_ball_right_wall_bounce() -> void:
 	check(s.ball_vx < 0, "右壁で反射して左向きになる")
 	check(s.ball_x <= cfg.court_width - cfg.ball_radius, "右壁にめり込まない")
 
-func test_ball_ceiling_bounce() -> void:
+func test_ball_passes_through_ceiling() -> void:
+	# 原作準拠: 上端で跳ね返らずボールは画面上へ突き抜ける(左右の壁だけ反射)
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -106,7 +107,7 @@ func test_ball_ceiling_bounce() -> void:
 	s.ball_y = cfg.ball_radius + FP.from_int(1)
 	s.ball_vy = -FP.from_int(6)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(s.ball_vy > 0, "天井で反射して下向きになる")
-	check(s.ball_y >= cfg.ball_radius, "天井にめり込まない")
+	check(s.ball_vy < 0, "上向き速度が反転せず上昇を続ける")
+	check(s.ball_y < cfg.ball_radius, "天井ラインを越えて画面上へ抜ける")
 
 # 床バウンドのテストは削除(仕様変更: RALLY中の床接触は得点。test_rally.gdが検証する)

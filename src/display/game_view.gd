@@ -11,6 +11,7 @@ const AnimSelect := preload("res://src/display/anim_select.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
 
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
+const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒットの手続き演出)
 
 var cfg
 var state
@@ -76,10 +77,22 @@ func _sync_sprites() -> void:
 	for i in _sprites.size():
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
+		var pos := ViewTransform.pos_of(p)
+		# レシーブの小ホップ: 接地ヒット中はhit_cooldownから上下オフセットを導出。
+		# 打った瞬間(cooldown最大)に最も持ち上がり、硬直が抜けるにつれ着地する。
+		# 状態から導出するのでロールバック再描画でも一貫する
+		if p.on_ground == 1 and p.hit_cooldown > 0:
+			var t := float(p.hit_cooldown) / float(cfg.hit_cooldown_ticks)
+			pos.y -= RECEIVE_HOP_PX * t
 		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
-		spr.position = ViewTransform.pos_of(p).round()
+		spr.position = pos.round()
 		spr.flip_h = AnimSelect.flip_for_team(Simulation.team_of(i))
 		var anim := AnimSelect.anim_for(p)
 		if spr.animation != anim:
 			spr.play(anim)
 	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y)).round()
+	# ラリー中のボール回転(原作準拠): 転がり角を水平位置から一意に導く。右へ進むほど
+	# 角度が増え時計回り=右回転、左へ進めば左回転。状態から導出しビューに角度を溜めない
+	var radius_px := ViewTransform.to_px(cfg.ball_radius)
+	if radius_px > 0.0:
+		_ball.rotation = ViewTransform.to_px(state.ball_x) / radius_px
