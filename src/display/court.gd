@@ -8,12 +8,12 @@ extends Node2D
 const ViewTransform := preload("res://src/display/view_transform.gd")
 
 const VIEW_H := 360.0
-const WALL_Y_OFF := 55.0   # 壁と床の境界(キャラ基準線から上へ)。原作は床が画面の約3割
-const COURT_BACK := 30.0   # コート奥ライン(基準線から上へ)
-const COURT_FRONT := 14.0  # コート手前ライン(基準線から下へ)
+const WALL_Y_OFF := 32.0   # 壁と床の境界(キャラ基準線から上へ)。原作は床が画面の約2割
+const ROW_H := 11.0        # 床タイルの横線間隔(車線1本の幅)。原作は細い
+const COURT_BACK := 14.0   # コート奥ライン(基準線から上へ)
+const COURT_FRONT := 8.0   # コート手前ライン(基準線から下へ)。奥+手前=ちょうど2車線
 const CONV := 0.0015       # 中央への収束率(奥行き1pxあたり)。原作実測に合わせた控えめな値
-const LANE_W := 64.0       # 床タイルの縦線間隔(sim px)
-const ROW_H := 16.0        # 床タイルの横線間隔
+const LANE_W := 32.0       # 床タイルの縦線間隔(sim px)。原作は格子が細かい
 
 var cfg
 
@@ -49,7 +49,8 @@ func _draw() -> void:
 	draw_rect(Rect2(0.0, wall_y, w, VIEW_H - wall_y), Color(0.15, 0.31, 0.78))
 	# 床タイルの横線(水平・等間隔)
 	var grid_col := Color(0.36, 0.62, 0.96)  # 原作の明るいシアン寄りの格子
-	var ry := wall_y
+	# 横線はコート奥ラインに揃えて敷く(白線が格子に乗る=車線がコートと一致する)
+	var ry := back_y - ROW_H * floorf((back_y - wall_y) / ROW_H)
 	while ry <= VIEW_H:
 		draw_line(Vector2(0.0, ry), Vector2(w, ry), grid_col, 1.0)
 		ry += ROW_H

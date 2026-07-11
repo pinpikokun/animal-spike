@@ -86,8 +86,8 @@ func _physics_process(_delta: float) -> void:
 # court.gdの中央対称収束に沿った表示専用の上下オフセット。simには影響しない
 static func _depth_offset(i: int) -> Vector2:
 	if i % 2 == 0:
-		return Vector2(0.0, 6.0)
-	return Vector2(0.0, -6.0)
+		return Vector2(0.0, 5.0)
+	return Vector2(0.0, -5.0)
 
 func _sync_sprites() -> void:
 	for i in _sprites.size():
