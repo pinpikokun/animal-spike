@@ -82,11 +82,18 @@ func _physics_process(_delta: float) -> void:
 	_sync_sprites()
 	$ScoreUI.update_from(state)
 
+# 2軸の見た目(原作準拠): 後衛slotは手前(下+左)、前衛slotは奥(上+右)。
+# court.gdのオブリーク(SHEAR=0.5)に沿った表示専用オフセット。simには影響しない
+static func _depth_offset(i: int) -> Vector2:
+	if i % 2 == 0:
+		return Vector2(-2.0, 4.0)
+	return Vector2(2.0, -4.0)
+
 func _sync_sprites() -> void:
 	for i in _sprites.size():
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
-		var pos := ViewTransform.pos_of(p)
+		var pos := ViewTransform.pos_of(p) + _depth_offset(i)
 		# レシーブの小ホップ: 接地ヒット中はhit_cooldownから上下オフセットを導出。
 		# 打った瞬間(cooldown最大)に最も持ち上がり、硬直が抜けるにつれ着地する。
 		# 状態から導出するのでロールバック再描画でも一貫する
@@ -99,7 +106,11 @@ func _sync_sprites() -> void:
 		var anim := AnimSelect.anim_for(p)
 		if spr.animation != anim:
 			spr.play(anim)
-	_ball.position = Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y)).round()
+	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
+	if state.phase == SimState.PHASE_SERVE:
+		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
+		ball_pos += _depth_offset(state.serving_team * 2)
+	_ball.position = ball_pos.round()
 	# 転がり回転(原作準拠): 保持中(サーブ)は回さず、飛行/転がり中だけ水平位置から
 	# フレームを選ぶ。角度=位置px/半径px→フレーム番号。右へ進むほど番号が進み時計回り
 	# =右回転、左へ進めば左回転。状態から導出しビューに角度を溜めない(ロールバック安全)
