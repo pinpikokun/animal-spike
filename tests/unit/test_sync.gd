@@ -16,7 +16,7 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-const GOLDEN_COMBINED_HASH := 2873872860672975231
+const GOLDEN_COMBINED_HASH := -715829975669620323
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
@@ -27,7 +27,7 @@ func _next_rand(s: int) -> int:
 
 func _run_once() -> Array[int]:
 	# フルゲーム(サーブ→ラリー→得点→再サーブ)を人間2系統のランダム入力で回す。
-	# 全入力ビット(0-63)を含み、切替・ヒット・トス照準・CPU相方も検証対象に入る
+	# 全入力ビット(0-127)を含み、切替・ヒット・トス照準・CPU相方も検証対象に入る
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0)
@@ -37,7 +37,7 @@ func _run_once() -> Array[int]:
 		var inputs: Array[int] = []
 		for i in 2:
 			rng = _next_rand(rng)
-			inputs.append(rng & 63)
+			inputs.append(rng & 127)
 		Simulation.tick(s, inputs, cfg)
 		if t % 60 == 0:
 			hashes.append(s.state_hash())
@@ -85,7 +85,7 @@ func _run_endgame() -> Array[int]:
 		var inputs: Array[int] = []
 		for i in 2:
 			rng = _next_rand(rng)
-			inputs.append(rng & 63)
+			inputs.append(rng & 127)
 		Simulation.tick(s, inputs, cfg)
 		if t % 60 == 0:
 			out.append(s.state_hash())

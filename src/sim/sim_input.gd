@@ -6,4 +6,5 @@ const IN_RIGHT := 2
 const IN_JUMP := 4
 const IN_ACTION := 8
 const IN_SWITCH := 16
-const IN_UP := 32  # トス方向の照準(ジャンプとは別。上向きトスの指定)
+const IN_UP := 32    # 上方向の照準(上キー。ジャンプと同じキーから立つ)
+const IN_DOWN := 64  # 下方向の照準(空中で下+アクション=アタック)

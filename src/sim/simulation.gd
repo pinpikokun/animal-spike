@@ -13,6 +13,7 @@ const IN_JUMP := SimInput.IN_JUMP
 const IN_ACTION := SimInput.IN_ACTION
 const IN_SWITCH := SimInput.IN_SWITCH
 const IN_UP := SimInput.IN_UP
+const IN_DOWN := SimInput.IN_DOWN
 
 static func team_of(i: int) -> int:
 	return i / 2
@@ -56,7 +57,13 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	state.tick += 1
 	if state.phase == SimStateScript.PHASE_SERVE:
 		state.timer -= 1
-		_step_players_and_hits(state, inputs, cfg)
+		# 上キー=ジャンプ+上照準を兼ねるため、トス前のサーバーはジャンプを封じる
+		# (上+アクション=真上トスの照準として機能させる。トス後は自由にジャンプ可)
+		var serve_inputs: Array[int] = inputs.duplicate()
+		var srv_idx: int = _server_index(state)
+		if srv_idx < serve_inputs.size():
+			serve_inputs[srv_idx] &= ~IN_JUMP
+		_step_players_and_hits(state, serve_inputs, cfg)
 		# サーバーは外線(サービスライン)を越えられない(最初のトスまで)。線の後ろでは動ける。
 		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる。
 		# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
@@ -145,21 +152,32 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# サーブ=セルフトス。方向で打ち分ける。白線後方から打つため前サーブは専用パワー。
+	# サーブ=セルフトス。方向で打ち分ける(ユーザー仕様):
+	# ニュートラル=緩やかに相手コートへ / 上=真上トス /
+	# 横=きつめの角度の山なり / 上+横=前方への短いトス(前ジャンプでアタック可能)
 	var hdir: int = 0
 	if input & IN_LEFT:
 		hdir -= 1
 	if input & IN_RIGHT:
 		hdir += 1
 	var up: bool = (input & IN_UP) != 0
-	if hdir != 0 and not up:
-		# 前サーブ(緩いサーブ): 白線後方からネットを越えて届く専用の強さ
+	var net_dir: int = _dir_of_team(s.serving_team)
+	if hdir == 0 and not up:
+		# ニュートラルサーブ: 高く緩い弧でネットを越えて相手コートへ
+		s.ball_vx = net_dir * cfg.serve_soft_vx
+		s.ball_vy = -cfg.serve_soft_vy
+	elif hdir != 0 and not up:
+		# 横サーブ: きつめの角度の山なりで飛ぶ
 		s.ball_vx = hdir * cfg.serve_vx
 		s.ball_vy = -cfg.serve_vy
-	else:
-		# 真上/中間トス: アタックサーブ用。高く上げてジャンプ+アタックで叩く
+	elif up and hdir == 0:
+		# 真上トス: アタックサーブの起点
+		s.ball_vx = 0
 		s.ball_vy = -cfg.bump_up_speed
+	else:
+		# 上+横: 敵コートに届かない短い前トス(その後前ジャンプでアタック)
 		s.ball_vx = hdir * cfg.toss_mid_vx
+		s.ball_vy = -cfg.bump_up_speed
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
 	s.touches = 1
 	s.last_touch_team = s.serving_team
@@ -262,15 +280,22 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
 		s.ball_vx = desired_vx - s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
 		s.ball_vy = desired_vy - s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
-	elif up:
-		# ジャンプトス: 空中でも上入力なら叩き下ろさず上げる(セルフセット/相方へ)。
-		# 横入力があればその方向へ、無ければ真上
-		s.ball_vy = -cfg.bump_up_speed
-		s.ball_vx = hdir * cfg.toss_mid_vx
-	else:
-		# スパイク: 空中・上入力なしは叩き下ろす
+	elif input & IN_DOWN:
+		# 空中+下: アタック(叩き下ろす)
 		s.ball_vy = cfg.spike_vy
 		s.ball_vx = dir * cfg.spike_vx
+	elif up:
+		# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
+		s.ball_vy = -cfg.bump_up_speed
+		s.ball_vx = hdir * cfg.toss_mid_vx
+	elif hdir != 0:
+		# 空中+横: きつめの角度の山なりで遠くへトス
+		s.ball_vy = -cfg.toss_fwd_vy
+		s.ball_vx = hdir * cfg.toss_fwd_vx
+	else:
+		# 空中ニュートラル: 緩やかに相手コート方向へ送る
+		s.ball_vy = -cfg.serve_soft_vy
+		s.ball_vx = dir * cfg.serve_soft_vx
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	if s.last_touch_team == team:
 		s.touches += 1
@@ -354,14 +379,17 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 	if below_top:
 		# ネット下部は壁。来た側へ押し返す
 		if s.ball_x >= net_left and s.ball_x <= net_right:
+			# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
 			if was_left:
 				s.ball_x = net_left - (s.ball_x - net_left)
 				if s.ball_vx > 0:
 					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+				s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
 			else:
 				s.ball_x = net_right + (net_right - s.ball_x)
 				if s.ball_vx < 0:
 					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
 	elif was_left != is_left:
 		# ネット上空を越えた: 攻守交代なのでタッチ数リセット
 		s.touches = 0

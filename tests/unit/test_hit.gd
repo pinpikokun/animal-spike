@@ -116,10 +116,40 @@ func test_spike_in_air() -> void:
 	p.y = cfg.floor_y - FP.from_int(60)
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - FP.from_int(5)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(s.ball_vy > 0, "スパイクは下向き")
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check(s.ball_vy > 0, "スパイク(空中+下)は下向き")
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
 	check(s.ball_vx >= cfg.spike_vx, "スパイクは速い")
+
+func test_air_neutral_sends_soft_over() -> void:
+	# 空中ニュートラル+アクション: 緩やかに相手コート方向へ送る(下向きではない)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - FP.from_int(5)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vy < 0, "空中ニュートラルは上向きの緩い弧")
+	check(s.ball_vx > 0, "左チームはネット方向(右)へ送る")
+	check(s.ball_vx < cfg.spike_vx, "スパイクより遅い")
+
+func test_air_side_tosses_far_arc() -> void:
+	# 空中+横: きつめの角度の山なりで遠くへ
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - FP.from_int(5)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	# 同step内で重力が1tick分加わるため厳密一致ではなく範囲で見る
+	check(s.ball_vy <= -cfg.toss_fwd_vy + cfg.gravity, "山なりの上向き成分")
+	check_eq(s.ball_vx, cfg.toss_fwd_vx, "入力方向へ遠くへ")
 
 func test_jump_toss_lifts_instead_of_spike() -> void:
 	# 空中でも上入力ならスパイク(下向き)でなくジャンプトス(上向き)になる

@@ -52,6 +52,8 @@ func _ready() -> void:
 		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする
 		s.centered = false
 		s.offset = Vector2(-16, -32)
+		# 手前レーン(偶数slot)を前面に描く(奥のキャラと重なった時に自然な前後関係)
+		s.z_index = 1 if i % 2 == 0 else 0
 		s.play("idle")
 		$Players.add_child(s)
 		_sprites.append(s)
@@ -103,12 +105,16 @@ func _sync_sprites() -> void:
 		if p.on_ground == 1 and p.hit_cooldown > 0:
 			var t := float(p.hit_cooldown) / float(cfg.hit_cooldown_ticks)
 			pos.y -= RECEIVE_HOP_PX * t
-		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
-		spr.position = pos.round()
 		spr.flip_h = AnimSelect.flip_for_team(Simulation.team_of(i))
 		var anim := AnimSelect.anim_for(p)
 		if spr.animation != anim:
 			spr.play(anim)
+		# カエル素材はidle系の足元に5pxの透明余白があり浮いて見える。
+		# キツネの接地軸に合わせる表示補正(jump素材は余白なしなので補正しない)
+		if Simulation.team_of(i) == 1 and anim != "jump":
+			pos.y += 5.0
+		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
+		spr.position = pos.round()
 	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
 	if state.phase == SimState.PHASE_SERVE:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)

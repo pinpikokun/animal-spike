@@ -10,13 +10,13 @@ static func poll() -> int:
 		input |= SimInput.IN_LEFT
 	if Input.is_key_pressed(KEY_RIGHT):
 		input |= SimInput.IN_RIGHT
-	if Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_SPACE):
-		input |= SimInput.IN_JUMP
-	if Input.is_key_pressed(KEY_X):
+	# 原作準拠の操作系: 上=ジャンプ(+上照準)、スペース=アクション(Xも可)、下=下照準
+	if Input.is_key_pressed(KEY_UP):
+		input |= SimInput.IN_JUMP | SimInput.IN_UP
+	if Input.is_key_pressed(KEY_DOWN):
+		input |= SimInput.IN_DOWN
+	if Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_X):
 		input |= SimInput.IN_ACTION
 	if Input.is_key_pressed(KEY_C):
 		input |= SimInput.IN_SWITCH
-	# 上矢印=トス照準(上向き)。ジャンプ(Z/Space)とは別。Xと同時押しで真上トス
-	if Input.is_key_pressed(KEY_UP):
-		input |= SimInput.IN_UP
 	return input

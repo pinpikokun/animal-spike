@@ -80,14 +80,42 @@ func test_server_cannot_retreat_into_wall() -> void:
 	check(s.ball_x >= cfg.ball_radius, "保持ボールが壁反射圏に入らない")
 
 func test_serve_up_toss_is_vertical() -> void:
-	# 真上サーブ(方向なし): アタックサーブ用に真上へ上げる(横成分ゼロ)
+	# 上+アクション: アタックサーブ用に真上へ上げる(横成分ゼロ)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
+	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
+	check(s.ball_vy < 0, "真上サーブは上向き")
+
+func test_serve_neutral_is_soft_over_net() -> void:
+	# ニュートラル+アクション: 緩やかな弧でネットを越えて相手コートへ届く
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
-	check(s.ball_vy < 0, "真上サーブは上向き")
+	check_eq(s.ball_vx, cfg.serve_soft_vx, "ネット方向へ緩い速度")
+	check_eq(s.ball_vy, -cfg.serve_soft_vy, "高く緩い弧")
+	var crossed := false
+	for i in 300:
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+		if s.ball_x > cfg.net_x:
+			crossed = true
+			break
+		if s.phase != SimState.PHASE_RALLY:
+			break
+	check(crossed, "ニュートラルサーブがネットを越える")
+
+func test_server_jump_suppressed_until_toss() -> void:
+	# 上キー=ジャンプ+照準のため、トス前のサーバーは上を押してもジャンプしない
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.players[0].on_ground, 1, "トス前のサーバーはジャンプできない")
+	check_eq(s.phase, SimState.PHASE_SERVE, "アクション無しではサーブされない")
 
 func test_floor_scores_opponent() -> void:
 	var w := _serve_world(0)
