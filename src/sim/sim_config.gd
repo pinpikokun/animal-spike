@@ -27,6 +27,9 @@ var player_reach: int
 var serve_hold_height: int
 var bump_up_speed: int
 var bump_fwd_speed: int
+var toss_fwd_vy: int
+var toss_fwd_vx: int
+var toss_mid_vx: int
 var spike_vx: int
 var spike_vy: int
 var serve_vx: int
@@ -68,6 +71,9 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	serve_hold_height = FP.from_int(_int_of(raw, "serve_hold_height_px"))
 	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
 	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
+	toss_fwd_vy = FP.from_int(_int_of(raw, "toss_fwd_vy_px_s")) / tick_rate
+	toss_fwd_vx = FP.from_int(_int_of(raw, "toss_fwd_vx_px_s")) / tick_rate
+	toss_mid_vx = FP.from_int(_int_of(raw, "toss_mid_vx_px_s")) / tick_rate
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate

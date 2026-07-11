@@ -16,4 +16,7 @@ static func poll() -> int:
 		input |= SimInput.IN_ACTION
 	if Input.is_key_pressed(KEY_C):
 		input |= SimInput.IN_SWITCH
+	# 上矢印=トス照準(上向き)。ジャンプ(Z/Space)とは別。Xと同時押しで真上トス
+	if Input.is_key_pressed(KEY_UP):
+		input |= SimInput.IN_UP
 	return input

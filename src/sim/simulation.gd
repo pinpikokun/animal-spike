@@ -12,6 +12,7 @@ const IN_RIGHT := SimInput.IN_RIGHT
 const IN_JUMP := SimInput.IN_JUMP
 const IN_ACTION := SimInput.IN_ACTION
 const IN_SWITCH := SimInput.IN_SWITCH
+const IN_UP := SimInput.IN_UP
 
 static func team_of(i: int) -> int:
 	return i / 2
@@ -184,15 +185,38 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 			best_i = i
 			best_d2 = d2
 	if best_i >= 0:
-		_apply_hit(s, best_i, cfg)
+		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
+		_apply_hit(s, best_i, cfg, winner_input)
 
-static func _apply_hit(s, i: int, cfg) -> void:
+static func _apply_hit(s, i: int, cfg, input: int) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
 	if p.on_ground == 1:
-		s.ball_vy = -cfg.bump_up_speed
-		s.ball_vx = dir * cfg.bump_fwd_speed
+		# 地上ヒット=トス/レシーブ。押している方向でトス方向を打ち分ける。
+		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
+		var hdir: int = 0
+		if input & IN_LEFT:
+			hdir -= 1
+		if input & IN_RIGHT:
+			hdir += 1
+		var up: bool = (input & IN_UP) != 0
+		if hdir != 0 and not up:
+			# 横のみ: 前へ低く遠く
+			s.ball_vy = -cfg.toss_fwd_vy
+			s.ball_vx = hdir * cfg.toss_fwd_vx
+		elif hdir != 0 and up:
+			# 上+横: 中間(高く+そこそこ前)
+			s.ball_vy = -cfg.bump_up_speed
+			s.ball_vx = hdir * cfg.toss_mid_vx
+		elif up:
+			# 上のみ: 真上へ高く
+			s.ball_vy = -cfg.bump_up_speed
+			s.ball_vx = 0
+		else:
+			# ニュートラル: 現行(少し前へ=素レシーブ)
+			s.ball_vy = -cfg.bump_up_speed
+			s.ball_vx = dir * cfg.bump_fwd_speed
 	else:
 		s.ball_vy = cfg.spike_vy
 		s.ball_vx = dir * cfg.spike_vx
