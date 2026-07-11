@@ -53,6 +53,32 @@ func test_serve_launches_ball() -> void:
 	check(s.ball_vx > 0, "左の前サーブは右向き(ネット方向)")
 	check(s.ball_vy < 0, "サーブは上向き成分")
 
+func test_server_cannot_cross_serve_line() -> void:
+	# サーバーはトス前に外線(サービスライン)をネット方向へ越えられない(毎tickクランプ)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 30:
+		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.players[0].x, cfg.serve_line, "左サーバーは線でクランプされる")
+	# 右チームも鏡像で検証
+	var w2 := _serve_world(1)
+	var s2 = w2[0]
+	for i in 30:
+		Simulation.step(s2, [0, 0, Simulation.IN_LEFT, 0], cfg)
+	check_eq(s2.players[2].x, cfg.court_width - cfg.serve_line, "右サーバーも線でクランプ")
+
+func test_server_cannot_retreat_into_wall() -> void:
+	# 壁際まで下がると保持ボールが壁反射圏に入り前サーブが自滅するため、
+	# サーブ位置の下限は壁からball_radius(レビュー指摘の死角封じ)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 30:
+		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
+	check_eq(s.players[0].x, cfg.ball_radius, "左サーバーは壁からball_radiusで止まる")
+	check(s.ball_x >= cfg.ball_radius, "保持ボールが壁反射圏に入らない")
+
 func test_serve_up_toss_is_vertical() -> void:
 	# 真上サーブ(方向なし): アタックサーブ用に真上へ上げる(横成分ゼロ)
 	var w := _serve_world(0)
@@ -152,6 +178,23 @@ func test_ball_settles_at_rest_during_pause() -> void:
 		Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.ball_vy, 0, "縦速度が完全に止まる")
 	check_eq(s.ball_vx, 0, "横速度が完全に止まる")
+	check_eq(s.ball_y, cfg.floor_y - cfg.ball_radius, "床にスナップして静止")
+
+func test_ball_settles_from_resonant_bounce() -> void:
+	# 共振速度帯(レビュー指摘: vy=7px/tick・高さ40pxで数千tick跳ね続けた)でも
+	# 固定量減衰により有限時間で静止することの回帰テスト
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_POINT_PAUSE
+	s.timer = 1000000
+	s.ball_x = FP.from_int(200)
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(40)
+	s.ball_vx = 0
+	s.ball_vy = FP.from_int(7)
+	for i in 600:
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+	check_eq(s.ball_vy, 0, "共振速度帯でも600tick以内に縦速度が止まる")
 	check_eq(s.ball_y, cfg.floor_y - cfg.ball_radius, "床にスナップして静止")
 
 func test_ball_rolls_into_wall_during_pause() -> void:

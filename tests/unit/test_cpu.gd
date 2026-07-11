@@ -98,6 +98,32 @@ func test_cpu_serve_crosses_net() -> void:
 			break
 	check(crossed, "CPUのサーブがネットを越え相手コートへ渡る(自滅しない)")
 
+func test_cpu_serve_crosses_net_right_team() -> void:
+	# 右チーム(serving_team=1)のCPUサーブも鏡像でネットを越え左コートへ渡る
+	# (_serve_xやトス方向の符号ミスをゴールデンハッシュ頼みにしない直接検証)
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.reset_match(s, cfg, 1)
+	var served := false
+	for i in cfg.serve_delay_ticks + 5:
+		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
+		Simulation.tick(s, [0, cpu_r], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			served = true
+			break
+	check(served, "右CPUがサーブ(トス)を実行")
+	var crossed := false
+	for i in 300:
+		var cpu_r2: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
+		Simulation.tick(s, [0, cpu_r2], cfg)
+		if s.ball_x < cfg.net_x:
+			crossed = true
+			break
+		if s.phase != SimState.PHASE_RALLY:
+			break
+	check(crossed, "右CPUのサーブがネットを越え左コートへ渡る")
+
 func test_cpu_walks_home_during_pause() -> void:
 	# 得点後のポーズ中、CPUは棒立ちせず持ち場へ歩いて戻る
 	var w := _world()

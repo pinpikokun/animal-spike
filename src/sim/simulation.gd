@@ -58,13 +58,15 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		state.timer -= 1
 		_step_players_and_hits(state, inputs, cfg)
 		# サーバーは外線(サービスライン)を越えられない(最初のトスまで)。線の後ろでは動ける。
-		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる
+		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる。
+		# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
+		# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
 		var srv = state.players[_server_index(state)]
 		var line: int = _serve_x(state, cfg)
 		if state.serving_team == 0:
-			srv.x = mini(srv.x, line)
+			srv.x = clampi(srv.x, cfg.ball_radius, line)
 		else:
-			srv.x = maxi(srv.x, line)
+			srv.x = clampi(srv.x, line, cfg.court_width - cfg.ball_radius)
 		_hold_ball_on_server(state, cfg)
 		_try_serve(state, inputs, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
@@ -330,10 +332,13 @@ static func _step_ball_loose(s, cfg) -> void:
 		s.ball_y = floor_limit - (s.ball_y - floor_limit)
 		if s.ball_vy > 0:
 			s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
+			# 乗算減衰だけだと閾値近傍で微小バウンドが長く続く速度帯がある(共振、
+			# レビュー指摘: 特定入射で数千tick跳ね続けた)。反発のたびに固定量も
+			# 減衰させ、有限バウンド回数で必ず閾値を割らせる
+			s.ball_vy = mini(s.ball_vy + cfg.ball_rest_speed / 4, 0)
 		# 床接触のたびに横速度も減衰(転がって自然に止まる)
 		s.ball_vx = s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-		# 微小な跳ね/転がりは静止させる(いつまでも小刻みに跳ね続けないように)。
-		# 閾値は重力1tick分の反発を上回る値にして、床上で完全停止させる
+		# 微小な跳ね/転がりは静止させ床にスナップ(小刻みな跳ねの継続を断つ)
 		if absi(s.ball_vy) < cfg.ball_rest_speed:
 			s.ball_vy = 0
 			s.ball_y = floor_limit
