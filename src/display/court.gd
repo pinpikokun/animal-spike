@@ -8,6 +8,7 @@ extends Node2D
 const ViewTransform := preload("res://src/display/view_transform.gd")
 
 const VIEW_H := 360.0
+const TOP_EXT := 16.0      # ビュー全体を下に寄せるぶん、壁を上へ描き足す
 const WALL_Y_OFF := 32.0   # 壁と床の境界(キャラ基準線から上へ)。原作は床が画面の約2割
 const ROW_H := 11.0        # 床タイルの横線間隔(車線1本の幅)。原作は細い
 const COURT_BACK := 14.0   # コート奥ライン(基準線から上へ)
@@ -36,14 +37,14 @@ func _draw() -> void:
 	var front_y := fy + COURT_FRONT
 
 	# 奥壁(濃い青): 薄い横線+縦パネル線(原作の壁パネル風)
-	draw_rect(Rect2(0.0, 0.0, w, wall_y), Color(0.13, 0.13, 0.50))
-	var wy := 12.0
+	draw_rect(Rect2(0.0, -TOP_EXT, w, wall_y + TOP_EXT), Color(0.13, 0.13, 0.50))
+	var wy := 12.0 - TOP_EXT
 	while wy < wall_y:
 		draw_line(Vector2(0.0, wy), Vector2(w, wy), Color(0.18, 0.19, 0.58), 1.0)
 		wy += 24.0
 	for i in 5:
 		var px := 64.0 + 128.0 * float(i)
-		draw_line(Vector2(px, 0.0), Vector2(px, wall_y), Color(0.55, 0.55, 0.62), 2.0)
+		draw_line(Vector2(px, -TOP_EXT), Vector2(px, wall_y), Color(0.55, 0.55, 0.62), 2.0)
 
 	# 床(明るい青の帯)
 	draw_rect(Rect2(0.0, wall_y, w, VIEW_H - wall_y), Color(0.15, 0.31, 0.78))
@@ -76,16 +77,21 @@ func _draw() -> void:
 	draw_line(fr, br, line_col, 2.0)  # 右サイドライン(右斜め)
 	draw_line(Vector2(cx, front_y), Vector2(cx, back_y), line_col, 2.0)  # 中央線(垂直)
 
-	# ネット: 中央で傾かない。手前ポール+奥行きだけの垂直な帯(原作準拠)
+	# ネット: 中央で傾かない。奥ポール+網の帯+手前ポール(原作準拠)
 	var nty := ViewTransform.to_px(cfg.net_top_y)
 	var net_h := fy - nty
-	var band_top := back_y - net_h          # 奥側の網上端(奥=画面上方向)
-	# 天井まで伸びる細いケーブル(原作: ポールの上から画面上端まで)
-	draw_line(Vector2(cx, 0.0), Vector2(cx, band_top), Color(0.55, 0.55, 0.62), 2.0)
-	# 奥行きの帯(網。手前ポールの背後で上に伸びる)
-	draw_rect(Rect2(cx - 2.0, band_top, 4.0, (front_y - band_top)), Color(0.72, 0.75, 0.86))
-	# 手前ポール(太い青)。手前ほど下が基準なのでポールは手前ラインに立つ
-	var pole_top := nty
-	draw_rect(Rect2(cx - 3.0, pole_top, 6.0, front_y - pole_top), Color(0.25, 0.42, 0.95))
-	# ポール上部の赤(原作は頭のすぐ下に赤いブロック)
-	draw_rect(Rect2(cx - 3.0, pole_top + 3.0, 6.0, 10.0), Color(0.90, 0.18, 0.12))
+	var back_top := back_y - net_h    # 奥ポール上端(奥=画面上方向)
+	# 天井まで伸びる細いケーブル(原作: ネットの上から画面上端まで)
+	draw_line(Vector2(cx, -TOP_EXT), Vector2(cx, back_top + 2.0), Color(0.55, 0.55, 0.62), 2.0)
+	# 奥ポール(青)。網より上に頭が少し覗く=ネットが壁まで続いて見えない
+	draw_rect(Rect2(cx - 2.0, back_top, 4.0, net_h), Color(0.22, 0.36, 0.82))
+	# 網の帯(奥ポールの頭を少し残して手前まで)
+	draw_rect(Rect2(cx - 2.0, back_top + 6.0, 4.0, front_y - (back_top + 6.0)), Color(0.72, 0.75, 0.86))
+	# 手前ポール: 手前ラインに立ち、高さはネット高ぶん(奥行きで間延びさせない)
+	var pole_top := front_y - net_h
+	draw_rect(Rect2(cx - 3.0, pole_top, 6.0, net_h), Color(0.25, 0.42, 0.95))
+	draw_rect(Rect2(cx - 3.0, pole_top, 2.0, net_h), Color(0.55, 0.70, 1.0))    # 左の光
+	draw_rect(Rect2(cx + 2.0, pole_top, 1.0, net_h), Color(0.12, 0.22, 0.55))  # 右の影
+	draw_rect(Rect2(cx - 3.0, pole_top, 6.0, 3.0), Color(0.92, 0.93, 0.97))    # 白い頭
+	draw_rect(Rect2(cx - 3.0, pole_top + 3.0, 6.0, 9.0), Color(0.90, 0.18, 0.12))  # 赤帯
+	draw_rect(Rect2(cx + 1.0, pole_top + 3.0, 2.0, 9.0), Color(0.60, 0.10, 0.08))  # 赤帯の影

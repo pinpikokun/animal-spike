@@ -30,6 +30,8 @@ func attach_external(cfg_in, state_ref) -> void:
 	state = state_ref
 
 func _ready() -> void:
+	# 原作準拠: コートを画面下に寄せる(表示のみの一括シフト。ScoreUIはCanvasLayerで不動)
+	position.y = 16.0
 	if not external_sim:
 		cfg = SimConfig.new()
 		if not cfg.valid:
