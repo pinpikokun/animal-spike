@@ -12,10 +12,13 @@ const GameViewScene := preload("res://src/display/game_view.tscn")
 
 const PORT := 42424
 
+const RBDEBUG_TICKS := 8  # rbdebug時に毎tick強制するロールバック量(決定論の再シミュ検証)
+
 var _sim_root
 var _hud: Label
 var _role := "?"
 var _is_bot := false
+var _rbdebug := false
 var _mismatch_count := 0
 var _sync_active := false
 var _started_at_msec := 0
@@ -24,6 +27,7 @@ var _last_report_sec := -1
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	_is_bot = args.has("bot")
+	_rbdebug = args.has("rbdebug")
 	_role = "host" if args.has("host") else "join"
 
 	_sim_root = SimRootScript.new()
@@ -60,6 +64,11 @@ func _ready() -> void:
 	SyncManager.sync_stopped.connect(_on_sync_stopped)
 	SyncManager.sync_error.connect(_on_sync_error)
 	SyncManager.remote_state_mismatch.connect(_on_remote_state_mismatch)
+	if _rbdebug:
+		# 毎tick強制ロールバック+再シミュ。保存stateに含まれない_team_inputsが
+		# 入力ノードの再書き込みで正しく再現されるか(=決定論)を最も厳しく検証する
+		SyncManager.debug_rollback_ticks = RBDEBUG_TICKS
+		print("NET rbdebug ON: forcing %d rollback ticks every tick" % RBDEBUG_TICKS)
 	_connect_net()
 
 func _connect_net() -> void:
