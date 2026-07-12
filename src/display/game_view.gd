@@ -189,24 +189,29 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 	var vy := ViewTransform.to_px(state.ball_vy)
 	var g := ViewTransform.to_px(cfg.gravity)
 	var impact_y := ViewTransform.to_px(state.ball_y) - t * vy + g * t * (t + 1.0) * 0.5
-	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # ぶわん(前半速く後半ゆっくり)
-	var wobble := 1.0 + 0.08 * sin(u * TAU * 1.5) # 膨らみが少し波打つ弾性
+	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # 出だし速く後半ゆっくり
 	var center := Vector2(wall_x, impact_y)
 	var center_angle := 0.0 if dir > 0.0 else PI
-	# 衝突点の光(最初だけ明るく滲む)
-	var core_a := (1.0 - u) * (1.0 - u) * 0.55
+	# 衝突点の白い閃光(最初の一瞬だけ)
+	var core_a := (1.0 - u) * (1.0 - u) * 0.8
 	if core_a > 0.02:
-		c.draw_circle(center, 7.0 + 5.0 * ease_out, Color(0.90, 0.97, 1.0, core_a))
-	# 膨らむ波紋2本(後発は少し遅れて追いかける)
-	for k in 2:
-		var uk := clampf(u - 0.12 * float(k), 0.0, 1.0)
-		var ek := 1.0 - (1.0 - uk) * (1.0 - uk)
-		var r := (8.0 + 34.0 * ek) * wobble
-		var a := (1.0 - uk) * (0.6 - 0.2 * float(k))
-		if a <= 0.02:
-			continue
-		var width := 3.0 - 1.5 * uk  # 広がるほど細く
-		c.draw_arc(center, r, center_angle - 1.05, center_angle + 1.05, 24, Color(0.78, 0.90, 1.0, a), width)
+		c.draw_circle(center, 5.0 + 6.0 * ease_out, Color(1.0, 1.0, 1.0, core_a))
+	# レインボーの火花: 衝突点からコート内側へ扇状に飛び散る。
+	# 各火花の方向/速さはインデックスから決定論的に導出(ビュー状態レス)
+	var fade := 1.0 - u
+	for i in 16:
+		var fi := float(i)
+		var ang := center_angle + (fmod(fi * 0.6180339, 1.0) - 0.5) * 2.6
+		var spd := 34.0 + 44.0 * fmod(fi * 0.3796, 1.0)
+		var d := Vector2(cos(ang), sin(ang))
+		var dist_now := spd * ease_out
+		var droop := 26.0 * u * u * (0.4 + fmod(fi * 0.234, 1.0))  # 重力で垂れる
+		var head := center + d * dist_now + Vector2(0.0, droop)
+		var tail := center + d * maxf(dist_now - 7.0 - 5.0 * fade, 0.0) + Vector2(0.0, droop * 0.8)
+		var col := Color.from_hsv(fmod(fi / 16.0 + u * 0.25, 1.0), 0.85, 1.0, fade * 0.95)
+		c.draw_line(tail, head, col, 2.0)
+		if fade > 0.3:
+			c.draw_circle(head, 1.5, Color.from_hsv(fmod(fi / 16.0 + u * 0.25, 1.0), 0.55, 1.0, fade))
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブの軌跡プレビュー(バブルボブル式)。simと同じ照準角テーブル・重力で
