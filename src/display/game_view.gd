@@ -17,6 +17,7 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
+var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer)
 var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
 var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
@@ -73,6 +74,11 @@ func _ready() -> void:
 	if _ball_frame_w != int(ball_px):
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
 	_ball.scale = Vector2.ONE * (ball_px / float(_ball_frame_w))
+	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する
+	_fx = FxLayer.new()
+	_fx.view = self
+	_fx.z_index = 10
+	add_child(_fx)
 
 func _physics_process(_delta: float) -> void:
 	if external_sim:
@@ -131,11 +137,21 @@ func _sync_sprites() -> void:
 			var step := TAU / float(_ball_roll_frames)
 			frame = posmod(roundi(angle / step), _ball_roll_frames)
 	_ball.region_rect = Rect2(frame * _ball_frame_w, 0, _ball_frame_w, _ball_frame_w)
-	queue_redraw()  # 壁バリアの波紋はボール位置から毎フレーム導出する
+	_fx.queue_redraw()  # 壁の波紋とマーカーはsim状態から毎フレーム導出する
 
-func _draw() -> void:
+# エフェクト専用の最前面レイヤー。親ノード自身の_drawは子(コート背景)の下に
+# 描かれて埋もれるため、必ず最後の子ノードとして重ねる
+class FxLayer:
+	extends Node2D
+	var view
+
+	func _draw() -> void:
+		if view != null:
+			view.draw_fx(self)
+
+func draw_fx(c: CanvasItem) -> void:
 	# 透明な壁(コート端)の「ブイン」: 壁で跳ね返った直後=壁の近くで壁から離れる向きに
-	# 飛んでいる時だけ、壁に波紋を描く。強さは壁からの距離で減衰。
+	# 飛んでいる時だけ描く。強さは壁からの距離で減衰。
 	# 全てsim状態からの導出でビュー側に状態を持たない(ロールバック安全)
 	if state == null or cfg == null:
 		return
@@ -145,19 +161,19 @@ func _draw() -> void:
 	var vx := ViewTransform.to_px(state.ball_vx)
 	var reach := 70.0
 	if bx < reach and vx > 0.01:
-		_draw_wall_ripple(0.0, by, 1.0 - bx / reach, 1.0)
+		_draw_wall_ripple(c, 0.0, by, 1.0 - bx / reach, 1.0)
 	elif bx > w - reach and vx < -0.01:
-		_draw_wall_ripple(w, by, 1.0 - (w - bx) / reach, -1.0)
-	_draw_control_marker()
+		_draw_wall_ripple(c, w, by, 1.0 - (w - bx) / reach, -1.0)
+	_draw_control_marker(c)
 
-func _draw_wall_ripple(wall_x: float, y: float, strength: float, dir: float) -> void:
+func _draw_wall_ripple(c: CanvasItem, wall_x: float, y: float, strength: float, dir: float) -> void:
 	# 透明な壁の「ブイン」: 壁全体が光り、大きな同心の弧が広がる。strength 0..1
 	var s := clampf(strength, 0.0, 1.0)
 	# 壁面のグロウ(縦の光の帯。接触直後ほど太く明るい)
 	var glow_w := 4.0 + 10.0 * s
 	var gx := wall_x if dir > 0.0 else wall_x - glow_w
-	draw_rect(Rect2(gx, y - 90.0, glow_w, 180.0), Color(0.70, 0.90, 1.0, 0.35 * s))
-	draw_rect(Rect2(wall_x - 1.0, y - 120.0, 2.0, 240.0), Color(0.85, 0.95, 1.0, 0.6 * s))
+	c.draw_rect(Rect2(gx, y - 90.0, glow_w, 180.0), Color(0.70, 0.90, 1.0, 0.35 * s))
+	c.draw_rect(Rect2(wall_x - 1.0, y - 120.0, 2.0, 240.0), Color(0.85, 0.95, 1.0, 0.6 * s))
 	# 大きな同心の弧が壁からコート内側へ広がる
 	var center_angle := 0.0 if dir > 0.0 else PI
 	for k in 4:
@@ -165,16 +181,16 @@ func _draw_wall_ripple(wall_x: float, y: float, strength: float, dir: float) -> 
 		var a := s * (0.85 - 0.18 * float(k))
 		if a <= 0.0:
 			continue
-		draw_arc(Vector2(wall_x, y), r, center_angle - 1.1, center_angle + 1.1, 24, Color(0.80, 0.93, 1.0, a), 3.0)
+		c.draw_arc(Vector2(wall_x, y), r, center_angle - 1.1, center_angle + 1.1, 24, Color(0.80, 0.93, 1.0, a), 3.0)
 
-func _draw_control_marker() -> void:
+func _draw_control_marker(c: CanvasItem) -> void:
 	# 操作中キャラの頭上に▽(黄)。sim状態のcontrolled_lから導出(表示専用)
 	# TODO(ネット対戦): 右チーム操作時はcontrolled_rを見る配線が要る
 	var idx: int = state.controlled_l
 	var p = state.players[idx]
 	var pos := ViewTransform.pos_of(p) + _depth_offset(idx)
-	var top := pos + Vector2(0.0, -42.0)
+	var top := pos + Vector2(0.0, -44.0)
 	var pts := PackedVector2Array([
-		top + Vector2(-6.0, -6.0), top + Vector2(6.0, -6.0), top + Vector2(0.0, 2.0)])
-	draw_colored_polygon(pts, Color(1.0, 0.90, 0.20))
-	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), Color(0.45, 0.30, 0.0), 1.0)
+		top + Vector2(-7.0, -8.0), top + Vector2(7.0, -8.0), top + Vector2(0.0, 2.0)])
+	c.draw_colored_polygon(pts, Color(1.0, 0.90, 0.20))
+	c.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), Color(0.45, 0.30, 0.0), 1.0)
