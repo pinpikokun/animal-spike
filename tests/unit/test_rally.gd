@@ -69,6 +69,14 @@ func test_serve_toss_never_crosses_net() -> void:
 		check(s.ball_x < cfg.net_x, "トスがネットを越えない(tick %d)" % i)
 		Simulation.step(s, [0, 0, 0, 0], cfg)
 
+# ボールの真下へ歩き、近づいたら前トス打ち(アクション+ネット方向)する
+# 「人間らしい」サーブ打撃入力
+func _chase_and_hit_input(s) -> int:
+	var dx: int = s.ball_x - s.players[0].x
+	if absi(dx) <= FP.from_int(24):
+		return Simulation.IN_ACTION | Simulation.IN_RIGHT
+	return Simulation.IN_RIGHT if dx > 0 else Simulation.IN_LEFT
+
 func test_serve_strike_starts_rally() -> void:
 	# トス→打撃でRALLY開始。打撃は通常のヒットルール(前トス打ちで越す)
 	var w := _serve_world(0)
@@ -76,8 +84,8 @@ func test_serve_strike_starts_rally() -> void:
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	var struck := false
-	for i in 300:
-		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	for i in 600:
+		Simulation.step(s, [_chase_and_hit_input(s), 0, 0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			struck = true
 			break
@@ -163,10 +171,11 @@ func test_serve_power_adjust_with_up_down() -> void:
 	check_eq(s2.serve_pow, Simulation.POW_MIN, "下キー長押しで高さ下限")
 	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(strong_vy < s2.ball_vy, "高さ%が大きいほど高く上がる(上向き=負が大きい)")
-	check_eq(strong_vx, s2.ball_vx, "横成分は高さ%に影響されない")
+	# 横速度は着弾距離固定のため滞空(高さ)に反比例する。高いトスほど横は遅い
+	check(strong_vx < s2.ball_vx, "高いトスほど横は遅い(着弾距離を保つ)")
 
 func test_serve_aim_flattens_toward_net() -> void:
-	# ネット方向キーで照準が倒れ(上限60度)、低く速い弾道になる
+	# ネット方向キーで照準が倒れ(上限60度)、トスが遠く(前方)へ飛ぶ
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
@@ -174,8 +183,13 @@ func test_serve_aim_flattens_toward_net() -> void:
 		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(s.serve_aim, Simulation.AIM_MAX, "ネット方向キー長押しで上限60度")
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(s.ball_vx > 0, "低い弾道はネット方向へ速い")
-	check(absi(s.ball_vy) < s.ball_vx, "60度は横成分が縦成分より大きい")
+	var far_vx: int = s.ball_vx
+	check(far_vx > 0, "倒した照準はネット方向へ飛ぶ")
+	# 既定角(25度)と比べ、倒した分だけ横速度が大きい(=遠くへ落ちる)
+	var w2 := _serve_world(0)
+	var s2 = w2[0]
+	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(far_vx > s2.ball_vx, "60度のトスは既定角より遠くへ飛ぶ")
 
 func test_serve_default_aim_crosses_net() -> void:
 	# 既定角(25度)でトス→アクション押しっぱなし+前進で打つとネットを越えて届く
@@ -185,7 +199,9 @@ func test_serve_default_aim_crosses_net() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	var crossed := false
 	for i in 600:
-		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+		var input: int = _chase_and_hit_input(s) if s.phase == SimState.PHASE_SERVE \
+			else Simulation.IN_RIGHT
+		Simulation.step(s, [input, 0, 0, 0], cfg)
 		if s.ball_x > cfg.net_x:
 			crossed = true
 			break

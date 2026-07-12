@@ -201,15 +201,20 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# 2段階サーブの1段目=セルフトス(本物のバレー式)。横成分は固定威力
-	# (serve_toss_power)で、どう倒しても自陣の半分程度までしか飛ばない=
-	# トス単体では絶対にネットを越えない。威力%は高さにのみ効く
-	# (高いトス=走り込みアタックサーブの滞空時間を作る)。トスはタッチ数に数えない
+	# 2段階サーブの1段目=セルフトス(本物のバレー式)。
+	# 縦: serve_toss_upに高さ%(60..130)を掛ける=高いトスほど滞空が長く
+	#     走り込みジャンプアタックの時間が作れる。
+	# 横: 照準角が決めるのは「着弾距離」(最大serve_toss_range)。横速度は
+	#     滞空時間から逆算するので、どんな高さ・角度でも着弾は自陣内=
+	#     トス単体では絶対にネットを越えない。トスはタッチ数に数えない
 	var net_dir: int = _dir_of_team(s.serving_team)
 	var aim: int = clampi(s.serve_aim, 0, AIM_MAX)
 	var pow_pct: int = clampi(s.serve_pow, POW_MIN, POW_MAX)
-	s.ball_vx = net_dir * (cfg.serve_toss_power * AIM_SIN[aim] / 65536)
-	s.ball_vy = -(cfg.serve_toss_power * AIM_COS[aim] / 65536) * pow_pct / 100
+	var vy_mag: int = (cfg.serve_toss_up * AIM_COS[aim] / 65536) * pow_pct / 100
+	var flight: int = maxi(2 * vy_mag / cfg.gravity, 1)
+	var dx: int = cfg.serve_toss_range * AIM_SIN[aim] / 65536
+	s.ball_vx = net_dir * (dx / flight)
+	s.ball_vy = -vy_mag
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	s.serve_tossed = 1

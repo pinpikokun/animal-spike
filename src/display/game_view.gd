@@ -267,19 +267,23 @@ func _draw_serve_preview(c: CanvasItem) -> void:
 	var aim: int = clampi(state.serve_aim, 0, Simulation.AIM_MAX)
 	var net_dir := 1.0 if state.serving_team == 0 else -1.0
 	var pow_pct: int = clampi(state.serve_pow, Simulation.POW_MIN, Simulation.POW_MAX)
-	var p := ViewTransform.to_px(cfg.serve_toss_power)
-	var vx := net_dir * p * Simulation.AIM_SIN[aim] / 65536.0
-	var vy := -p * Simulation.AIM_COS[aim] / 65536.0 * float(pow_pct) / 100.0
+	# simの_try_serveと同じ整数式で速度を出してからpxへ変換(弾道の完全一致)
+	var vy_mag: int = (cfg.serve_toss_up * Simulation.AIM_COS[aim] / 65536) * pow_pct / 100
+	var flight: int = maxi(2 * vy_mag / cfg.gravity, 1)
+	var dx_fp: int = cfg.serve_toss_range * Simulation.AIM_SIN[aim] / 65536
+	var vx := net_dir * ViewTransform.to_px(dx_fp / flight)
+	var vy := -ViewTransform.to_px(vy_mag)
 	var g := ViewTransform.to_px(cfg.gravity)
 	var pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
 	var floor_px := ViewTransform.to_px(cfg.floor_y)
-	for i in 90:
+	# 高いトス(高さ130%)でも弧の全体が描けるよう滞空上限+αまで積分する
+	for i in 160:
 		vy += g
 		pos += Vector2(vx, vy)
 		if pos.y > floor_px:
 			break
 		if i % 3 == 0:
-			var a := clampf(1.1 - float(i) / 60.0, 0.15, 1.0)
+			var a := clampf(1.1 - float(i) / 100.0, 0.15, 1.0)
 			c.draw_circle(pos, 2.0, Color(1.0, 0.95, 0.55, 0.75 * a))
 
 func _draw_control_marker(c: CanvasItem) -> void:

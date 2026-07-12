@@ -48,7 +48,8 @@ var serve_vy: int
 var serve_soft_vx: int
 var serve_soft_vy: int
 var serve_power: int
-var serve_toss_power: int  # 2段階サーブのトス強さ(横成分はこれで固定=ネット到達不能)
+var serve_toss_up: int     # 2段階サーブのトス縦速度(高い=ジャンプアタックの滞空)
+var serve_toss_range: int  # トスの最大前方距離(fp)。横速度は滞空時間から逆算=ネット到達不能
 var net_repel: int
 var hit_cooldown_ticks: int
 var point_pause_ticks: int
@@ -120,7 +121,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	serve_soft_vx = FP.from_int(_int_of(raw, "serve_soft_vx_px_s")) / tick_rate
 	serve_soft_vy = FP.from_int(_int_of(raw, "serve_soft_vy_px_s")) / tick_rate
 	serve_power = FP.from_int(_int_of(raw, "serve_power_px_s")) / tick_rate
-	serve_toss_power = FP.from_int(_int_of(raw, "serve_toss_power_px_s")) / tick_rate
+	serve_toss_up = FP.from_int(_int_of(raw, "serve_toss_up_px_s")) / tick_rate
+	serve_toss_range = FP.from_int(_int_of(raw, "serve_toss_range_px"))
 	net_repel = FP.from_int(_int_of(raw, "net_repel_px_s")) / tick_rate
 	hit_cooldown_ticks = _int_of(raw, "hit_cooldown_ticks")
 	point_pause_ticks = _int_of(raw, "point_pause_ticks")
