@@ -12,6 +12,12 @@ const InputPoll := preload("res://src/display/input_poll.gd")
 
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒットの手続き演出)
+# ボールのへしゃげ(原作: アタック時は弾が潰れて速い)。速度がV0(px/tick)を
+# 超えると進行方向に伸び垂直に潰れ始め、V1で最大MAXまで潰れる。
+# スパイク級(約9px/tick)から発動し、通常の浮遊球では真円のまま
+const SQUASH_V0 := 8.5
+const SQUASH_V1 := 13.5
+const SQUASH_MAX := 0.30
 
 var cfg
 var state
@@ -19,6 +25,7 @@ var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
 var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer)
 var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
+var _ball_base_scale := 1.0  # 真円時のボール表示スケール(へしゃげの基準)
 var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
 # ここは状態を読んでスプライトを駆動する表示専任になる
@@ -73,7 +80,8 @@ func _ready() -> void:
 	var ball_px := ViewTransform.to_px(cfg.ball_radius) * 2.0
 	if _ball_frame_w != int(ball_px):
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
-	_ball.scale = Vector2.ONE * (ball_px / float(_ball_frame_w))
+	_ball_base_scale = ball_px / float(_ball_frame_w)
+	_ball.scale = Vector2.ONE * _ball_base_scale
 	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する
 	_fx = FxLayer.new()
 	_fx.view = self
@@ -126,6 +134,16 @@ func _sync_sprites() -> void:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(state.serving_team * 2)
 	_ball.position = ball_pos.round()
+	# へしゃげ: 速度がスパイク級のとき進行方向に伸び垂直に潰れる。
+	# sim速度から毎フレーム導出しビューに状態を持たない(ロールバック安全)
+	var bv := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))
+	var squash := clampf((bv.length() - SQUASH_V0) / (SQUASH_V1 - SQUASH_V0), 0.0, 1.0) * SQUASH_MAX
+	if squash > 0.01 and state.phase != SimState.PHASE_SERVE:
+		_ball.rotation = bv.angle()
+		_ball.scale = Vector2(_ball_base_scale * (1.0 + squash), _ball_base_scale * (1.0 - squash))
+	else:
+		_ball.rotation = 0.0
+		_ball.scale = Vector2.ONE * _ball_base_scale
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。
 	# 状態から導出しビューに角度を溜めない(ロールバック安全)
