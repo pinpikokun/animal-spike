@@ -30,6 +30,10 @@ var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
 # ここは状態を読んでスプライトを駆動する表示専任になる
 var external_sim := false
+# ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
+# 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
+# net_match.gdがホスト=0/クライアント=1を設定する
+var local_team := 0
 
 func attach_external(cfg_in, state_ref) -> void:
 	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
@@ -189,7 +193,8 @@ func draw_fx(c: CanvasItem) -> void:
 		_draw_wall_ripple(c, 0.0, bx, 1.0)
 	elif vx < -0.01:
 		_draw_wall_ripple(c, w, w - bx, -1.0)
-	if state.phase == SimState.PHASE_SERVE:
+	# サーブ軌跡は自チームのサーブのみ(相手の狙いはネタバレさせない)
+	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team:
 		_draw_serve_preview(c)
 	_draw_control_marker(c)
 
@@ -267,9 +272,9 @@ func _draw_serve_preview(c: CanvasItem) -> void:
 			c.draw_circle(pos, 2.0, Color(1.0, 0.95, 0.55, 0.75 * a))
 
 func _draw_control_marker(c: CanvasItem) -> void:
-	# 操作中キャラの頭上に▽(黄)。sim状態のcontrolled_lから導出(表示専用)
-	# TODO(ネット対戦): 右チーム操作時はcontrolled_rを見る配線が要る
-	var idx: int = state.controlled_l
+	# 操作中キャラの頭上に▽(黄)。自チームの操作スロットから導出(表示専用)。
+	# 右チーム操作(ネット対戦のクライアント)はcontrolled_rを見る
+	var idx: int = state.controlled_l if local_team == 0 else 2 + state.controlled_r
 	var p = state.players[idx]
 	var pos := ViewTransform.pos_of(p) + _depth_offset(idx)
 	var top := pos + Vector2(0.0, -44.0)

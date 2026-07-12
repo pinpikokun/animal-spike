@@ -52,6 +52,8 @@ func _ready() -> void:
 
 	var view := GameViewScene.instantiate()
 	view.attach_external(_sim_root.cfg, _sim_root.state)
+	# ホスト=左チーム/クライアント=右チーム。▽マーカーとサーブ軌跡の表示先を自チームに合わせる
+	view.local_team = 0 if _role == "host" else 1
 	add_child(view)
 
 	_hud = Label.new()
