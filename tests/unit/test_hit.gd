@@ -292,19 +292,38 @@ func test_hop_toss_on_up_action() -> void:
 	check(p.vy > -cfg.jump_speed, "フルジャンプにはならない")
 	check(s.ball_vy < 0, "ボールは上へトスされる")
 
-func test_no_jump_on_up_side_action() -> void:
-	# ↑+横+アクション: ジャンプせず地上で構えて前トス
+func test_toss_stance_hops_without_moving() -> void:
+	# ↑+横+アクション: 小ホップはするが移動はしない(横キーはトス方向指定専用)
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
+	var x0: int = p.x
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_JUMP
 		| Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(p.on_ground, 1, "横込みならジャンプしない(地上で構える)")
-	check_eq(s.touches, 1, "地上トスが成立する")
+	check_eq(p.x, x0, "トス構え中は横キーで移動しない")
+	check(p.vy >= -cfg.hop_speed and p.vy < 0, "小ホップになる(フルジャンプではない)")
+	check_eq(s.touches, 1, "トスが成立する")
 	check_eq(s.ball_vx, cfg.toss_mid_vx, "上+横=中間トス(緩やかな前目)")
+
+func test_jump_cut_on_release() -> void:
+	# 可変ジャンプ: 上昇中に上キーを離すと失速し、押し続けより早く落下に転じる
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = FP.from_int(400)  # ボールは遠く(ヒットさせない)
+	var hold = SimState.new()
+	hold.load_int_array(s.to_int_array())
+	# 双方1tick目でジャンプ、以降5tick: 片方は保持、片方は離す
+	Simulation.step(s, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(hold, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	for i in 5:
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+		Simulation.step(hold, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	check(s.players[0].vy > hold.players[0].vy, "離した側は上昇速度が失われている")
+	check(s.players[0].y > hold.players[0].y, "離した側は高く上がれない")
 
 func test_jump_without_action_is_full() -> void:
 	# アクションなしの↑は従来どおりフルジャンプ

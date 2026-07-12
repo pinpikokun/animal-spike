@@ -384,24 +384,26 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.stun > 0:
 		p.stun -= 1
 		input = 0
+	# トス構え(上+アクション): その場で小ホップして手を伸ばす。横キーは
+	# トスの方向指定専用になり移動には使わない(「トスだけする」ユーザー指定)
+	var toss_stance: bool = (input & IN_ACTION) != 0 and (input & IN_JUMP) != 0
 	p.vx = 0
-	if input & IN_LEFT:
-		p.vx = -cfg.move_speed
-	if input & IN_RIGHT:
-		p.vx = cfg.move_speed
+	if not toss_stance:
+		if input & IN_LEFT:
+			p.vx = -cfg.move_speed
+		if input & IN_RIGHT:
+			p.vx = cfg.move_speed
 	if (input & IN_JUMP) and p.on_ground == 1:
-		# アクション(トス)と同時押しのジャンプ挙動(原作の「構えてトス」の再現):
-		#   上+アクション(横なし) = 小ホップ(軽く跳んで手を伸ばし真上トス)
-		#   上+横+アクション     = 跳ばない(地上で構えて前トス)
-		#   アクションなし        = 通常のフルジャンプ
-		if input & IN_ACTION:
-			if not (input & (IN_LEFT | IN_RIGHT)):
-				p.vy = -cfg.hop_speed
-				p.on_ground = 0
+		if toss_stance:
+			p.vy = -cfg.hop_speed
 		else:
 			p.vy = -cfg.jump_speed
-			p.on_ground = 0
+		p.on_ground = 0
 	if p.on_ground == 0:
+		# 可変ジャンプ: 上昇中に上キーを離すとその場で失速して落下に転じる
+		# (毎tick半減の減衰。intの/2はゼロ方向切り捨てで決定論)
+		if p.vy < 0 and not (input & IN_JUMP):
+			p.vy = p.vy / 2
 		p.vy += cfg.gravity
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1

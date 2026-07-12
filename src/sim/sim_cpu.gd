@@ -280,6 +280,10 @@ static func decide(s, idx: int, cfg) -> int:
 			# 位置取りで立てたジャンプ意図が地上ヒットと混ざると跳躍が化ける
 			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
 			input |= SimInput.IN_ACTION | _ground_shot_keys(s, idx, cfg, team, prof)
+	# 可変ジャンプ対応: 上昇中はジャンプキーを保持し続ける(離すと失速する
+	# 人間向けの仕様でCPUのジャンプアタックが化けないように)
+	if p.on_ground == 0 and p.vy < 0 and not (input & SimInput.IN_ACTION):
+		input |= SimInput.IN_JUMP
 	return input
 
 # 地上ヒット時の方向キー選択(上=セットアップ / ネット方向=前トスで越す)
