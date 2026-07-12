@@ -152,10 +152,13 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 			return true
 	return false
 
-# サーブの狙い(角度/威力)をスコアから決定論的に散らす(安全域24..40度/100..125%に制限)
+# サーブトスの狙い(角度/高さ)をスコアから決定論的に散らす。
+# 2段階サーブでは角度を倒すほどトスが遠くへ飛び、CPUの足(3px/tick)で
+# 追いつける限界がある。安全域8..24度/100..125%(24度超は走っても間に合わず
+# 同じ狙いの再トスが無限ループする=決定論の膠着、実測で確認済み)
 static func _serve_target(s, idx: int) -> Array[int]:
 	var h: int = absi((s.score_l * 73856093) ^ (s.score_r * 19349663) ^ (idx * 83492791))
-	var aim: int = 24 + h % 17
+	var aim: int = 8 + h % 17
 	var pow_pct: int = 100 + (h / 97) % 26
 	return [aim, pow_pct]
 
@@ -163,6 +166,20 @@ static func _decide_serve(s, idx: int, cfg, ab: int) -> int:
 	# サーブ遅延タイマーはsimulation.gdのstep()が減算する(ここは読むだけ)
 	if idx != s.serving_team * 2:
 		return 0
+	if s.serve_tossed == 1:
+		# 2段階サーブの2段目: トスの落下点へ歩き、落ち際に前トス打ちで
+		# 確実にネットを越す(トス直後は自分のhit_cooldownが再打撃を防ぐ)
+		var p = s.players[idx]
+		var reach: int = cfg.player_reach
+		var dx: int = s.ball_x - p.x
+		var dy: int = s.ball_y - p.y
+		var dy_n: int = dy * reach / cfg.player_reach_up
+		var fwd: int = SimInput.IN_RIGHT if s.serving_team == 0 else SimInput.IN_LEFT
+		if dx * dx + dy_n * dy_n <= reach * reach:
+			return SimInput.IN_ACTION | fwd
+		var land: int = _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
+			cfg.floor_y - cfg.player_reach_up / 2, 0)
+		return _walk_to(p, land, cfg.player_reach / 4)
 	if ab & AB_SERVE_VAR:
 		var target := _serve_target(s, idx)
 		var to_net: int = SimInput.IN_RIGHT if s.serving_team == 0 else SimInput.IN_LEFT

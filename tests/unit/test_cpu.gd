@@ -51,7 +51,8 @@ func test_cpu_auto_serves() -> void:
 	# tick経由でCPUサーバーの自動サーブを検証する
 	s.controlled_l = 1
 	var served := false
-	for i in cfg.serve_delay_ticks + 10:
+	# 2段階サーブ(トス→追走→打撃)のため猶予は遅延+トス滞空ぶん広く取る
+	for i in cfg.serve_delay_ticks + 180:
 		Simulation.tick(s, [0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			served = true
@@ -66,7 +67,7 @@ func test_cpu_team_serves_via_team_input() -> void:
 	var cfg = w[1]
 	Simulation.reset_match(s, cfg, 1)
 	var served := false
-	for i in cfg.serve_delay_ticks + 10:
+	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
 		Simulation.tick(s, [0, cpu_r], cfg)
 		if s.phase == SimState.PHASE_RALLY:
@@ -82,12 +83,12 @@ func test_cpu_serve_crosses_net() -> void:
 	# 左=人間が相方(index1)操作、CPUサーバー(index0)が自動サーブする配線
 	s.controlled_l = 1
 	var served := false
-	for i in cfg.serve_delay_ticks + 5:
+	for i in cfg.serve_delay_ticks + 180:
 		Simulation.tick(s, [0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			served = true
 			break
-	check(served, "CPUがサーブ(トス)を実行")
+	check(served, "CPUがサーブ(トス→打撃)を実行")
 	var crossed := false
 	for i in 300:
 		Simulation.tick(s, [0, 0], cfg)
@@ -106,13 +107,13 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 	var cfg = w[1]
 	Simulation.reset_match(s, cfg, 1)
 	var served := false
-	for i in cfg.serve_delay_ticks + 5:
+	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
 		Simulation.tick(s, [0, cpu_r], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			served = true
 			break
-	check(served, "右CPUがサーブ(トス)を実行")
+	check(served, "右CPUがサーブ(トス→打撃)を実行")
 	var crossed := false
 	for i in 300:
 		var cpu_r2: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
@@ -265,13 +266,13 @@ func test_serve_variation_reaches_target_and_crosses() -> void:
 	s.score_r = 1
 	s.controlled_l = 1  # サーバー(index0)はCPU
 	var served := false
-	for i in cfg.serve_delay_ticks + 30:
+	for i in cfg.serve_delay_ticks + 180:
 		Simulation.tick(s, [0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			served = true
 			break
 	check(served, "多様化サーブでもサーブは実行される")
-	check(s.serve_aim >= 24 and s.serve_aim <= 40, "角度が安全域内: " + str(s.serve_aim))
+	check(s.serve_aim >= 8 and s.serve_aim <= 24, "角度が安全域内: " + str(s.serve_aim))
 	check(s.serve_pow >= 100 and s.serve_pow <= 125, "威力が安全域内: " + str(s.serve_pow))
 	check(s.serve_aim != 25 or s.serve_pow != 100, "既定(25/100)から狙いが変わっている")
 	var crossed := false

@@ -43,15 +43,78 @@ func test_ball_held_by_server() -> void:
 	check_eq(s.ball_x, s.players[0].x, "ボールはサーバー頭上に固定(x)")
 	check_eq(s.ball_y, s.players[0].y - cfg.serve_hold_height, "ボールはサーバー頭上に固定(y)")
 
-func test_serve_launches_ball() -> void:
-	# 照準サーブ: 既定角(25度)でアクション→ネット方向へ上向きに飛ぶ
+func test_serve_toss_stays_in_serve_phase() -> void:
+	# 2段階サーブ: アクション1回目はトス。フェーズはSERVEのまま打撃待ちになる
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check(s.ball_vx > 0, "左のサーブは右向き(ネット方向)")
-	check(s.ball_vy < 0, "サーブは上向き成分")
+	check_eq(s.phase, SimState.PHASE_SERVE, "トスだけではRALLYにならない")
+	check_eq(s.serve_tossed, 1, "トス済みフラグが立つ")
+	check(s.ball_vx > 0, "左のトスは右向き(ネット方向)")
+	check(s.ball_vy < 0, "トスは上向き")
+	check_eq(s.touches, 0, "トスはタッチ数に数えない")
+
+func test_serve_toss_never_crosses_net() -> void:
+	# トス単体では絶対にネットを越えない(最悪ケース: 角度上限+高さ上限)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.serve_aim = Simulation.AIM_MAX
+	s.serve_pow = Simulation.POW_MAX
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	for i in 300:
+		if s.serve_tossed == 0:
+			break  # 床に落ちて再トス待ちに戻った
+		check(s.ball_x < cfg.net_x, "トスがネットを越えない(tick %d)" % i)
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+
+func test_serve_strike_starts_rally() -> void:
+	# トス→打撃でRALLY開始。打撃は通常のヒットルール(前トス打ちで越す)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var struck := false
+	for i in 300:
+		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			struck = true
+			break
+	check(struck, "トスを打ってラリーが始まる")
+	check_eq(s.touches, 1, "サーブ打撃はタッチ1")
+	check_eq(s.last_touch_team, 0, "最終タッチはサーブ側")
+
+func test_serve_toss_floor_resets_to_aim() -> void:
+	# 打ち損ねてトスが床に落ちたら失点せず構え(照準)からやり直す
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.serve_tossed, 1, "トス済み")
+	for i in 300:
+		Simulation.step(s, [0, 0, 0, 0], cfg)  # 打たずに放置
+		if s.serve_tossed == 0:
+			break
+	check_eq(s.serve_tossed, 0, "床に落ちたら構えに戻る")
+	check_eq(s.phase, SimState.PHASE_SERVE, "失点にはならない")
+	check_eq(s.score_r, 0, "相手に点は入らない")
+	check_eq(s.players[0].x, cfg.serve_line, "サーバーは白線へ戻る")
+
+func test_serve_strike_only_by_server() -> void:
+	# トス済みのボールを打てるのはサーバー本人だけ(相方は不可)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	# 相方(idx1)をボールの真横に置いてアクションさせても打てない
+	s.players[1].x = s.ball_x
+	s.players[1].y = cfg.floor_y
+	var inputs: Array[int] = [0, Simulation.IN_ACTION, 0, 0]
+	Simulation.step(s, [0, 0], cfg)  # チーム入力APIでは相方はCPU化するため直接step
+	Simulation._resolve_hit(s, inputs, cfg)
+	check_eq(s.phase, SimState.PHASE_SERVE, "相方はサーブ打撃できない")
+	check_eq(s.touches, 0, "タッチも発生しない")
 
 func test_server_is_pinned_during_serve() -> void:
 	# サーブ照準中、横キーは角度調整に使うためサーバーは移動しない(白線の位置に固定)
@@ -77,27 +140,30 @@ func test_serve_aim_up_becomes_vertical() -> void:
 		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
 	check_eq(s.serve_aim, 0, "逆方向キー長押しで照準が真上(0度)まで立つ")
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
-	check(s.ball_vy < 0, "真上サーブは上向き")
+	check_eq(s.serve_tossed, 1, "アクションでトスが上がる")
+	check_eq(s.ball_vx, 0, "真上トスは横成分ゼロ")
+	check(s.ball_vy < 0, "真上トスは上向き")
 
 func test_serve_power_adjust_with_up_down() -> void:
-	# 上キーで威力が上がり(上限130%)、下キーで下がる(下限60%)。速度に反映される
+	# 上キーでトスが高くなり(上限130%)、下キーで低くなる(下限60%)。
+	# 高さ%は縦成分にのみ効く(横はネット到達不能の固定威力)
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	for i in 60:
 		Simulation.step(s, [Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.serve_pow, Simulation.POW_MAX, "上キー長押しで威力上限")
+	check_eq(s.serve_pow, Simulation.POW_MAX, "上キー長押しで高さ上限")
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var strong_vy: int = s.ball_vy
 	var strong_vx: int = s.ball_vx
 	var w2 := _serve_world(0)
 	var s2 = w2[0]
 	for i in 60:
 		Simulation.step(s2, [Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s2.serve_pow, Simulation.POW_MIN, "下キー長押しで威力下限")
+	check_eq(s2.serve_pow, Simulation.POW_MIN, "下キー長押しで高さ下限")
 	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(strong_vx > s2.ball_vx, "威力が高いほど速い(同角度)")
+	check(strong_vy < s2.ball_vy, "高さ%が大きいほど高く上がる(上向き=負が大きい)")
+	check_eq(strong_vx, s2.ball_vx, "横成分は高さ%に影響されない")
 
 func test_serve_aim_flattens_toward_net() -> void:
 	# ネット方向キーで照準が倒れ(上限60度)、低く速い弾道になる
@@ -112,20 +178,18 @@ func test_serve_aim_flattens_toward_net() -> void:
 	check(absi(s.ball_vy) < s.ball_vx, "60度は横成分が縦成分より大きい")
 
 func test_serve_default_aim_crosses_net() -> void:
-	# 既定角(25度)のサーブは緩やかな弧でネットを越えて相手コートへ届く
+	# 既定角(25度)でトス→アクション押しっぱなし+前進で打つとネットを越えて届く
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	var crossed := false
-	for i in 300:
-		Simulation.step(s, [0, 0, 0, 0], cfg)
+	for i in 600:
+		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 		if s.ball_x > cfg.net_x:
 			crossed = true
 			break
-		if s.phase != SimState.PHASE_RALLY:
-			break
-	check(crossed, "既定角のサーブがネットを越える")
+	check(crossed, "既定角のトス→打撃でネットを越える")
 
 func test_server_jump_suppressed_until_toss() -> void:
 	# 上キー=ジャンプ+照準のため、トス前のサーバーは上を押してもジャンプしない

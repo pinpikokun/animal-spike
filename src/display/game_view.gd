@@ -148,7 +148,7 @@ func _sync_sprites() -> void:
 		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
 		spr.position = pos.round()
 	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
-	if state.phase == SimState.PHASE_SERVE:
+	if state.phase == SimState.PHASE_SERVE and state.serve_tossed == 0:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(state.serving_team * 2)
 	_ball.position = ball_pos.round()
@@ -201,8 +201,9 @@ func draw_fx(c: CanvasItem) -> void:
 		_draw_wall_ripple(c, 0.0, bx, 1.0)
 	elif vx < -0.01:
 		_draw_wall_ripple(c, w, w - bx, -1.0)
-	# サーブ軌跡は自チームのサーブのみ(相手の狙いはネタバレさせない)
-	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team:
+	# サーブ軌跡は自チームのサーブの照準中のみ(相手の狙いはネタバレさせない)
+	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team \
+			and state.serve_tossed == 0:
 		_draw_serve_preview(c)
 	_draw_control_marker(c)
 
@@ -259,14 +260,14 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 			c.draw_circle(head, 1.5, Color.from_hsv(hue, 0.55, 1.0, fade))
 
 func _draw_serve_preview(c: CanvasItem) -> void:
-	# サーブの軌跡プレビュー(バブルボブル式)。simと同じ照準角テーブル・重力で
-	# 弾道を点線表示する。上キーで立て、ネット方向キーで倒して狙いを決める
+	# サーブトスの軌跡プレビュー(2段階サーブの1段目)。simの_try_serveと同じ式:
+	# 横成分は固定威力、威力%は高さにのみ効く。ここに落ちるボールを自分で打つ
 	var aim: int = clampi(state.serve_aim, 0, Simulation.AIM_MAX)
 	var net_dir := 1.0 if state.serving_team == 0 else -1.0
 	var pow_pct: int = clampi(state.serve_pow, Simulation.POW_MIN, Simulation.POW_MAX)
-	var p := ViewTransform.to_px(cfg.serve_power) * float(pow_pct) / 100.0
+	var p := ViewTransform.to_px(cfg.serve_toss_power)
 	var vx := net_dir * p * Simulation.AIM_SIN[aim] / 65536.0
-	var vy := -p * Simulation.AIM_COS[aim] / 65536.0
+	var vy := -p * Simulation.AIM_COS[aim] / 65536.0 * float(pow_pct) / 100.0
 	var g := ViewTransform.to_px(cfg.gravity)
 	var pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
 	var floor_px := ViewTransform.to_px(cfg.floor_y)

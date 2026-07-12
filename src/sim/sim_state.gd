@@ -31,8 +31,9 @@ var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
 var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(受けた側がスタンする)
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
-var serve_aim: int = 25  # サーブの照準角(垂直から何度ネット側へ倒すか。0=真上..60=低い弾道)
-var serve_pow: int = 100  # サーブ威力(%)。上下キーで60..130を選ぶ
+var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
+var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
+var serve_tossed: int = 0  # 2段階サーブ: 0=構え(照準中)、1=トス済み(打撃待ち)
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -71,6 +72,7 @@ func to_int_array() -> Array[int]:
 	out.append(last_hit_tick)
 	out.append(serve_aim)
 	out.append(serve_pow)
+	out.append(serve_tossed)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -108,6 +110,7 @@ func load_int_array(arr: Array) -> void:
 	last_hit_tick = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
+	serve_tossed = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1

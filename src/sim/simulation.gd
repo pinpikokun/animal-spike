@@ -64,38 +64,58 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
 	if state.phase == SimStateScript.PHASE_SERVE:
-		state.timer -= 1
-		# サーブ照準(バブルボブル式): 横キーで角度(ネット方向=倒す/逆=立てる)、
-		# 上下キーで威力(60..130%)。各1刻み/tickでスイープ。
-		# サーバーはトスまで移動もジャンプもしない(照準に専念)
-		var srv_idx: int = _server_index(state)
-		var serve_inputs: Array[int] = inputs.duplicate()
-		if srv_idx < serve_inputs.size():
-			var raw: int = serve_inputs[srv_idx]
-			var to_net: int = IN_RIGHT if state.serving_team == 0 else IN_LEFT
-			var away: int = IN_LEFT if state.serving_team == 0 else IN_RIGHT
-			if raw & to_net:
-				state.serve_aim = mini(state.serve_aim + 1, AIM_MAX)
-			elif raw & away:
-				state.serve_aim = maxi(state.serve_aim - 1, 0)
-			if raw & IN_UP:
-				state.serve_pow = mini(state.serve_pow + 1, POW_MAX)
-			elif raw & IN_DOWN:
-				state.serve_pow = maxi(state.serve_pow - 1, POW_MIN)
-			serve_inputs[srv_idx] &= ~(IN_JUMP | IN_LEFT | IN_RIGHT)
-		_step_players_and_hits(state, serve_inputs, cfg)
-		# サーバーは外線(サービスライン)を越えられない(最初のトスまで)。線の後ろでは動ける。
-		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる。
-		# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
-		# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
-		var srv = state.players[_server_index(state)]
-		var line: int = _serve_x(state, cfg)
-		if state.serving_team == 0:
-			srv.x = clampi(srv.x, cfg.ball_radius, line)
+		if state.serve_tossed == 0:
+			state.timer -= 1
+			# 2段階サーブの1段目=照準(バブルボブル式): 横キーで角度、上下キーで
+			# トスの高さ(60..130%)。各1刻み/tickでスイープ。
+			# サーバーはトスまで移動もジャンプもしない(照準に専念)
+			var srv_idx: int = _server_index(state)
+			var serve_inputs: Array[int] = inputs.duplicate()
+			if srv_idx < serve_inputs.size():
+				var raw: int = serve_inputs[srv_idx]
+				var to_net: int = IN_RIGHT if state.serving_team == 0 else IN_LEFT
+				var away: int = IN_LEFT if state.serving_team == 0 else IN_RIGHT
+				if raw & to_net:
+					state.serve_aim = mini(state.serve_aim + 1, AIM_MAX)
+				elif raw & away:
+					state.serve_aim = maxi(state.serve_aim - 1, 0)
+				if raw & IN_UP:
+					state.serve_pow = mini(state.serve_pow + 1, POW_MAX)
+				elif raw & IN_DOWN:
+					state.serve_pow = maxi(state.serve_pow - 1, POW_MIN)
+				serve_inputs[srv_idx] &= ~(IN_JUMP | IN_LEFT | IN_RIGHT)
+			_step_players_and_hits(state, serve_inputs, cfg)
+			# サーバーは外線(サービスライン)を越えられない(トスまで)。線の後ろでは動ける。
+			# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
+			# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
+			var srv = state.players[_server_index(state)]
+			var line: int = _serve_x(state, cfg)
+			if state.serving_team == 0:
+				srv.x = clampi(srv.x, cfg.ball_radius, line)
+			else:
+				srv.x = clampi(srv.x, line, cfg.court_width - cfg.ball_radius)
+			_hold_ball_on_server(state, cfg)
+			_try_serve(state, inputs, cfg)
 		else:
-			srv.x = clampi(srv.x, line, cfg.court_width - cfg.ball_radius)
-		_hold_ball_on_server(state, cfg)
-		_try_serve(state, inputs, cfg)
+			# 2段目=トス済み・打撃待ち。サーバーは移動・ジャンプ解禁され、通常の
+			# ヒットルールで打つ(地上前トス=安全サーブ/走り込みジャンプ+下=アタック)。
+			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
+			_step_players_and_hits(state, inputs, cfg)
+			_step_ball(state, cfg)
+			if state.phase == SimStateScript.PHASE_SERVE \
+					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
+				# 打ち損ねてトスが床に落ちた: 失点にせず構えからやり直す(再トス)。
+				# サーバーごと白線へ戻す(前へ走り込んだ後でも仕切り直しが明快)
+				state.serve_tossed = 0
+				state.ball_vx = 0
+				state.ball_vy = 0
+				state.timer = cfg.serve_delay_ticks
+				var srv2 = state.players[_server_index(state)]
+				srv2.x = _serve_x(state, cfg)
+				srv2.y = cfg.floor_y
+				srv2.vy = 0
+				srv2.on_ground = 1
+				_hold_ball_on_server(state, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		_step_players_and_hits(state, inputs, cfg)
 		_step_ball(state, cfg)
@@ -131,8 +151,9 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vy = 0
 	s.ball_spin = 0
 	s.ball_power = 0
-	s.serve_aim = 25  # 既定は気持ちよく相手コート前方へ入る角度
+	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
 	s.serve_pow = 100
+	s.serve_tossed = 0
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for p in s.players:
 		p.stun = 0
@@ -180,18 +201,18 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# サーブ=照準角(serve_aim)に沿ったセルフトス(バブルボブル式)。
-	# 0度=真上のトス(アタックサーブの起点)、角度を倒すほど低く速い弾道でネットへ
+	# 2段階サーブの1段目=セルフトス(本物のバレー式)。横成分は固定威力
+	# (serve_toss_power)で、どう倒しても自陣の半分程度までしか飛ばない=
+	# トス単体では絶対にネットを越えない。威力%は高さにのみ効く
+	# (高いトス=走り込みアタックサーブの滞空時間を作る)。トスはタッチ数に数えない
 	var net_dir: int = _dir_of_team(s.serving_team)
 	var aim: int = clampi(s.serve_aim, 0, AIM_MAX)
-	var power: int = cfg.serve_power * clampi(s.serve_pow, POW_MIN, POW_MAX) / 100
-	s.ball_vx = net_dir * (power * AIM_SIN[aim] / 65536)
-	s.ball_vy = -(power * AIM_COS[aim] / 65536)
+	var pow_pct: int = clampi(s.serve_pow, POW_MIN, POW_MAX)
+	s.ball_vx = net_dir * (cfg.serve_toss_power * AIM_SIN[aim] / 65536)
+	s.ball_vy = -(cfg.serve_toss_power * AIM_COS[aim] / 65536) * pow_pct / 100
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
-	s.touches = 1
-	s.last_touch_team = s.serving_team
-	s.phase = SimStateScript.PHASE_RALLY
+	s.serve_tossed = 1
 
 static func _check_floor_point(s, cfg) -> void:
 	# 同一tick内でタッチ超過などが先に得点しフェーズが変わっていたら加点しない(1ラリー2点の禁止)
@@ -223,13 +244,17 @@ static func _award_point(s, team: int, cfg) -> void:
 # 負けた側も硬直だけ食らう不公平があった。
 # 同距離ならボールがある側のチームを優先、それも同点ならインデックス小。全て整数比較で決定論
 static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
-	if s.phase != SimStateScript.PHASE_RALLY:
+	# サーブの2段目(トス済み)はサーバー本人のみ打てる。それ以外のSERVE中は不可
+	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
+	if s.phase != SimStateScript.PHASE_RALLY and not serve_strike:
 		return
 	var reach: int = cfg.player_reach
 	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
 	var best_i: int = -1
 	var best_d2: int = 0
 	for i in s.players.size():
+		if serve_strike and i != _server_index(s):
+			continue
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not (input & IN_ACTION):
 			continue
@@ -254,6 +279,10 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 	if best_i >= 0:
 		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
 		_apply_hit(s, best_i, cfg, winner_input, best_d2)
+		if serve_strike:
+			# サーブの打撃が成立した瞬間にラリー開始
+			s.phase = SimStateScript.PHASE_RALLY
+			s.serve_tossed = 0
 
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]

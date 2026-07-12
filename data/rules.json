@@ -37,6 +37,7 @@
 	"serve_soft_vx_px_s": 280,
 	"serve_soft_vy_px_s": 560,
 	"serve_power_px_s": 620,
+	"serve_toss_power_px_s": 380,
 	"net_repel_px_s": 120,
 	"hit_cooldown_ticks": 14,
 	"point_pause_ticks": 90,
