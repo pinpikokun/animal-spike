@@ -46,6 +46,8 @@ static func decide(s, idx: int, cfg) -> int:
 	if on_own_side:
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
-		if dx * dx + dy * dy <= cfg.player_reach * cfg.player_reach:
+		# simulation.gdの_resolve_hitと同じ楕円判定(横reach・縦reach_up)
+		var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
+		if dx * dx + dy_n * dy_n <= cfg.player_reach * cfg.player_reach:
 			input |= SimInput.IN_ACTION
 	return input

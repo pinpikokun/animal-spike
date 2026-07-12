@@ -107,6 +107,25 @@ func test_no_hit_out_of_reach() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 0, "届かなければヒットしない")
 
+func test_reach_is_tighter_vertically() -> void:
+	# 楕円判定: 横ならreach内だが、同じ距離でも真上はreach_upを超えると届かない
+	# (頭のかなり上でボールを打てる違和感の回帰テスト)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var d: int = (cfg.player_reach + cfg.player_reach_up) / 2  # reach_upとreachの間
+	s.ball_x = s.players[0].x
+	s.ball_y = s.players[0].y - d
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "真上はreach_upを超えると届かない")
+	# 同じ距離を横に置けば届く
+	var w2 := _rally_world()
+	var s2 = w2[0]
+	s2.ball_x = s2.players[0].x + d
+	s2.ball_y = s2.players[0].y
+	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s2.touches, 1, "横なら同じ距離で届く")
+
 func test_spike_in_air() -> void:
 	var w := _rally_world()
 	var s = w[0]

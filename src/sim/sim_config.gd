@@ -24,6 +24,7 @@ var net_x: int
 var net_top_y: int
 var net_half_w: int
 var player_reach: int
+var player_reach_up: int
 var serve_hold_height: int
 var serve_line: int
 var ball_rest_speed: int
@@ -75,6 +76,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	net_top_y = FP.from_int(_int_of(raw, "net_top_y_px"))
 	net_half_w = FP.from_int(_int_of(raw, "net_half_w_px"))
 	player_reach = FP.from_int(_int_of(raw, "player_reach_px"))
+	player_reach_up = FP.from_int(_int_of(raw, "player_reach_up_px"))
+	if player_reach_up <= 0:
+		_fail("player_reach_up_pxは正であること")
+		return
 	serve_hold_height = FP.from_int(_int_of(raw, "serve_hold_height_px"))
 	serve_line = FP.from_int(_int_of(raw, "serve_line_px"))
 	ball_rest_speed = FP.from_int(_int_of(raw, "ball_rest_speed_px_s")) / tick_rate

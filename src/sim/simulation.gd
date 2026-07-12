@@ -229,9 +229,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
-		# 両辺ともfp生値の積((fp)^2単位)で比較しスケールを揃える。
+		# 楕円判定: 横はreach、縦はreach_up(頭のかなり上で打てる違和感の抑制)。
+		# dyをreach/reach_up倍して円判定に正規化する。
 		# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
-		var d2: int = dx * dx + dy * dy
+		var dy_n: int = dy * reach / cfg.player_reach_up
+		var d2: int = dx * dx + dy_n * dy_n
 		if d2 > reach * reach:
 			continue
 		var better: bool = best_i < 0 or d2 < best_d2

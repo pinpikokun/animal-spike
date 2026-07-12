@@ -14,6 +14,7 @@
 	"net_top_y_px": 275,
 	"net_half_w_px": 3,
 	"player_reach_px": 40,
+	"player_reach_up_px": 34,
 	"serve_hold_height_px": 28,
 	"serve_line_px": 24,
 	"hit_inertia_pct": 30,

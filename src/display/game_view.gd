@@ -143,19 +143,38 @@ func _draw() -> void:
 	var bx := ViewTransform.to_px(state.ball_x)
 	var by := ViewTransform.to_px(state.ball_y)
 	var vx := ViewTransform.to_px(state.ball_vx)
-	var reach := 34.0
+	var reach := 70.0
 	if bx < reach and vx > 0.01:
 		_draw_wall_ripple(0.0, by, 1.0 - bx / reach, 1.0)
 	elif bx > w - reach and vx < -0.01:
 		_draw_wall_ripple(w, by, 1.0 - (w - bx) / reach, -1.0)
+	_draw_control_marker()
 
 func _draw_wall_ripple(wall_x: float, y: float, strength: float, dir: float) -> void:
-	# 同心の弧が壁からふわっと膨らむ(ブイン)。strength 0..1
+	# 透明な壁の「ブイン」: 壁全体が光り、大きな同心の弧が広がる。strength 0..1
 	var s := clampf(strength, 0.0, 1.0)
-	for k in 3:
-		var r := 10.0 + 9.0 * float(k) + 8.0 * (1.0 - s)
-		var a := s * (0.5 - 0.13 * float(k))
+	# 壁面のグロウ(縦の光の帯。接触直後ほど太く明るい)
+	var glow_w := 4.0 + 10.0 * s
+	var gx := wall_x if dir > 0.0 else wall_x - glow_w
+	draw_rect(Rect2(gx, y - 90.0, glow_w, 180.0), Color(0.70, 0.90, 1.0, 0.35 * s))
+	draw_rect(Rect2(wall_x - 1.0, y - 120.0, 2.0, 240.0), Color(0.85, 0.95, 1.0, 0.6 * s))
+	# 大きな同心の弧が壁からコート内側へ広がる
+	var center_angle := 0.0 if dir > 0.0 else PI
+	for k in 4:
+		var r := 14.0 + 16.0 * float(k) + 24.0 * (1.0 - s)
+		var a := s * (0.85 - 0.18 * float(k))
 		if a <= 0.0:
 			continue
-		var center_angle := 0.0 if dir > 0.0 else PI  # 弧はコート内側へ膨らむ
-		draw_arc(Vector2(wall_x, y), r, center_angle - 0.9, center_angle + 0.9, 20, Color(0.75, 0.88, 1.0, a), 2.0)
+		draw_arc(Vector2(wall_x, y), r, center_angle - 1.1, center_angle + 1.1, 24, Color(0.80, 0.93, 1.0, a), 3.0)
+
+func _draw_control_marker() -> void:
+	# 操作中キャラの頭上に▽(黄)。sim状態のcontrolled_lから導出(表示専用)
+	# TODO(ネット対戦): 右チーム操作時はcontrolled_rを見る配線が要る
+	var idx: int = state.controlled_l
+	var p = state.players[idx]
+	var pos := ViewTransform.pos_of(p) + _depth_offset(idx)
+	var top := pos + Vector2(0.0, -42.0)
+	var pts := PackedVector2Array([
+		top + Vector2(-6.0, -6.0), top + Vector2(6.0, -6.0), top + Vector2(0.0, 2.0)])
+	draw_colored_polygon(pts, Color(1.0, 0.90, 0.20))
+	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), Color(0.45, 0.30, 0.0), 1.0)
