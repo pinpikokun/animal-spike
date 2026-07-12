@@ -26,6 +26,9 @@ var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
 var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(受けた側がスタンする)
+# CPU能力マスク(8bit x 4人、割当はsim_cpu.gdのAB_*)。人間操作スロットには使われない。
+# 既定は全員最強(=31を4人分パック)。試合開始前に設定画面/ストーリーモードが書き換える
+var cpu_skill_bits: int = 522133279
 var serve_aim: int = 25  # サーブの照準角(垂直から何度ネット側へ倒すか。0=真上..60=低い弾道)
 var serve_pow: int = 100  # サーブ威力(%)。上下キーで60..130を選ぶ
 var phase: int = PHASE_SERVE
@@ -61,6 +64,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_vy)
 	out.append(ball_spin)
 	out.append(ball_power)
+	out.append(cpu_skill_bits)
 	out.append(serve_aim)
 	out.append(serve_pow)
 	out.append(phase)
@@ -95,6 +99,7 @@ func load_int_array(arr: Array) -> void:
 	ball_vy = arr[k]; k += 1
 	ball_spin = arr[k]; k += 1
 	ball_power = arr[k]; k += 1
+	cpu_skill_bits = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
 	phase = arr[k]; k += 1
