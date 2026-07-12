@@ -133,7 +133,7 @@ func _sync_sprites() -> void:
 			pos.y += 5.0
 		# スタン中は白点滅(tick由来の周期=ロールバック再描画でも一貫)
 		if p.stun > 0:
-			var on := (state.tick / 4) % 2 == 0
+			var on: bool = (state.tick / 4) % 2 == 0
 			spr.modulate = Color(1.0, 1.0, 1.0, 0.45) if on else Color(1.0, 0.6, 0.6, 1.0)
 		else:
 			spr.modulate = Color.WHITE
