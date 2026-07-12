@@ -16,6 +16,7 @@ class Player:
 	var vy: int = 0
 	var on_ground: int = 1
 	var hit_cooldown: int = 0
+	var stun: int = 0  # パワーボールを受けた硬直(移動・ヒット不可)の残りtick
 
 var tick: int = 0
 var players: Array[Player] = []
@@ -24,6 +25,7 @@ var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
+var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(受けた側がスタンする)
 var serve_aim: int = 25  # サーブの照準角(垂直から何度ネット側へ倒すか。0=真上..60=低い弾道)
 var serve_pow: int = 100  # サーブ威力(%)。上下キーで60..130を選ぶ
 var phase: int = PHASE_SERVE
@@ -52,11 +54,13 @@ func to_int_array() -> Array[int]:
 		out.append(p.vy)
 		out.append(p.on_ground)
 		out.append(p.hit_cooldown)
+		out.append(p.stun)
 	out.append(ball_x)
 	out.append(ball_y)
 	out.append(ball_vx)
 	out.append(ball_vy)
 	out.append(ball_spin)
+	out.append(ball_power)
 	out.append(serve_aim)
 	out.append(serve_pow)
 	out.append(phase)
@@ -84,11 +88,13 @@ func load_int_array(arr: Array) -> void:
 		p.vy = arr[k]; k += 1
 		p.on_ground = arr[k]; k += 1
 		p.hit_cooldown = arr[k]; k += 1
+		p.stun = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1
 	ball_vx = arr[k]; k += 1
 	ball_vy = arr[k]; k += 1
 	ball_spin = arr[k]; k += 1
+	ball_power = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
 	phase = arr[k]; k += 1

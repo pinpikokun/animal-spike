@@ -130,8 +130,12 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vx = 0
 	s.ball_vy = 0
 	s.ball_spin = 0
+	s.ball_power = 0
 	s.serve_aim = 25  # 既定は気持ちよく相手コート前方へ入る角度
 	s.serve_pow = 100
+	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)
+	for p in s.players:
+		p.stun = 0
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
@@ -228,7 +232,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 		if not (input & IN_ACTION):
 			continue
 		var p = s.players[i]
-		if p.hit_cooldown > 0:
+		if p.hit_cooldown > 0 or p.stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
@@ -247,12 +251,18 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 			best_d2 = d2
 	if best_i >= 0:
 		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
-		_apply_hit(s, best_i, cfg, winner_input)
+		_apply_hit(s, best_i, cfg, winner_input, best_d2)
 
-static func _apply_hit(s, i: int, cfg, input: int) -> void:
+static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
+	# パワーボール(パーフェクトスパイク由来)を相手チームが受けるとスタン。
+	# ヒット自体は成立する(慣性で大きく浮く)が、その後しばらく動けない。
+	# 判定はball_powerを消費する前に読む
+	if s.ball_power == 1 and s.last_touch_team != team:
+		p.stun = cfg.stun_ticks
+	s.ball_power = 0
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
 	var hdir: int = 0
 	if input & IN_LEFT:
@@ -287,9 +297,16 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 		s.ball_vx = desired_vx - s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
 		s.ball_vy = desired_vy - s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
 	elif input & IN_DOWN:
-		# 空中+下: アタック(叩き下ろす)
-		s.ball_vy = cfg.spike_vy
-		s.ball_vx = dir * cfg.spike_vx
+		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
+		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
+		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯
+		var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+		var pct: int = 100
+		if d2 >= 0 and d2 <= sweet * sweet:
+			pct = cfg.spike_power_pct
+			s.ball_power = 1
+		s.ball_vy = cfg.spike_vy * pct / 100
+		s.ball_vx = dir * cfg.spike_vx * pct / 100
 	elif up:
 		# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
 		s.ball_vy = -cfg.bump_up_speed
@@ -312,6 +329,10 @@ static func _apply_hit(s, i: int, cfg, input: int) -> void:
 		_award_point(s, 1 - team, cfg)
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
+	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
+	if p.stun > 0:
+		p.stun -= 1
+		input = 0
 	p.vx = 0
 	if input & IN_LEFT:
 		p.vx = -cfg.move_speed

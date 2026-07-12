@@ -37,6 +37,9 @@ var hit_inertia_num: int
 var hit_inertia_den: int
 var spike_vx: int
 var spike_vy: int
+var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
+var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
+var stun_ticks: int        # パワーボールを受けた側のスタン時間
 var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
@@ -93,6 +96,18 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	hit_inertia_den = 100
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
+	spike_sweet_pct = _int_of(raw, "spike_sweet_pct")
+	if spike_sweet_pct < 0 or spike_sweet_pct > 100:
+		_fail("spike_sweet_pctは0..100であること")
+		return
+	spike_power_pct = _int_of(raw, "spike_power_pct")
+	if spike_power_pct < 100:
+		_fail("spike_power_pctは100以上であること")
+		return
+	stun_ticks = _int_of(raw, "stun_ticks")
+	if stun_ticks < 0:
+		_fail("stun_ticksは0以上であること")
+		return
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate
 	serve_vy = FP.from_int(_int_of(raw, "serve_vy_px_s")) / tick_rate
 	serve_soft_vx = FP.from_int(_int_of(raw, "serve_soft_vx_px_s")) / tick_rate

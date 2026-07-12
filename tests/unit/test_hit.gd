@@ -140,6 +140,67 @@ func test_spike_in_air() -> void:
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
 	check(s.ball_vx >= cfg.spike_vx, "スパイクは速い")
 
+func test_perfect_spike_boosts_power() -> void:
+	# ジャストミート(スイートスポット内)のスパイクは速度ボーナス+パワーボール化
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_power, 1, "ジャストミートはパワーボールになる")
+	# 同step内の重力1tick分を考慮して通常スパイクより明確に速いことを見る
+	check(s.ball_vy > cfg.spike_vy + cfg.gravity, "ジャストミートは通常スパイクより速い")
+	check(s.ball_vx > cfg.spike_vx, "横速度もボーナスが乗る")
+
+func test_edge_spike_is_normal() -> void:
+	# スイートスポットの外(リーチ内ギリギリ)のスパイクは通常威力
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+	s.ball_x = p.x + sweet + FP.from_int(4)  # スイート外・リーチ内
+	s.ball_y = p.y
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_power, 0, "ズレたスパイクはパワーボールにならない")
+	check(s.ball_vy <= cfg.spike_vy + cfg.gravity, "ズレたスパイクは通常威力")
+
+func test_receiving_power_ball_stuns() -> void:
+	# パワーボールを相手チームが受けるとヒットは成立するがスタンする
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_power = 1
+	s.last_touch_team = 1
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = -FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
+	check_eq(s.players[0].stun, cfg.stun_ticks, "受けた側はスタンする")
+	check_eq(s.ball_power, 0, "パワーはヒットで消費される")
+
+func test_stunned_player_cannot_hit_or_move() -> void:
+	# スタン中は移動もヒットもできない
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.stun = 10
+	var x0: int = p.x
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "スタン中はヒットしない")
+	check_eq(p.x, x0, "スタン中は動けない")
+	check_eq(p.stun, 9, "スタンはtickごとに回復へ向かう")
+
 func test_air_neutral_sends_soft_over() -> void:
 	# 空中ニュートラル+アクション: 緩やかに相手コート方向へ送る(下向きではない)
 	var w := _rally_world()

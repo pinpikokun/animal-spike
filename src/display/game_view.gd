@@ -127,6 +127,12 @@ func _sync_sprites() -> void:
 		# キツネの接地軸に合わせる表示補正(jump素材は余白なしなので補正しない)
 		if Simulation.team_of(i) == 1 and anim != "jump":
 			pos.y += 5.0
+		# スタン中は白点滅(tick由来の周期=ロールバック再描画でも一貫)
+		if p.stun > 0:
+			var on := (state.tick / 4) % 2 == 0
+			spr.modulate = Color(1.0, 1.0, 1.0, 0.45) if on else Color(1.0, 0.6, 0.6, 1.0)
+		else:
+			spr.modulate = Color.WHITE
 		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
 		spr.position = pos.round()
 	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
@@ -144,6 +150,8 @@ func _sync_sprites() -> void:
 	else:
 		_ball.rotation = 0.0
 		_ball.scale = Vector2.ONE * _ball_base_scale
+	# パワーボール(ジャストミートのスパイク)は熱を帯びた色で警告する
+	_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。
 	# 状態から導出しビューに角度を溜めない(ロールバック安全)
