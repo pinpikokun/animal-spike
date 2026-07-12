@@ -19,6 +19,7 @@
 	"serve_hold_height_px": 28,
 	"serve_line_px": 24,
 	"hit_inertia_pct": 30,
+	"hit_inertia_just_pct": 10,
 	"ball_rest_speed_px_s": 40,
 	"bump_up_speed_px_s": 680,
 	"bump_fwd_speed_px_s": 40,

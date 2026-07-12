@@ -298,9 +298,13 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
 	# 耐久力が尽きた瞬間にスタン(倒れて動けない)し、満タンへ戻る(気絶サイクル)。
 	# 判定はball_powerを消費する前に読む
+	# スイート判定(芯)は全用途共通: 耐久力の回復/削り、スパイクのパワー化、
+	# そして「芯で捉えたボールは慣性に流されない」(慣性が30%→10%に落ちる)
+	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
+	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
 	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
-		var sweet_g: int = cfg.player_reach * cfg.spike_sweet_pct / 100
-		if d2 >= 0 and d2 <= sweet_g * sweet_g:
+		if sweet:
 			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 		else:
 			p.guard -= cfg.guard_dmg_power
@@ -347,25 +351,31 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
-		s.ball_vx = desired_vx - s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
-		s.ball_vy = desired_vy - s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
+		s.ball_vx = desired_vx - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = desired_vy - s.ball_vy * inertia / cfg.hit_inertia_den
 	elif input & IN_DOWN:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
 		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
 		# 打ち分け: 下のみ=鋭角(手前に鋭く落ちる。近距離でないと自陣落ちのリスク)、
-		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向
-		var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向。
+		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
+		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
+		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
 		var pct: int = 100
-		if d2 >= 0 and d2 <= sweet * sweet:
+		if sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
+		var svx: int
+		var svy: int
 		if hdir != 0:
-			s.ball_vy = cfg.spike_vy * pct / 100
-			s.ball_vx = dir * cfg.spike_vx * pct / 100
+			svy = cfg.spike_vy * pct / 100
+			svx = dir * cfg.spike_vx * pct / 100
 		else:
-			s.ball_vy = cfg.spike_steep_vy * pct / 100
-			s.ball_vx = dir * cfg.spike_steep_vx * pct / 100
+			svy = cfg.spike_steep_vy * pct / 100
+			svx = dir * cfg.spike_steep_vx * pct / 100
+		s.ball_vx = svx - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = svy - s.ball_vy * inertia / cfg.hit_inertia_den
 	elif up:
 		# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
 		s.ball_vy = -cfg.bump_up_speed

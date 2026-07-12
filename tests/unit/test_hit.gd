@@ -204,6 +204,52 @@ func test_edge_spike_is_normal() -> void:
 	check_eq(s.ball_power, 0, "ズレたスパイクはパワーボールにならない")
 	check(s.ball_vy <= cfg.spike_steep_vy + cfg.gravity, "ズレたスパイクは通常威力")
 
+func test_spike_reflects_incoming_inertia() -> void:
+	# 空中アタックにも慣性反射: 上がり際(上昇中)のボールを叩くと反発が乗って
+	# 静止球より速く鋭く飛ぶ(打つタイミングが着弾を変える物理)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+	s.ball_x = p.x + sweet + FP.from_int(4)  # スイート外(慣性30%が丸ごと出る)
+	s.ball_y = p.y
+	s.ball_vy = -FP.from_int(8)  # 上昇中
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	var expect: int = cfg.spike_steep_vy \
+		+ FP.from_int(8) * cfg.hit_inertia_num / cfg.hit_inertia_den + cfg.gravity
+	check_eq(s.ball_vy, expect, "上がり際の反発が縦速度に乗る")
+
+func test_just_meet_cuts_inertia() -> void:
+	# ジャストミート(芯)は慣性の影響が10%に落ちる=狙い通りに飛ぶ
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(2)  # スイート内
+	s.ball_y = p.y - FP.from_int(2)
+	s.ball_vy = -FP.from_int(8)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	var expect: int = cfg.spike_steep_vy * cfg.spike_power_pct / 100 \
+		+ FP.from_int(8) * cfg.hit_inertia_just_num / cfg.hit_inertia_den + cfg.gravity
+	check_eq(s.ball_vy, expect, "芯なら慣性がjust値まで落ちる")
+
+func test_just_receive_holds_aim() -> void:
+	# 地上のジャスト受け(芯)も慣性カット: 強い入射でも狙いがブレにくい
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
+	s.ball_y = s.players[0].y - FP.from_int(2)
+	s.ball_vx = -FP.from_int(20)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	var expect: int = FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den
+	check_eq(s.ball_vx, expect, "真上トスの横ブレがjust慣性分だけに収まる")
+
 func test_receiving_power_ball_damages_guard() -> void:
 	# パワーボールを(スイート外で)受けるとヒットは成立し、耐久力が削れる
 	var w := _rally_world()

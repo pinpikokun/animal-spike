@@ -205,11 +205,15 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 	var cands: Array = []
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	if can_spike:
-		# 鋭角(下のみ)=前面へ鋭く、緩角(下+横)=後面へ低く。着弾比較で選ばれる
+		# 鋭角(下のみ)=前面へ鋭く、緩角(下+横)=後面へ低く。着弾比較で選ばれる。
+		# スパイクは慣性反射が乗る(simulation._apply_hit)ため、入射速度の反発分を
+		# 候補速度に織り込んで予測する(織り込まないと着弾を読み違える)
+		var rvx: int = s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
+		var rvy: int = s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
 		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN,
-			dir * cfg.spike_steep_vx, cfg.spike_steep_vy])
+			dir * cfg.spike_steep_vx - rvx, cfg.spike_steep_vy - rvy])
 		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
-			dir * cfg.spike_vx, cfg.spike_vy])
+			dir * cfg.spike_vx - rvx, cfg.spike_vy - rvy])
 	cands.append([SimInput.IN_ACTION, dir * cfg.serve_soft_vx, -cfg.serve_soft_vy])
 	cands.append([SimInput.IN_ACTION | fwd_key, dir * cfg.toss_fwd_vx, -cfg.toss_fwd_vy])
 	var best_input: int = SimInput.IN_ACTION

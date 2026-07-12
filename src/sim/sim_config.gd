@@ -36,6 +36,7 @@ var toss_fwd_vx: int
 var toss_mid_vx: int
 var hit_inertia_num: int
 var hit_inertia_den: int
+var hit_inertia_just_num: int  # ジャストミート時の慣性(芯で捉えると流されない)
 var spike_vx: int        # 緩角スパイク(下+横): 遠くへ低く=後面狙い
 var spike_vy: int
 var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面狙い
@@ -102,6 +103,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	toss_mid_vx = FP.from_int(_int_of(raw, "toss_mid_vx_px_s")) / tick_rate
 	hit_inertia_num = _int_of(raw, "hit_inertia_pct")
 	hit_inertia_den = 100
+	hit_inertia_just_num = _int_of(raw, "hit_inertia_just_pct")
+	if hit_inertia_just_num < 0 or hit_inertia_just_num > hit_inertia_num:
+		_fail("hit_inertia_just_pctは0..hit_inertia_pctであること")
+		return
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
 	spike_steep_vx = FP.from_int(_int_of(raw, "spike_steep_vx_px_s")) / tick_rate
