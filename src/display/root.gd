@@ -6,9 +6,6 @@ const DisplayScale := preload("res://src/display/display_scale.gd")
 const DisplayOptions := preload("res://src/display/display_options.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
 
-# 設定画面のレベル番号→CPU能力マスク(0=弱..3=最強)
-const CPU_LEVEL_MASKS: Array[int] = [
-	SimCpu.LEVEL_WEAK, SimCpu.LEVEL_NORMAL, SimCpu.LEVEL_STRONG, SimCpu.LEVEL_MAX]
 
 const BASE_W := 640
 const BASE_H := 360
@@ -47,14 +44,15 @@ func _apply_settings() -> void:
 func _apply_cpu_levels() -> void:
 	# CPUの強さをsim状態へ反映(ローカルプレイのみ)。ネット対戦のstateは
 	# SyncManagerが同期しており、片側だけの書き換えはデシンクになるため触らない
-	var ally: int = CPU_LEVEL_MASKS[clampi(int(_settings.ally_cpu_level), 0, 3)]
-	var enemy: int = CPU_LEVEL_MASKS[clampi(int(_settings.enemy_cpu_level), 0, 3)]
+	var ally: int = SimCpu.PRESETS[clampi(int(_settings.ally_cpu_level), 0, 3)]
+	var enemy: int = SimCpu.PRESETS[clampi(int(_settings.enemy_cpu_level), 0, 3)]
 	for node in [_game, _debug]:
 		if node == null or not ("state" in node) or node.state == null:
 			continue
 		if "external_sim" in node and node.external_sim:
 			continue
-		node.state.cpu_skill_bits = SimCpu.pack_skills(ally, ally, enemy, enemy)
+		for i in 4:
+			node.state.players[i].cpu = ally if i < 2 else enemy
 
 func _layout() -> void:
 	var win: Vector2i = get_window().size

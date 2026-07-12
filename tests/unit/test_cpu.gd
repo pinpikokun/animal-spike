@@ -124,16 +124,26 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 			break
 	check(crossed, "右CPUのサーブがネットを越え左コートへ渡る")
 
-func test_skill_pack_roundtrip() -> void:
-	# 能力マスクの詰め込み/取り出しが4人分正しく往復する
-	var w := _world()
-	var s = w[0]
-	s.cpu_skill_bits = SimCpu.pack_skills(
-		SimCpu.LEVEL_WEAK, SimCpu.LEVEL_NORMAL, SimCpu.LEVEL_STRONG, SimCpu.LEVEL_MAX)
-	check_eq(SimCpu.skill_of(s, 0), SimCpu.LEVEL_WEAK, "slot0=弱")
-	check_eq(SimCpu.skill_of(s, 1), SimCpu.LEVEL_NORMAL, "slot1=普通")
-	check_eq(SimCpu.skill_of(s, 2), SimCpu.LEVEL_STRONG, "slot2=強")
-	check_eq(SimCpu.skill_of(s, 3), SimCpu.LEVEL_MAX, "slot3=最強")
+func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, tiq := 0) -> int:
+	# テスト用: 誤差・ミス・遅延のない純粋な能力プロファイル(既定)
+	return SimCpu.make_profile(ab, delay, aim, miss, sweet, depth, tiq)
+
+func test_profile_pack_roundtrip() -> void:
+	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
+	var prof: int = SimCpu.make_profile(21, 10, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 21, "能力")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 10, "遅延")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_SWEET), 153, "ジャスト率")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DEPTH), 2, "予測深度")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_TIQ), 2, "配球IQ")
+	check_eq(prof, SimCpu.PRESET_STRONG, "強プリセットと一致")
+
+func test_state_default_profile_is_max() -> void:
+	# sim_state.gdの既定リテラルがsim_cpu.PRESET_MAXからずれない番人
+	var s = SimState.new()
+	check_eq(s.players[0].cpu, SimCpu.PRESET_MAX, "既定プロファイル=最強")
 
 func test_weak_chases_current_ball_predict_chases_landing() -> void:
 	# 弱(能力なし)は現在のボール位置を追い、予測持ちは落下点を追う
@@ -144,9 +154,9 @@ func test_weak_chases_current_ball_predict_chases_landing() -> void:
 	s.ball_x = FP.from_int(120)  # 今はplayers[1](x=157)の左
 	s.ball_y = FP.from_int(100)
 	s.ball_vx = FP.from_int(8)   # 右へ強く飛んでいる=落下点は右
-	s.cpu_skill_bits = SimCpu.pack_skills(0, SimCpu.LEVEL_WEAK, 0, 0)
+	s.players[1].cpu = _prof(0)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "弱は現在位置(左)を追う")
-	s.cpu_skill_bits = SimCpu.pack_skills(0, SimCpu.AB_PREDICT, 0, 0)
+	s.players[1].cpu = _prof(SimCpu.AB_PREDICT)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT, "予測持ちは落下点(右)へ動く")
 
 func test_roles_split_receiver_and_support() -> void:
@@ -159,11 +169,27 @@ func test_roles_split_receiver_and_support() -> void:
 	s.ball_y = FP.from_int(100)
 	s.players[1].x = FP.from_int(100)
 	var mask: int = SimCpu.AB_PREDICT | SimCpu.AB_ROLES
-	s.cpu_skill_bits = SimCpu.pack_skills(mask, mask, 0, 0)
+	s.players[0].cpu = _prof(mask)
+	s.players[1].cpu = _prof(mask)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT, "非レシーバーは持ち場(157)へ離れる")
 	# 役割なしなら同じ状況でボールへ突っ込む(=みんなで追いかける問題)
-	s.cpu_skill_bits = SimCpu.pack_skills(SimCpu.AB_PREDICT, SimCpu.AB_PREDICT, 0, 0)
+	s.players[1].cpu = _prof(SimCpu.AB_PREDICT)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "役割なしはボールへ向かう")
+
+func test_yields_to_human_mate() -> void:
+	# 人間の相方が同じ球を取れるならCPUは譲る(人間優先、お見合い事故の防止)
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.ball_x = FP.from_int(90)
+	s.ball_y = FP.from_int(100)
+	s.controlled_l = 0           # slot0=人間
+	s.players[0].x = FP.from_int(100)  # 人間: 落下点から10px
+	s.players[1].x = FP.from_int(85)   # CPU: 5pxでより近いが…
+	s.players[1].cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ROLES)
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(not (input & Simulation.IN_LEFT), "人間が取れる球にCPUは突っ込まない")
 
 func test_attack_cpu_jumps_to_meet_toss() -> void:
 	# 味方が上げた球に対し、会合できるならジャンプする(アタック準備)
@@ -178,11 +204,56 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)  # 頭上高くから落ちてくる
 	s.ball_vy = 0
-	s.cpu_skill_bits = SimCpu.pack_skills(0, SimCpu.LEVEL_MAX, 0, 0)
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "会合可能な球へジャンプする")
 	# アタック能力なしなら跳ばない
-	s.cpu_skill_bits = SimCpu.pack_skills(0, SimCpu.AB_PREDICT, 0, 0)
+	p.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
+
+func test_reaction_delay_freezes_movement() -> void:
+	# 相手の打球直後、遅延tickの間は移動しない(0tick超反応の禁止)。遅延後は動く
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.ball_x = FP.from_int(60)
+	s.ball_y = FP.from_int(100)
+	s.last_touch_team = 1     # 相手が打った
+	s.tick = 100
+	s.last_hit_tick = 96      # 4tick前
+	s.players[1].cpu = _prof(SimCpu.AB_PREDICT, 10)  # 遅延10tick
+	check_eq(SimCpu.decide(s, 1, cfg) & (Simulation.IN_LEFT | Simulation.IN_RIGHT), 0,
+		"遅延中は動かない")
+	s.tick = 110              # 14tick経過=遅延明け
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "遅延明けは動く")
+
+func test_predict_depth_zero_ignores_wall_bounce() -> void:
+	# 予測深度0は壁反射を読めない=壁バウンド球の着地を壁側と誤認する
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.players[1].x = FP.from_int(100)
+	s.ball_x = FP.from_int(40)
+	s.ball_y = FP.from_int(60)
+	s.ball_vx = -FP.from_int(6)  # 左壁へ向かい反射して右へ戻る球
+	var deep: int = SimCpu._predict_landing_x(s, cfg, cfg.floor_y, 3)
+	var shallow: int = SimCpu._predict_landing_x(s, cfg, cfg.floor_y, 0)
+	check(deep > shallow, "深い予測は反射後(右)、浅い予測は壁際で止まる")
+
+func test_miss_roll_is_stable_within_touch() -> void:
+	# 乱数はタッチ毎1抽選: 同じlast_hit_tickなら何tick経っても同じ値(震えない)
+	var w := _world()
+	var s = w[0]
+	s.last_hit_tick = 777
+	var a: int = SimCpu._roll(SimCpu.SALT_AIM, s, 1)
+	s.tick += 30
+	var b: int = SimCpu._roll(SimCpu.SALT_AIM, s, 1)
+	check_eq(a, b, "タッチ内で値が変わらない")
+	s.last_hit_tick = 778
+	check(SimCpu._roll(SimCpu.SALT_AIM, s, 1) != a, "次のタッチでは変わる")
+	check(SimCpu._roll(SimCpu.SALT_MISS, s, 1) != SimCpu._roll(SimCpu.SALT_AIM, s, 1),
+		"saltで判定種別が分離される")
 
 func test_serve_variation_reaches_target_and_crosses() -> void:
 	# サーブ多様化: スコアで狙いが変わり、選んだ角度/威力は安全域(24..40/100..125)。

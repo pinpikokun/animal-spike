@@ -187,6 +187,7 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	s.ball_vx = net_dir * (power * AIM_SIN[aim] / 65536)
 	s.ball_vy = -(power * AIM_COS[aim] / 65536)
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
+	s.last_hit_tick = s.tick
 	s.touches = 1
 	s.last_touch_team = s.serving_team
 	s.phase = SimStateScript.PHASE_RALLY
@@ -320,6 +321,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		s.ball_vy = -cfg.serve_soft_vy
 		s.ball_vx = dir * cfg.serve_soft_vx
 	p.hit_cooldown = cfg.hit_cooldown_ticks
+	s.last_hit_tick = s.tick
 	if s.last_touch_team == team:
 		s.touches += 1
 	else:
