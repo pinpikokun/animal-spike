@@ -158,42 +158,63 @@ func draw_fx(c: CanvasItem) -> void:
 	var w := ViewTransform.to_px(cfg.court_width)
 	var bx := ViewTransform.to_px(state.ball_x)
 	var vx := ViewTransform.to_px(state.ball_vx)
-	var reach := 34.0
-	if bx < reach and vx > 0.01:
+	# 壁から離れる向きに飛んでいる=直前に跳ねた可能性。寿命判定は波紋側(u>=1で消灯)
+	if vx > 0.01:
 		_draw_wall_ripple(c, 0.0, bx, 1.0)
-	elif bx > w - reach and vx < -0.01:
+	elif vx < -0.01:
 		_draw_wall_ripple(c, w, w - bx, -1.0)
 	if state.phase == SimState.PHASE_SERVE:
 		_draw_serve_preview(c)
 	_draw_control_marker(c)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
-	# 透明な壁の「ブイン」(控えめ版): 跳ね返った瞬間の衝突点に固定して描き、
-	# 離れるにつれ消える。衝突点はボールの現在位置と速度から逆算する(状態レス)
-	var reach := 34.0
-	var s := clampf(1.0 - dist / reach, 0.0, 1.0)
-	# 衝突からの経過tick数 t = 壁からの距離 / 横速度 で、衝突時の高さを逆算
+	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
+	# 出だしは勢いよく、後半はゆっくり(イーズアウト)+波打つ半径で弾性感を出す。
+	# 衝突点と経過時間はボールの現在位置と速度から逆算する(状態レス)
 	var vx := absf(ViewTransform.to_px(state.ball_vx))
 	if vx < 0.01:
 		return
-	var t := dist / vx
+	var t := dist / vx           # 衝突からの経過tick数
+	var dur := 16.0              # 波紋の寿命(tick)
+	var u := t / dur
+	if u >= 1.0:
+		return
+	# 直近のヒットが「壁衝突の推定時刻」より後なら、今の速度はヒット由来であり
+	# 壁で跳ねていない(サーブ直後などの誤発火を防ぐ)
+	var max_cd := 0
+	for p in state.players:
+		max_cd = maxi(max_cd, p.hit_cooldown)
+	if max_cd > 0 and float(cfg.hit_cooldown_ticks - max_cd) <= t:
+		return
 	var vy := ViewTransform.to_px(state.ball_vy)
 	var g := ViewTransform.to_px(cfg.gravity)
 	var impact_y := ViewTransform.to_px(state.ball_y) - t * vy + g * t * (t + 1.0) * 0.5
+	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # ぶわん(前半速く後半ゆっくり)
+	var wobble := 1.0 + 0.08 * sin(u * TAU * 1.5) # 膨らみが少し波打つ弾性
+	var center := Vector2(wall_x, impact_y)
 	var center_angle := 0.0 if dir > 0.0 else PI
-	for k in 3:
-		var r := 10.0 + 9.0 * float(k) + 8.0 * (1.0 - s)
-		var a := s * (0.5 - 0.13 * float(k))
-		if a <= 0.0:
+	# 衝突点の光(最初だけ明るく滲む)
+	var core_a := (1.0 - u) * (1.0 - u) * 0.55
+	if core_a > 0.02:
+		c.draw_circle(center, 7.0 + 5.0 * ease_out, Color(0.90, 0.97, 1.0, core_a))
+	# 膨らむ波紋2本(後発は少し遅れて追いかける)
+	for k in 2:
+		var uk := clampf(u - 0.12 * float(k), 0.0, 1.0)
+		var ek := 1.0 - (1.0 - uk) * (1.0 - uk)
+		var r := (8.0 + 34.0 * ek) * wobble
+		var a := (1.0 - uk) * (0.6 - 0.2 * float(k))
+		if a <= 0.02:
 			continue
-		c.draw_arc(Vector2(wall_x, impact_y), r, center_angle - 0.9, center_angle + 0.9, 20, Color(0.75, 0.88, 1.0, a), 2.0)
+		var width := 3.0 - 1.5 * uk  # 広がるほど細く
+		c.draw_arc(center, r, center_angle - 1.05, center_angle + 1.05, 24, Color(0.78, 0.90, 1.0, a), width)
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブの軌跡プレビュー(バブルボブル式)。simと同じ照準角テーブル・重力で
 	# 弾道を点線表示する。上キーで立て、ネット方向キーで倒して狙いを決める
 	var aim: int = clampi(state.serve_aim, 0, Simulation.AIM_MAX)
 	var net_dir := 1.0 if state.serving_team == 0 else -1.0
-	var p := ViewTransform.to_px(cfg.serve_power)
+	var pow_pct: int = clampi(state.serve_pow, Simulation.POW_MIN, Simulation.POW_MAX)
+	var p := ViewTransform.to_px(cfg.serve_power) * float(pow_pct) / 100.0
 	var vx := net_dir * p * Simulation.AIM_SIN[aim] / 65536.0
 	var vy := -p * Simulation.AIM_COS[aim] / 65536.0
 	var g := ViewTransform.to_px(cfg.gravity)

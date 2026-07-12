@@ -69,17 +69,35 @@ func test_server_is_pinned_during_serve() -> void:
 	check_eq(s2.players[2].x, cfg.court_width - cfg.serve_line, "右サーバーも白線に固定")
 
 func test_serve_aim_up_becomes_vertical() -> void:
-	# 上キーで照準を立てて真上(0度)にできる。真上サーブは横成分ゼロ
+	# ネットと逆方向キーで照準を立てて真上(0度)にできる。真上サーブは横成分ゼロ
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	for i in 40:
-		Simulation.step(s, [Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.serve_aim, 0, "上キー長押しで照準が真上(0度)まで立つ")
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
+	check_eq(s.serve_aim, 0, "逆方向キー長押しで照準が真上(0度)まで立つ")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
 	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
 	check(s.ball_vy < 0, "真上サーブは上向き")
+
+func test_serve_power_adjust_with_up_down() -> void:
+	# 上キーで威力が上がり(上限130%)、下キーで下がる(下限60%)。速度に反映される
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 60:
+		Simulation.step(s, [Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.serve_pow, Simulation.POW_MAX, "上キー長押しで威力上限")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var strong_vx: int = s.ball_vx
+	var w2 := _serve_world(0)
+	var s2 = w2[0]
+	for i in 60:
+		Simulation.step(s2, [Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s2.serve_pow, Simulation.POW_MIN, "下キー長押しで威力下限")
+	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(strong_vx > s2.ball_vx, "威力が高いほど速い(同角度)")
 
 func test_serve_aim_flattens_toward_net() -> void:
 	# ネット方向キーで照準が倒れ(上限60度)、低く速い弾道になる
