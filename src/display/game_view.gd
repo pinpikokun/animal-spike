@@ -157,31 +157,56 @@ func draw_fx(c: CanvasItem) -> void:
 		return
 	var w := ViewTransform.to_px(cfg.court_width)
 	var bx := ViewTransform.to_px(state.ball_x)
-	var by := ViewTransform.to_px(state.ball_y)
 	var vx := ViewTransform.to_px(state.ball_vx)
-	var reach := 70.0
+	var reach := 34.0
 	if bx < reach and vx > 0.01:
-		_draw_wall_ripple(c, 0.0, by, 1.0 - bx / reach, 1.0)
+		_draw_wall_ripple(c, 0.0, bx, 1.0)
 	elif bx > w - reach and vx < -0.01:
-		_draw_wall_ripple(c, w, by, 1.0 - (w - bx) / reach, -1.0)
+		_draw_wall_ripple(c, w, w - bx, -1.0)
+	if state.phase == SimState.PHASE_SERVE:
+		_draw_serve_preview(c)
 	_draw_control_marker(c)
 
-func _draw_wall_ripple(c: CanvasItem, wall_x: float, y: float, strength: float, dir: float) -> void:
-	# 透明な壁の「ブイン」: 壁全体が光り、大きな同心の弧が広がる。strength 0..1
-	var s := clampf(strength, 0.0, 1.0)
-	# 壁面のグロウ(縦の光の帯。接触直後ほど太く明るい)
-	var glow_w := 4.0 + 10.0 * s
-	var gx := wall_x if dir > 0.0 else wall_x - glow_w
-	c.draw_rect(Rect2(gx, y - 90.0, glow_w, 180.0), Color(0.70, 0.90, 1.0, 0.35 * s))
-	c.draw_rect(Rect2(wall_x - 1.0, y - 120.0, 2.0, 240.0), Color(0.85, 0.95, 1.0, 0.6 * s))
-	# 大きな同心の弧が壁からコート内側へ広がる
+func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
+	# 透明な壁の「ブイン」(控えめ版): 跳ね返った瞬間の衝突点に固定して描き、
+	# 離れるにつれ消える。衝突点はボールの現在位置と速度から逆算する(状態レス)
+	var reach := 34.0
+	var s := clampf(1.0 - dist / reach, 0.0, 1.0)
+	# 衝突からの経過tick数 t = 壁からの距離 / 横速度 で、衝突時の高さを逆算
+	var vx := absf(ViewTransform.to_px(state.ball_vx))
+	if vx < 0.01:
+		return
+	var t := dist / vx
+	var vy := ViewTransform.to_px(state.ball_vy)
+	var g := ViewTransform.to_px(cfg.gravity)
+	var impact_y := ViewTransform.to_px(state.ball_y) - t * vy + g * t * (t + 1.0) * 0.5
 	var center_angle := 0.0 if dir > 0.0 else PI
-	for k in 4:
-		var r := 14.0 + 16.0 * float(k) + 24.0 * (1.0 - s)
-		var a := s * (0.85 - 0.18 * float(k))
+	for k in 3:
+		var r := 10.0 + 9.0 * float(k) + 8.0 * (1.0 - s)
+		var a := s * (0.5 - 0.13 * float(k))
 		if a <= 0.0:
 			continue
-		c.draw_arc(Vector2(wall_x, y), r, center_angle - 1.1, center_angle + 1.1, 24, Color(0.80, 0.93, 1.0, a), 3.0)
+		c.draw_arc(Vector2(wall_x, impact_y), r, center_angle - 0.9, center_angle + 0.9, 20, Color(0.75, 0.88, 1.0, a), 2.0)
+
+func _draw_serve_preview(c: CanvasItem) -> void:
+	# サーブの軌跡プレビュー(バブルボブル式)。simと同じ照準角テーブル・重力で
+	# 弾道を点線表示する。上キーで立て、ネット方向キーで倒して狙いを決める
+	var aim: int = clampi(state.serve_aim, 0, Simulation.AIM_MAX)
+	var net_dir := 1.0 if state.serving_team == 0 else -1.0
+	var p := ViewTransform.to_px(cfg.serve_power)
+	var vx := net_dir * p * Simulation.AIM_SIN[aim] / 65536.0
+	var vy := -p * Simulation.AIM_COS[aim] / 65536.0
+	var g := ViewTransform.to_px(cfg.gravity)
+	var pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
+	var floor_px := ViewTransform.to_px(cfg.floor_y)
+	for i in 90:
+		vy += g
+		pos += Vector2(vx, vy)
+		if pos.y > floor_px:
+			break
+		if i % 3 == 0:
+			var a := clampf(1.1 - float(i) / 60.0, 0.15, 1.0)
+			c.draw_circle(pos, 2.0, Color(1.0, 0.95, 0.55, 0.75 * a))
 
 func _draw_control_marker(c: CanvasItem) -> void:
 	# 操作中キャラの頭上に▽(黄)。sim状態のcontrolled_lから導出(表示専用)

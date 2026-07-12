@@ -44,60 +44,61 @@ func test_ball_held_by_server() -> void:
 	check_eq(s.ball_y, s.players[0].y - cfg.serve_hold_height, "ボールはサーバー頭上に固定(y)")
 
 func test_serve_launches_ball() -> void:
-	# 前サーブ(横=ネット方向入力)。左チームはネット方向=右へ、上向き成分あり
-	var w := _serve_world(0)
-	var s = w[0]
-	var cfg = w[1]
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check(s.ball_vx > 0, "左の前サーブは右向き(ネット方向)")
-	check(s.ball_vy < 0, "サーブは上向き成分")
-
-func test_server_cannot_cross_serve_line() -> void:
-	# サーバーはトス前に外線(サービスライン)をネット方向へ越えられない(毎tickクランプ)
-	var w := _serve_world(0)
-	var s = w[0]
-	var cfg = w[1]
-	for i in 30:
-		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(s.players[0].x, cfg.serve_line, "左サーバーは線でクランプされる")
-	# 右チームも鏡像で検証
-	var w2 := _serve_world(1)
-	var s2 = w2[0]
-	for i in 30:
-		Simulation.step(s2, [0, 0, Simulation.IN_LEFT, 0], cfg)
-	check_eq(s2.players[2].x, cfg.court_width - cfg.serve_line, "右サーバーも線でクランプ")
-
-func test_server_cannot_retreat_into_wall() -> void:
-	# 壁際まで下がると保持ボールが壁反射圏に入り前サーブが自滅するため、
-	# サーブ位置の下限は壁からball_radius(レビュー指摘の死角封じ)
-	var w := _serve_world(0)
-	var s = w[0]
-	var cfg = w[1]
-	for i in 30:
-		Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
-	check_eq(s.players[0].x, cfg.ball_radius, "左サーバーは壁からball_radiusで止まる")
-	check(s.ball_x >= cfg.ball_radius, "保持ボールが壁反射圏に入らない")
-
-func test_serve_up_toss_is_vertical() -> void:
-	# 上+アクション: アタックサーブ用に真上へ上げる(横成分ゼロ)
-	var w := _serve_world(0)
-	var s = w[0]
-	var cfg = w[1]
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
-	check(s.ball_vy < 0, "真上サーブは上向き")
-
-func test_serve_neutral_is_soft_over_net() -> void:
-	# ニュートラル+アクション: 緩やかな弧でネットを越えて相手コートへ届く
+	# 照準サーブ: 既定角(25度)でアクション→ネット方向へ上向きに飛ぶ
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
-	check_eq(s.ball_vx, cfg.serve_soft_vx, "ネット方向へ緩い速度")
-	check_eq(s.ball_vy, -cfg.serve_soft_vy, "高く緩い弧")
+	check(s.ball_vx > 0, "左のサーブは右向き(ネット方向)")
+	check(s.ball_vy < 0, "サーブは上向き成分")
+
+func test_server_is_pinned_during_serve() -> void:
+	# サーブ照準中、横キーは角度調整に使うためサーバーは移動しない(白線の位置に固定)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 30:
+		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.players[0].x, cfg.serve_line, "左サーバーは白線の位置から動かない")
+	# 右チームも鏡像で検証
+	var w2 := _serve_world(1)
+	var s2 = w2[0]
+	for i in 30:
+		Simulation.step(s2, [0, 0, Simulation.IN_LEFT, 0], cfg)
+	check_eq(s2.players[2].x, cfg.court_width - cfg.serve_line, "右サーバーも白線に固定")
+
+func test_serve_aim_up_becomes_vertical() -> void:
+	# 上キーで照準を立てて真上(0度)にできる。真上サーブは横成分ゼロ
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 40:
+		Simulation.step(s, [Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.serve_aim, 0, "上キー長押しで照準が真上(0度)まで立つ")
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.phase, SimState.PHASE_RALLY, "サーブでRALLYへ")
+	check_eq(s.ball_vx, 0, "真上サーブは横成分ゼロ")
+	check(s.ball_vy < 0, "真上サーブは上向き")
+
+func test_serve_aim_flattens_toward_net() -> void:
+	# ネット方向キーで照準が倒れ(上限60度)、低く速い弾道になる
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	for i in 80:
+		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.serve_aim, Simulation.AIM_MAX, "ネット方向キー長押しで上限60度")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "低い弾道はネット方向へ速い")
+	check(absi(s.ball_vy) < s.ball_vx, "60度は横成分が縦成分より大きい")
+
+func test_serve_default_aim_crosses_net() -> void:
+	# 既定角(25度)のサーブは緩やかな弧でネットを越えて相手コートへ届く
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	var crossed := false
 	for i in 300:
 		Simulation.step(s, [0, 0, 0, 0], cfg)
@@ -106,7 +107,7 @@ func test_serve_neutral_is_soft_over_net() -> void:
 			break
 		if s.phase != SimState.PHASE_RALLY:
 			break
-	check(crossed, "ニュートラルサーブがネットを越える")
+	check(crossed, "既定角のサーブがネットを越える")
 
 func test_server_jump_suppressed_until_toss() -> void:
 	# 上キー=ジャンプ+照準のため、トス前のサーバーは上を押してもジャンプしない

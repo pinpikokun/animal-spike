@@ -15,6 +15,12 @@ const IN_SWITCH := SimInput.IN_SWITCH
 const IN_UP := SimInput.IN_UP
 const IN_DOWN := SimInput.IN_DOWN
 
+# サーブ照準用の整数三角関数(fpスケール65536)。角度0..60度、1度刻み。
+# 表示層の軌跡プレビューも同じテーブルを参照する(sim/表示の弾道一致)
+const AIM_MAX := 60
+const AIM_SIN: Array[int] = [0, 1144, 2287, 3430, 4572, 5712, 6850, 7987, 9121, 10252, 11380, 12505, 13626, 14742, 15855, 16962, 18064, 19161, 20252, 21336, 22415, 23486, 24550, 25607, 26656, 27697, 28729, 29753, 30767, 31772, 32768, 33754, 34729, 35693, 36647, 37590, 38521, 39441, 40348, 41243, 42126, 42995, 43852, 44695, 45525, 46341, 47143, 47930, 48703, 49461, 50203, 50931, 51643, 52339, 53020, 53684, 54332, 54963, 55578, 56175, 56756]
+const AIM_COS: Array[int] = [65536, 65526, 65496, 65446, 65376, 65287, 65177, 65048, 64898, 64729, 64540, 64332, 64104, 63856, 63589, 63303, 62997, 62672, 62328, 61966, 61584, 61183, 60764, 60326, 59870, 59396, 58903, 58393, 57865, 57319, 56756, 56175, 55578, 54963, 54332, 53684, 53020, 52339, 51643, 50931, 50203, 49461, 48703, 47930, 47143, 46341, 45525, 44695, 43852, 42995, 42126, 41243, 40348, 39441, 38521, 37590, 36647, 35693, 34729, 33754, 32768]
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -57,12 +63,18 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	state.tick += 1
 	if state.phase == SimStateScript.PHASE_SERVE:
 		state.timer -= 1
-		# 上キー=ジャンプ+上照準を兼ねるため、トス前のサーバーはジャンプを封じる
-		# (上+アクション=真上トスの照準として機能させる。トス後は自由にジャンプ可)
-		var serve_inputs: Array[int] = inputs.duplicate()
+		# サーブ照準(バブルボブル式): 上キーで垂直へ、ネット方向キーで低い弾道へ
+		# 1度/tickでスイープ。サーバーはトスまで移動もジャンプもしない(照準に専念)
 		var srv_idx: int = _server_index(state)
+		var serve_inputs: Array[int] = inputs.duplicate()
 		if srv_idx < serve_inputs.size():
-			serve_inputs[srv_idx] &= ~IN_JUMP
+			var raw: int = serve_inputs[srv_idx]
+			var to_net: int = IN_RIGHT if state.serving_team == 0 else IN_LEFT
+			if raw & IN_UP:
+				state.serve_aim = maxi(state.serve_aim - 1, 0)
+			elif raw & to_net:
+				state.serve_aim = mini(state.serve_aim + 1, AIM_MAX)
+			serve_inputs[srv_idx] &= ~(IN_JUMP | IN_LEFT | IN_RIGHT)
 		_step_players_and_hits(state, serve_inputs, cfg)
 		# サーバーは外線(サービスライン)を越えられない(最初のトスまで)。線の後ろでは動ける。
 		# トスするとRALLYへ移りこの制限は外れ、前へ移動/ジャンプしてアタックサーブできる。
@@ -110,6 +122,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vx = 0
 	s.ball_vy = 0
 	s.ball_spin = 0
+	s.serve_aim = 25  # 既定は気持ちよく相手コート前方へ入る角度
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
@@ -153,32 +166,12 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# サーブ=セルフトス。方向で打ち分ける(ユーザー仕様):
-	# ニュートラル=緩やかに相手コートへ / 上=真上トス /
-	# 横=きつめの角度の山なり / 上+横=前方への短いトス(前ジャンプでアタック可能)
-	var hdir: int = 0
-	if input & IN_LEFT:
-		hdir -= 1
-	if input & IN_RIGHT:
-		hdir += 1
-	var up: bool = (input & IN_UP) != 0
+	# サーブ=照準角(serve_aim)に沿ったセルフトス(バブルボブル式)。
+	# 0度=真上のトス(アタックサーブの起点)、角度を倒すほど低く速い弾道でネットへ
 	var net_dir: int = _dir_of_team(s.serving_team)
-	if hdir == 0 and not up:
-		# ニュートラルサーブ: 高く緩い弧でネットを越えて相手コートへ
-		s.ball_vx = net_dir * cfg.serve_soft_vx
-		s.ball_vy = -cfg.serve_soft_vy
-	elif hdir != 0 and not up:
-		# 横サーブ: きつめの角度の山なりで飛ぶ
-		s.ball_vx = hdir * cfg.serve_vx
-		s.ball_vy = -cfg.serve_vy
-	elif up and hdir == 0:
-		# 真上トス: アタックサーブの起点
-		s.ball_vx = 0
-		s.ball_vy = -cfg.bump_up_speed
-	else:
-		# 上+横: 敵コートに届かない短い前トス(その後前ジャンプでアタック)
-		s.ball_vx = hdir * cfg.toss_mid_vx
-		s.ball_vy = -cfg.bump_up_speed
+	var aim: int = clampi(s.serve_aim, 0, AIM_MAX)
+	s.ball_vx = net_dir * (cfg.serve_power * AIM_SIN[aim] / 65536)
+	s.ball_vy = -(cfg.serve_power * AIM_COS[aim] / 65536)
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
 	s.touches = 1
 	s.last_touch_team = s.serving_team

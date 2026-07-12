@@ -27,9 +27,8 @@ static func decide(s, idx: int, cfg) -> int:
 	if s.phase == SimStateScript.PHASE_SERVE:
 		# サーブ遅延タイマーはsimulation.gdのstep()が減算する(ここは読むだけ)
 		if idx == s.serving_team * 2 and s.timer <= 0:
-			# サーブ=前トス(ネット方向)で緩く越す。CPUは自分でアタックせず確実に返す
-			var toss_dir: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-			return SimInput.IN_ACTION | toss_dir
+			# 照準サーブ: 既定角(reset_rallyの25度)でそのまま打てば緩くネットを越える
+			return SimInput.IN_ACTION
 		return 0
 	if s.phase == SimStateScript.PHASE_POINT_PAUSE:
 		# ポーズ中は棒立ちせず持ち場へ歩いて戻る(次ラリーの準備)
