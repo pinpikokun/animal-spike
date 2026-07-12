@@ -15,9 +15,10 @@ const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒット
 # ボールのへしゃげ(原作: アタック時は弾が潰れて速い)。速度がV0(px/tick)を
 # 超えると進行方向に伸び垂直に潰れ始め、V1で最大MAXまで潰れる。
 # スパイク級(約9px/tick)から発動し、通常の浮遊球では真円のまま
-const SQUASH_V0 := 8.5
-const SQUASH_V1 := 13.5
+const SQUASH_V0 := 11.5
+const SQUASH_V1 := 17.0
 const SQUASH_MAX := 0.30
+const SQUASH_VY_W := 0.6  # 縦速度の寄与を下げる(トスは縦に速いだけ=潰れない)
 
 var cfg
 var state
@@ -156,7 +157,9 @@ func _sync_sprites() -> void:
 	# へしゃげ: 速度がスパイク級のとき進行方向に伸び垂直に潰れる。
 	# sim速度から毎フレーム導出しビューに状態を持たない(ロールバック安全)
 	var bv := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))
-	var squash := clampf((bv.length() - SQUASH_V0) / (SQUASH_V1 - SQUASH_V0), 0.0, 1.0) * SQUASH_MAX
+	# 強度は横速度重視: 通常スパイクはわずか、パワーボールが大きく潰れる=威力の緩急
+	var sq_speed := Vector2(bv.x, bv.y * SQUASH_VY_W).length()
+	var squash := clampf((sq_speed - SQUASH_V0) / (SQUASH_V1 - SQUASH_V0), 0.0, 1.0) * SQUASH_MAX
 	if squash > 0.01 and state.phase != SimState.PHASE_SERVE:
 		_ball.rotation = bv.angle()
 		_ball.scale = Vector2(_ball_base_scale * (1.0 + squash), _ball_base_scale * (1.0 - squash))
@@ -202,6 +205,17 @@ func draw_fx(c: CanvasItem) -> void:
 		_draw_wall_ripple(c, 0.0, bx, 1.0)
 	elif vx < -0.01:
 		_draw_wall_ripple(c, w, w - bx, -1.0)
+	# 画面外(上)に飛んだボールの現在位置を▼で示す(x追従)。強反射やジャンプトスで
+	# 天井を突き抜けるのは正しい物理なので、見失わないための案内だけを出す
+	var by := ViewTransform.to_px(state.ball_y)
+	var view_top := -position.y  # ビューは上へシフトしているため画面上端はローカル正側
+	if by < view_top - ViewTransform.to_px(cfg.ball_radius) \
+			and state.phase != SimState.PHASE_SERVE:
+		var ax := clampf(bx, 8.0, w - 8.0)
+		var ay := view_top + 4.0
+		var col := Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color(1.0, 0.9, 0.3)
+		c.draw_colored_polygon(PackedVector2Array([
+			Vector2(ax - 5.0, ay), Vector2(ax + 5.0, ay), Vector2(ax, ay + 7.0)]), col)
 	# サーブ軌跡は自チームのサーブの照準中のみ(相手の狙いはネタバレさせない)
 	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team \
 			and state.serve_tossed == 0:
