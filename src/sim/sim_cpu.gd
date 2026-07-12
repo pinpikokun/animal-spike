@@ -259,7 +259,9 @@ static func decide(s, idx: int, cfg) -> int:
 			# 地上ヒットの組み立て: 素のバンプは真上に上がるだけでネットを越えない。
 			# チームにアタッカーがいてタッチ数に余裕があれば真上に上げて呼び込み、
 			# そうでなければ(=これが最後のタッチ)ネット方向キーで前トスして越す
-			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
+			# JUMPも落とす: アクション+上ジャンプは小ホップ化(トス用)のため、
+			# 位置取りで立てたジャンプ意図が地上ヒットと混ざると跳躍が化ける
+			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
 			input |= SimInput.IN_ACTION | _ground_shot_keys(s, idx, cfg, team, prof)
 	return input
 

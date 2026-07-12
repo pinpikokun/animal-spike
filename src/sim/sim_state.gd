@@ -17,6 +17,7 @@ class Player:
 	var on_ground: int = 1
 	var hit_cooldown: int = 0
 	var stun: int = 0  # パワーボールを受けた硬直(移動・ヒット不可)の残りtick
+	var dive: int = 0  # ジャンピングトス演出の残りtick(符号=飛びつき方向)。表示層が読む
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
 	var cpu: int = 848543938315807
@@ -59,6 +60,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.on_ground)
 		out.append(p.hit_cooldown)
 		out.append(p.stun)
+		out.append(p.dive)
 		out.append(p.cpu)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -95,6 +97,7 @@ func load_int_array(arr: Array) -> void:
 		p.on_ground = arr[k]; k += 1
 		p.hit_cooldown = arr[k]; k += 1
 		p.stun = arr[k]; k += 1
+		p.dive = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1

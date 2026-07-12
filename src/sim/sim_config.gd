@@ -15,6 +15,7 @@ var floor_y: int
 var gravity: int
 var move_speed: int
 var jump_speed: int
+var hop_speed: int  # トス用の小ジャンプ(アクション+上)。フルジャンプより軽い
 var ball_radius: int
 var ball_bounce_num: int
 var ball_bounce_den: int
@@ -73,6 +74,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	gravity = FP.from_int(_int_of(raw, "gravity_px_s2")) / (tick_rate * tick_rate)
 	move_speed = FP.from_int(_int_of(raw, "move_speed_px_s")) / tick_rate
 	jump_speed = FP.from_int(_int_of(raw, "jump_speed_px_s")) / tick_rate
+	hop_speed = FP.from_int(_int_of(raw, "hop_speed_px_s")) / tick_rate
 	ball_radius = FP.from_int(_int_of(raw, "ball_radius_px"))
 	ball_bounce_num = _int_of(raw, "ball_bounce_pct")
 	ball_bounce_den = 100

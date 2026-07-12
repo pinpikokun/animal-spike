@@ -131,6 +131,14 @@ func _sync_sprites() -> void:
 		# キツネの接地軸に合わせる表示補正(jump素材は余白なしなので補正しない)
 		if Simulation.team_of(i) == 1 and anim != "jump":
 			pos.y += 5.0
+		# ジャンピングトス(リーチ縁の救済)は体を倒して飛びつく。sim状態の
+		# dive(符号=方向、絶対値=残tick)から毎フレーム導出(ロールバック安全)。
+		# 回転軸は足元原点。出だしが最大で起き上がりながら戻る
+		if p.dive != 0:
+			var lean := float(p.dive) / float(cfg.hit_cooldown_ticks)
+			spr.rotation = lean * 0.9
+		else:
+			spr.rotation = 0.0
 		# スタン中は白点滅(tick由来の周期=ロールバック再描画でも一貫)
 		if p.stun > 0:
 			var on: bool = (state.tick / 4) % 2 == 0

@@ -133,9 +133,10 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_power = 0
 	s.serve_aim = 25  # 既定は気持ちよく相手コート前方へ入る角度
 	s.serve_pow = 100
-	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)
+	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for p in s.players:
 		p.stun = 0
+		p.dive = 0
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
@@ -277,9 +278,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		var desired_vx: int = 0
 		var desired_vy: int = 0
 		if hdir != 0 and not up:
-			# 横のみ: 前へ低く遠く
-			desired_vy = -cfg.toss_fwd_vy
-			desired_vx = hdir * cfg.toss_fwd_vx
+			# 横のみ: 前へ低く遠く。ただしボールがリーチの縁ギリギリなら
+			# ジャンピングトス(飛びついて片手で拾う救済)になり、緩めの軌道に化ける。
+			# 入力は同じで状況が挙動を変える(演出は表示層がヒット距離から導出する)
+			var edge: int = cfg.player_reach * 3 / 4
+			if d2 >= 0 and d2 > edge * edge:
+				desired_vy = -cfg.bump_up_speed
+				desired_vx = hdir * cfg.toss_mid_vx
+				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
+			else:
+				desired_vy = -cfg.toss_fwd_vy
+				desired_vx = hdir * cfg.toss_fwd_vx
 		elif hdir != 0 and up:
 			# 上+横: 中間(高く+そこそこ前)
 			desired_vy = -cfg.bump_up_speed
@@ -347,12 +356,26 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if input & IN_RIGHT:
 		p.vx = cfg.move_speed
 	if (input & IN_JUMP) and p.on_ground == 1:
-		p.vy = -cfg.jump_speed
-		p.on_ground = 0
+		# アクション(トス)と同時押しのジャンプ挙動(原作の「構えてトス」の再現):
+		#   上+アクション(横なし) = 小ホップ(軽く跳んで手を伸ばし真上トス)
+		#   上+横+アクション     = 跳ばない(地上で構えて前トス)
+		#   アクションなし        = 通常のフルジャンプ
+		if input & IN_ACTION:
+			if not (input & (IN_LEFT | IN_RIGHT)):
+				p.vy = -cfg.hop_speed
+				p.on_ground = 0
+		else:
+			p.vy = -cfg.jump_speed
+			p.on_ground = 0
 	if p.on_ground == 0:
 		p.vy += cfg.gravity
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1
+	# ジャンピングトス演出の残時間(符号=方向)。ゼロへ向かって減る
+	if p.dive > 0:
+		p.dive -= 1
+	elif p.dive < 0:
+		p.dive += 1
 	var min_x: int = 0
 	var max_x: int = cfg.court_width
 	if team == 0:

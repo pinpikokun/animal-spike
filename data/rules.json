@@ -6,6 +6,7 @@
 	"gravity_px_s2": 1150,
 	"move_speed_px_s": 180,
 	"jump_speed_px_s": 580,
+	"hop_speed_px_s": 300,
 	"ball_radius_px": 14,
 	"ball_bounce_pct": 78,
 	"points_to_win": 15,

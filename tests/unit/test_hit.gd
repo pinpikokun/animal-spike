@@ -277,6 +277,72 @@ func test_jump_toss_lifts_instead_of_spike() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check(s.ball_vy < 0, "ジャンプトスは上向き(スパイクの下向きと逆)")
 
+func test_hop_toss_on_up_action() -> void:
+	# ↑+アクション(横なし): フルジャンプせず小ホップして真上トス
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s,
+		[Simulation.IN_ACTION | Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(p.on_ground, 0, "小ホップで浮く")
+	check(p.vy >= -cfg.hop_speed and p.vy < 0, "ホップはフルジャンプより軽い")
+	check(p.vy > -cfg.jump_speed, "フルジャンプにはならない")
+	check(s.ball_vy < 0, "ボールは上へトスされる")
+
+func test_no_jump_on_up_side_action() -> void:
+	# ↑+横+アクション: ジャンプせず地上で構えて前トス
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_JUMP
+		| Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(p.on_ground, 1, "横込みならジャンプしない(地上で構える)")
+	check_eq(s.touches, 1, "地上トスが成立する")
+	check_eq(s.ball_vx, cfg.toss_mid_vx, "上+横=中間トス(緩やかな前目)")
+
+func test_jump_without_action_is_full() -> void:
+	# アクションなしの↑は従来どおりフルジャンプ
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	s.ball_x = FP.from_int(400)  # ボールは遠く
+	Simulation.step(s, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(p.on_ground, 0, "フルジャンプで浮く")
+	check(p.vy <= -cfg.jump_speed + cfg.gravity, "フルジャンプの初速")
+
+func test_jumping_toss_on_reach_edge() -> void:
+	# 横+アクションでボールがリーチ縁ギリギリ: ジャンピングトス(緩め軌道+演出フラグ)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	var edge: int = cfg.player_reach * 3 / 4
+	s.ball_x = p.x + edge + FP.from_int(4)  # 縁の外側・リーチ内
+	s.ball_y = cfg.floor_y
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.touches, 1, "ギリギリでも拾える")
+	check(s.ball_vy <= -cfg.bump_up_speed + cfg.gravity, "救済トスは高く緩く上がる")
+	check(p.dive > 0, "飛びつき演出フラグ(右向き)が立つ")
+
+func test_near_toss_is_not_jumping_toss() -> void:
+	# 体の近くの横トスは通常の前トス(演出フラグなし)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(p.dive, 0, "近距離トスは飛びつかない")
+	check_eq(s.ball_vx, cfg.toss_fwd_vx, "通常の前トスのまま")
+
 func test_cooldown_blocks_double_hit() -> void:
 	var w := _rally_world()
 	var s = w[0]
