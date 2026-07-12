@@ -151,7 +151,6 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vy = 0
 	s.ball_spin = 0
 	s.ball_power = 0
-	s.ball_attack = 0
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
 	s.serve_pow = 100
 	s.serve_tossed = 0
@@ -294,24 +293,21 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
-	# 耐久力(ガード)システム: 相手のアタック(スパイク由来のボール)をしのぐと
-	# 耐久力が削れる(パワーボール=ジャストミート由来は大ダメージ)。
-	# ヒット自体は成立するが、耐久力が尽きた瞬間にスタン(倒れて動けない)し、
-	# 耐久力は満タンへ戻る(格ゲーの気絶と同じサイクル)。
-	# 判定はball_power/ball_attackを消費する前に読む
-	if s.last_touch_team >= 0 and s.last_touch_team != team:
-		var dmg: int = 0
-		if s.ball_power == 1:
-			dmg = cfg.guard_dmg_power
-		elif s.ball_attack == 1:
-			dmg = cfg.guard_dmg_spike
-		if dmg > 0:
-			p.guard -= dmg
+	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
+	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
+	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
+	# 耐久力が尽きた瞬間にスタン(倒れて動けない)し、満タンへ戻る(気絶サイクル)。
+	# 判定はball_powerを消費する前に読む
+	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
+		var sweet_g: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+		if d2 >= 0 and d2 <= sweet_g * sweet_g:
+			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
+		else:
+			p.guard -= cfg.guard_dmg_power
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
 	s.ball_power = 0
-	s.ball_attack = 0
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
 	var hdir: int = 0
 	if input & IN_LEFT:
@@ -361,7 +357,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向
 		var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
 		var pct: int = 100
-		s.ball_attack = 1  # スパイク由来のボール=受けた側の耐久力を削る
 		if d2 >= 0 and d2 <= sweet * sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
@@ -383,12 +378,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 空中ニュートラル: 緩やかに相手コート方向へ送る
 		s.ball_vy = -cfg.serve_soft_vy
 		s.ball_vx = dir * cfg.serve_soft_vx
-	# ジャストトス: スパイク以外のヒット(トス/レシーブ)をスイートスポットで
-	# 取ると耐久力が回復する。攻めのジャストミートと対になる守りのご褒美
-	if s.ball_attack == 0:
-		var sweet_t: int = cfg.player_reach * cfg.spike_sweet_pct / 100
-		if d2 >= 0 and d2 <= sweet_t * sweet_t:
-			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if s.last_touch_team == team:

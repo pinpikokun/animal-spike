@@ -33,8 +33,7 @@ var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
-var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(大ダメージ+熱色表示)
-var ball_attack: int = 0  # 1=スパイク由来のボール(受けた側の耐久力を削る)。次のヒットで消える
+var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(耐久力を削る+熱色表示)
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
@@ -76,7 +75,6 @@ func to_int_array() -> Array[int]:
 	out.append(ball_vy)
 	out.append(ball_spin)
 	out.append(ball_power)
-	out.append(ball_attack)
 	out.append(last_hit_tick)
 	out.append(serve_aim)
 	out.append(serve_pow)
@@ -117,7 +115,6 @@ func load_int_array(arr: Array) -> void:
 	ball_vy = arr[k]; k += 1
 	ball_spin = arr[k]; k += 1
 	ball_power = arr[k]; k += 1
-	ball_attack = arr[k]; k += 1
 	last_hit_tick = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
