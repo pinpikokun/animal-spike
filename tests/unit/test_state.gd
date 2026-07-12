@@ -17,9 +17,10 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != c.state_hash(), "プレイヤー差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick(1) + プレイヤー4体x9(stun/dive/cpuプロファイル含む) + ボール6(spin/power含む)
-	# + last_hit_tick(1) + サーブ系3(aim/pow/tossed) + フェーズ系(12) = 59
-	check_eq(SimState.new().to_int_array().size(), 59, "シリアライズ長")
+	# tick(1) + プレイヤー4体x11(stun/dive/guard/guard_max/cpu含む)
+	# + ボール7(spin/power/attack含む) + last_hit_tick(1)
+	# + サーブ系3(aim/pow/tossed) + フェーズ系(12) = 68
+	check_eq(SimState.new().to_int_array().size(), 68, "シリアライズ長")
 
 func test_load_int_array_roundtrip() -> void:
 	# to_int_array→load_int_arrayの往復で全フィールドが復元される(ロールバックの土台)

@@ -91,13 +91,22 @@ func draw_hud(c: Control) -> void:
 			face_mod = Color(1.0, 0.5, 0.5)
 		c.draw_texture_rect_region(tex, Rect2(x + 2.0, PANEL_Y + 2.0, 20.0, 20.0),
 			region, face_mod)
-		# スタン値バー(赤): 残りスタンtickの割合。回復につれ減る
+		# 耐久力バー: アタックを受けると減り、尽きるとスタン。ジャストトスで回復。
+		# 残量で緑→黄→赤と変わる(あと1発で倒れる緊張感の可視化)
 		var bar_x := x + 26.0
 		var bar_w := PANEL_W - 30.0
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.15, 0.15, 0.2, 0.9))
-		if _cfg.stun_ticks > 0 and p.stun > 0:
-			var frac := float(p.stun) / float(_cfg.stun_ticks)
-			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), Color(0.95, 0.25, 0.20))
+		if p.guard_max > 0:
+			var frac := clampf(float(p.guard) / float(p.guard_max), 0.0, 1.0)
+			var col := Color(0.30, 0.85, 0.35)
+			if frac <= 0.25:
+				col = Color(0.95, 0.25, 0.20)
+			elif frac <= 0.5:
+				col = Color(0.95, 0.80, 0.25)
+			# スタン中はゼロから回復済みだが、点滅で「今は行動不能」を示す
+			if p.stun > 0 and (_state.tick / 4) % 2 == 0:
+				col = Color(0.6, 0.6, 0.6)
+			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), col)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)
 		# 必殺ゲージ(水色): 値はまだsimに無いので枠と空バーのみ(M3bで接続)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), Color(0.15, 0.15, 0.2, 0.9))

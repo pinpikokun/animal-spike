@@ -141,10 +141,9 @@ func _sync_sprites() -> void:
 			spr.rotation = lean * 0.9
 		else:
 			spr.rotation = 0.0
-		# スタン中は白点滅(tick由来の周期=ロールバック再描画でも一貫)
+		# スタン中は倒れポーズ(hurt)+薄い赤み。頭上の渦巻きはFxLayerが描く
 		if p.stun > 0:
-			var on: bool = (state.tick / 4) % 2 == 0
-			spr.modulate = Color(1.0, 1.0, 1.0, 0.45) if on else Color(1.0, 0.6, 0.6, 1.0)
+			spr.modulate = Color(1.0, 0.75, 0.75)
 		else:
 			spr.modulate = Color.WHITE
 		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
@@ -207,6 +206,7 @@ func draw_fx(c: CanvasItem) -> void:
 	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team \
 			and state.serve_tossed == 0:
 		_draw_serve_preview(c)
+	_draw_stun_spirals(c)
 	_draw_control_marker(c)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
@@ -285,6 +285,22 @@ func _draw_serve_preview(c: CanvasItem) -> void:
 		if i % 3 == 0:
 			var a := clampf(1.1 - float(i) / 100.0, 0.15, 1.0)
 			c.draw_circle(pos, 2.0, Color(1.0, 0.95, 0.55, 0.75 * a))
+
+func _draw_stun_spirals(c: CanvasItem) -> void:
+	# スタン中のキャラの頭上でヒヨコ(黄色い玉)がクルクル回る古典演出。
+	# 角度はtick由来=ロールバック再描画でも一貫(ビュー状態レス)
+	for i in state.players.size():
+		var p = state.players[i]
+		if p.stun <= 0:
+			continue
+		var pos := ViewTransform.pos_of(p) + _depth_offset(i)
+		var center := pos + Vector2(0.0, -30.0)
+		var base := float(state.tick) * 0.22
+		for k in 3:
+			var ang := base + TAU * float(k) / 3.0
+			var orbit := center + Vector2(cos(ang) * 12.0, sin(ang) * 4.0 - 2.0)
+			c.draw_circle(orbit, 2.5, Color(1.0, 0.9, 0.2))
+			c.draw_circle(orbit, 1.2, Color(1.0, 1.0, 0.75))
 
 func _draw_control_marker(c: CanvasItem) -> void:
 	# 操作中キャラの頭上に▽(黄)。自チームの操作スロットから導出(表示専用)。

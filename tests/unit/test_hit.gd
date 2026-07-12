@@ -204,20 +204,98 @@ func test_edge_spike_is_normal() -> void:
 	check_eq(s.ball_power, 0, "ズレたスパイクはパワーボールにならない")
 	check(s.ball_vy <= cfg.spike_steep_vy + cfg.gravity, "ズレたスパイクは通常威力")
 
-func test_receiving_power_ball_stuns() -> void:
-	# パワーボールを相手チームが受けるとヒットは成立するがスタンする
+func test_receiving_power_ball_damages_guard() -> void:
+	# パワーボールを受けるとヒットは成立し、耐久力が大きく削れる(即スタンではない)
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_power = 1
 	s.last_touch_team = 1
-	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外(ジャスト回復と混ぜない)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
-	check_eq(s.players[0].stun, cfg.stun_ticks, "受けた側はスタンする")
+	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_power, "耐久力が大ダメージ")
+	check_eq(s.players[0].stun, 0, "耐久力が残っていればスタンしない")
 	check_eq(s.ball_power, 0, "パワーはヒットで消費される")
+
+func test_guard_zero_causes_stun_and_refill() -> void:
+	# 耐久力が尽きるとスタンし、耐久力は満タンへ戻る(気絶サイクル)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].guard = cfg.guard_dmg_power  # あと1発で尽きる
+	s.ball_power = 1
+	s.last_touch_team = 1
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.players[0].stun, cfg.stun_ticks, "耐久力が尽きてスタン")
+	check_eq(s.players[0].guard, s.players[0].guard_max, "スタン後は満タンへ戻る")
+
+func test_normal_spike_receive_damages_less() -> void:
+	# 通常スパイク(ball_attack)の受けは小ダメージ。トスや素の返球はノーダメージ
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_attack = 1
+	s.last_touch_team = 1
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_spike, "通常スパイク受けは小ダメージ")
+	var w2 := _rally_world()
+	var s2 = w2[0]
+	s2.last_touch_team = 1  # 相手からの普通の返球(attackなし)
+	s2.ball_x = s2.players[0].x + FP.from_int(30)
+	s2.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s2.players[0].guard, 100, "普通の返球の受けはノーダメージ")
+
+func test_spike_marks_ball_as_attack() -> void:
+	# 空中+下のスパイクはボールにattackフラグを付ける(受けた側が削れる)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - FP.from_int(5)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_attack, 1, "スパイクはattackボールになる")
+
+func test_just_toss_heals_guard() -> void:
+	# ジャストトス: スイートスポットで取ったトス/レシーブは耐久力を回復する
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].guard = 40
+	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
+	s.ball_y = cfg.floor_y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.players[0].guard, 40 + cfg.guard_heal_just, "ジャストトスで回復")
+	# 上限は満タンまで
+	var w2 := _rally_world()
+	var s2 = w2[0]
+	s2.players[0].guard = 95
+	s2.ball_x = s2.players[0].x + FP.from_int(2)
+	s2.ball_y = cfg.floor_y - FP.from_int(2)
+	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s2.players[0].guard, 100, "回復は満タンで頭打ち")
+
+func test_edge_toss_does_not_heal() -> void:
+	# スイート外のトスは回復しない(ジャストだけのご褒美)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].guard = 40
+	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外・リーチ内
+	s.ball_y = cfg.floor_y
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.touches, 1, "ヒットは成立")
+	check_eq(s.players[0].guard, 40, "スイート外は回復なし")
 
 func test_stunned_player_cannot_hit_or_move() -> void:
 	# スタン中は移動もヒットもできない

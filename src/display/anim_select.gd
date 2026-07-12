@@ -2,8 +2,10 @@
 # 状態を読むだけ(副作用なし)。表示層だがテクスチャ非依存なのでヘッドレステスト可能。
 extends RefCounted
 
-# 優先順位: 空中=jump > 接地ヒット硬直=crouch > 移動=run > 静止=idle
+# 優先順位: スタン=hurt(倒れ) > 空中=jump > 接地ヒット硬直=crouch > 移動=run > 静止=idle
 static func anim_for(p) -> String:
+	if p.stun > 0:
+		return "hurt"
 	if p.on_ground == 0:
 		return "jump"
 	if p.hit_cooldown > 0:

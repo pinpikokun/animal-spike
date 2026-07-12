@@ -16,8 +16,12 @@ class Player:
 	var vy: int = 0
 	var on_ground: int = 1
 	var hit_cooldown: int = 0
-	var stun: int = 0  # パワーボールを受けた硬直(移動・ヒット不可)の残りtick
+	var stun: int = 0  # 耐久力が尽きた硬直(移動・ヒット不可)の残りtick
 	var dive: int = 0  # ジャンピングトス演出の残りtick(符号=飛びつき方向)。表示層が読む
+	# 耐久力(ガード): アタックをしのぐたびに減り、尽きるとスタン(満タンへ復帰)。
+	# ジャストトスで回復。guard_maxはキャラ別ステータスの器(M4で個体差を接続)
+	var guard: int = 100
+	var guard_max: int = 100
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
 	var cpu: int = 848543938315807
@@ -29,7 +33,8 @@ var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
-var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(受けた側がスタンする)
+var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(大ダメージ+熱色表示)
+var ball_attack: int = 0  # 1=スパイク由来のボール(受けた側の耐久力を削る)。次のヒットで消える
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
@@ -62,6 +67,8 @@ func to_int_array() -> Array[int]:
 		out.append(p.hit_cooldown)
 		out.append(p.stun)
 		out.append(p.dive)
+		out.append(p.guard)
+		out.append(p.guard_max)
 		out.append(p.cpu)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -69,6 +76,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_vy)
 	out.append(ball_spin)
 	out.append(ball_power)
+	out.append(ball_attack)
 	out.append(last_hit_tick)
 	out.append(serve_aim)
 	out.append(serve_pow)
@@ -100,6 +108,8 @@ func load_int_array(arr: Array) -> void:
 		p.hit_cooldown = arr[k]; k += 1
 		p.stun = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
+		p.guard = arr[k]; k += 1
+		p.guard_max = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1
@@ -107,6 +117,7 @@ func load_int_array(arr: Array) -> void:
 	ball_vy = arr[k]; k += 1
 	ball_spin = arr[k]; k += 1
 	ball_power = arr[k]; k += 1
+	ball_attack = arr[k]; k += 1
 	last_hit_tick = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1

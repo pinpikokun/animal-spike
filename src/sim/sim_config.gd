@@ -42,7 +42,10 @@ var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面
 var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
-var stun_ticks: int        # パワーボールを受けた側のスタン時間
+var stun_ticks: int        # 耐久力が尽きた時のスタン時間
+var guard_dmg_spike: int   # 通常スパイクを受けた時の耐久力ダメージ
+var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
+var guard_heal_just: int   # ジャストトスの耐久力回復量
 var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
@@ -115,6 +118,12 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:
 		_fail("stun_ticksは0以上であること")
+		return
+	guard_dmg_spike = _int_of(raw, "guard_dmg_spike")
+	guard_dmg_power = _int_of(raw, "guard_dmg_power")
+	guard_heal_just = _int_of(raw, "guard_heal_just")
+	if guard_dmg_spike < 0 or guard_dmg_power < 0 or guard_heal_just < 0:
+		_fail("guard系の値は0以上であること")
 		return
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate
 	serve_vy = FP.from_int(_int_of(raw, "serve_vy_px_s")) / tick_rate
