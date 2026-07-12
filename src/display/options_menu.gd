@@ -5,6 +5,7 @@ extends CanvasLayer
 signal settings_changed
 
 const SCALES := [2, 3, 4]
+const CPU_LEVELS := ["弱", "普通", "強", "最強"]
 
 var _settings: Dictionary
 var _panel: PanelContainer
@@ -61,6 +62,24 @@ func _build() -> void:
 	slider.value_changed.connect(_on_intensity)
 	v.add_child(slider)
 
+	var cpu_lbl := Label.new()
+	cpu_lbl.text = "CPUの強さ"
+	v.add_child(cpu_lbl)
+
+	var ally := OptionButton.new()
+	for name in CPU_LEVELS:
+		ally.add_item("味方CPU: " + name)
+	ally.selected = clampi(int(_settings.ally_cpu_level), 0, CPU_LEVELS.size() - 1)
+	ally.item_selected.connect(_on_ally_cpu)
+	v.add_child(ally)
+
+	var enemy := OptionButton.new()
+	for name in CPU_LEVELS:
+		enemy.add_item("敵CPU: " + name)
+	enemy.selected = clampi(int(_settings.enemy_cpu_level), 0, CPU_LEVELS.size() - 1)
+	enemy.item_selected.connect(_on_enemy_cpu)
+	v.add_child(enemy)
+
 	var close := Button.new()
 	close.text = "閉じる (ESC)"
 	close.pressed.connect(func() -> void: visible = false)
@@ -83,4 +102,12 @@ func _on_crt(on: bool) -> void:
 
 func _on_intensity(v: float) -> void:
 	_settings.crt_intensity = v
+	settings_changed.emit()
+
+func _on_ally_cpu(idx: int) -> void:
+	_settings.ally_cpu_level = idx
+	settings_changed.emit()
+
+func _on_enemy_cpu(idx: int) -> void:
+	_settings.enemy_cpu_level = idx
 	settings_changed.emit()
