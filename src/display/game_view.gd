@@ -197,21 +197,27 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 	if core_a > 0.02:
 		c.draw_circle(center, 5.0 + 6.0 * ease_out, Color(1.0, 1.0, 1.0, core_a))
 	# レインボーの火花: 衝突点からコート内側へ扇状に飛び散る。
-	# 各火花の方向/速さはインデックスから決定論的に導出(ビュー状態レス)
+	# 散り方はバウンドごとに変える: 種は「衝突時点の回転量と衝突高さ」から作る。
+	# どちらもアニメ中は不変で、バウンドごとに異なる値=毎回違う散り方かつ
+	# ビュー状態レスでロールバック安全
+	var spin_imp := ViewTransform.to_px(state.ball_spin) - dir * dist
+	var seed := absi(int(roundf(spin_imp)) * 131 + int(roundf(impact_y)) * 31)
 	var fade := 1.0 - u
 	for i in 16:
-		var fi := float(i)
-		var ang := center_angle + (fmod(fi * 0.6180339, 1.0) - 0.5) * 2.6
-		var spd := 34.0 + 44.0 * fmod(fi * 0.3796, 1.0)
+		var h1 := float(posmod(seed + i * 2654435761, 4096)) / 4096.0  # 角度用
+		var h2 := float(posmod(seed * 3 + i * 1597334677, 4096)) / 4096.0  # 速さ用
+		var h3 := float(posmod(seed * 7 + i * 805459861, 4096)) / 4096.0  # 色/垂れ用
+		var ang := center_angle + (h1 - 0.5) * 2.6
+		var spd := 30.0 + 52.0 * h2
 		var d := Vector2(cos(ang), sin(ang))
 		var dist_now := spd * ease_out
-		var droop := 26.0 * u * u * (0.4 + fmod(fi * 0.234, 1.0))  # 重力で垂れる
+		var droop := 26.0 * u * u * (0.4 + h3)  # 重力で垂れる
 		var head := center + d * dist_now + Vector2(0.0, droop)
 		var tail := center + d * maxf(dist_now - 7.0 - 5.0 * fade, 0.0) + Vector2(0.0, droop * 0.8)
-		var col := Color.from_hsv(fmod(fi / 16.0 + u * 0.25, 1.0), 0.85, 1.0, fade * 0.95)
-		c.draw_line(tail, head, col, 2.0)
+		var hue := fmod(h3 + float(i) / 16.0 + u * 0.25, 1.0)
+		c.draw_line(tail, head, Color.from_hsv(hue, 0.85, 1.0, fade * 0.95), 2.0)
 		if fade > 0.3:
-			c.draw_circle(head, 1.5, Color.from_hsv(fmod(fi / 16.0 + u * 0.25, 1.0), 0.55, 1.0, fade))
+			c.draw_circle(head, 1.5, Color.from_hsv(hue, 0.55, 1.0, fade))
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブの軌跡プレビュー(バブルボブル式)。simと同じ照準角テーブル・重力で
