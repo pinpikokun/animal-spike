@@ -50,8 +50,9 @@ func _ready() -> void:
 		state = SimState.new()
 		Simulation.reset_match(state, cfg, 0)
 	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
-	# 下寄せ(原作準拠)+コートが画面より狭いぶん中央寄せ
-	position = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, 16.0)
+	# コートが画面より狭いぶん中央寄せ。縦は上へ寄せて下端の顔HUD帯(y=332..356)と
+	# コート床(floor_y=320)・キャラの足元が重ならないようにする
+	position = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, -12.0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
 	$ScoreUI.setup(cfg)
