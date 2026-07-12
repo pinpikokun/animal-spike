@@ -35,8 +35,10 @@ var toss_fwd_vx: int
 var toss_mid_vx: int
 var hit_inertia_num: int
 var hit_inertia_den: int
-var spike_vx: int
+var spike_vx: int        # 緩角スパイク(下+横): 遠くへ低く=後面狙い
 var spike_vy: int
+var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面狙い
+var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
 var stun_ticks: int        # パワーボールを受けた側のスタン時間
@@ -96,6 +98,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	hit_inertia_den = 100
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
+	spike_steep_vx = FP.from_int(_int_of(raw, "spike_steep_vx_px_s")) / tick_rate
+	spike_steep_vy = FP.from_int(_int_of(raw, "spike_steep_vy_px_s")) / tick_rate
 	spike_sweet_pct = _int_of(raw, "spike_sweet_pct")
 	if spike_sweet_pct < 0 or spike_sweet_pct > 100:
 		_fail("spike_sweet_pctは0..100であること")

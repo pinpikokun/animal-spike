@@ -26,6 +26,8 @@
 	"toss_mid_vx_px_s": 150,
 	"spike_vx_px_s": 480,
 	"spike_vy_px_s": 300,
+	"spike_steep_vx_px_s": 260,
+	"spike_steep_vy_px_s": 520,
 	"spike_sweet_pct": 45,
 	"spike_power_pct": 150,
 	"stun_ticks": 40,

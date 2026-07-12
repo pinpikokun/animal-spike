@@ -114,6 +114,21 @@ static func _land_x_from(x: int, y: int, vx: int, vy: int, cfg, target_y: int, m
 static func _predict_landing_x(s, cfg, target_y: int, max_bounce: int) -> int:
 	return _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg, target_y, max_bounce)
 
+# 候補弾道がネットを越えられるか(越える瞬間の高さが上端よりball_radius以上上か)。
+# _land_x_fromはネットを無視するため、鋭角スパイクのような低い弾道の候補は
+# この検査を通してから採用する(ネット直撃=自陣落ちの自滅を配球段階で弾く)
+static func _clears_net(x: int, y: int, vx: int, vy: int, cfg) -> bool:
+	for t in 240:
+		var prev_x: int = x
+		vy += cfg.gravity
+		x += vx
+		y += vy
+		if (prev_x < cfg.net_x) != (x < cfg.net_x):
+			return y <= cfg.net_top_y - cfg.ball_radius
+		if y >= cfg.floor_y and vy > 0:
+			return false
+	return false
+
 # 今ジャンプしたらリーチ(半径limit)でボールと会合できるか(双方の弾道を並走積分)
 static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 	var bx: int = s.ball_x
@@ -171,19 +186,24 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 	var target_y: int = cfg.floor_y - cfg.ball_radius
 	# 候補: [入力ビット, vx, vy](速度はsimulation._apply_hitの空中各分岐と同じ式)
 	var cands: Array = []
+	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	if can_spike:
+		# 鋭角(下のみ)=前面へ鋭く、緩角(下+横)=後面へ低く。着弾比較で選ばれる
 		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN,
+			dir * cfg.spike_steep_vx, cfg.spike_steep_vy])
+		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
 			dir * cfg.spike_vx, cfg.spike_vy])
 	cands.append([SimInput.IN_ACTION, dir * cfg.serve_soft_vx, -cfg.serve_soft_vy])
-	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	cands.append([SimInput.IN_ACTION | fwd_key, dir * cfg.toss_fwd_vx, -cfg.toss_fwd_vy])
 	var best_input: int = SimInput.IN_ACTION
 	var best_score: int = -1
 	for c in cands:
 		var land: int = _land_x_from(s.ball_x, s.ball_y, c[1], c[2], cfg, target_y, 3)
-		# 相手コートに落ちない打ち方は選ばない
+		# 相手コートに落ちない打ち方・ネットに掛かる打ち方は選ばない
 		var in_opp: bool = land > cfg.net_x if team == 0 else land < cfg.net_x
 		if not in_opp:
+			continue
+		if not _clears_net(s.ball_x, s.ball_y, c[1], c[2], cfg):
 			continue
 		var score: int = 0x7FFFFFFFFFFFFFFF
 		for i in 2:
@@ -342,5 +362,8 @@ static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, 
 		return _pick_air_shot(s, p, cfg, team, can_spike)
 	var input: int = SimInput.IN_ACTION
 	if can_spike:
+		# 配球IQなしは緩角スパイク(下+横)固定。鋭角はネット至近でないと
+		# 自陣落ちするため、着弾を計算しない頭脳には持たせない
 		input |= SimInput.IN_DOWN
+		input |= SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	return input

@@ -300,14 +300,20 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	elif input & IN_DOWN:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
-		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯
+		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
+		# 打ち分け: 下のみ=鋭角(手前に鋭く落ちる。近距離でないと自陣落ちのリスク)、
+		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向
 		var sweet: int = cfg.player_reach * cfg.spike_sweet_pct / 100
 		var pct: int = 100
 		if d2 >= 0 and d2 <= sweet * sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
-		s.ball_vy = cfg.spike_vy * pct / 100
-		s.ball_vx = dir * cfg.spike_vx * pct / 100
+		if hdir != 0:
+			s.ball_vy = cfg.spike_vy * pct / 100
+			s.ball_vx = dir * cfg.spike_vx * pct / 100
+		else:
+			s.ball_vy = cfg.spike_steep_vy * pct / 100
+			s.ball_vx = dir * cfg.spike_steep_vx * pct / 100
 	elif up:
 		# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
 		s.ball_vy = -cfg.bump_up_speed
