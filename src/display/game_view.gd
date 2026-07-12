@@ -54,6 +54,7 @@ func _ready() -> void:
 	position = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, 16.0)
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
+	$ScoreUI.setup(cfg)
 	var fox := SpriteFactory.build_fox()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
