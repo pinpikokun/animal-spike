@@ -276,14 +276,14 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブトスの軌跡プレビュー(2段階サーブの1段目)。simの_try_serveと同じ式:
-	# 横成分は固定威力、威力%は高さにのみ効く。ここに落ちるボールを自分で打つ
+	# 左右=着弾距離、上下=高さ%(完全独立)。ここに落ちるボールを自分で打つ
 	var aim: int = clampi(state.serve_aim, 0, Simulation.AIM_MAX)
 	var net_dir := 1.0 if state.serving_team == 0 else -1.0
 	var pow_pct: int = clampi(state.serve_pow, Simulation.POW_MIN, Simulation.POW_MAX)
 	# simの_try_serveと同じ整数式で速度を出してからpxへ変換(弾道の完全一致)
-	var vy_mag: int = (cfg.serve_toss_up * Simulation.AIM_COS[aim] / 65536) * pow_pct / 100
+	var vy_mag: int = cfg.serve_toss_up * pow_pct / 100
 	var flight: int = maxi(2 * vy_mag / cfg.gravity, 1)
-	var dx_fp: int = cfg.serve_toss_range * Simulation.AIM_SIN[aim] / 65536
+	var dx_fp: int = cfg.serve_toss_range * aim / Simulation.AIM_MAX
 	var vx := net_dir * ViewTransform.to_px(dx_fp / flight)
 	var vy := -ViewTransform.to_px(vy_mag)
 	var g := ViewTransform.to_px(cfg.gravity)

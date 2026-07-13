@@ -15,13 +15,12 @@ const IN_SWITCH := SimInput.IN_SWITCH
 const IN_UP := SimInput.IN_UP
 const IN_DOWN := SimInput.IN_DOWN
 
-# サーブ照準用の整数三角関数(fpスケール65536)。角度0..60度、1度刻み。
-# 表示層の軌跡プレビューも同じテーブルを参照する(sim/表示の弾道一致)
+# サーブトス照準。左右キー=着弾距離(0..AIM_MAXの目盛りをserve_toss_rangeへ線形対応)、
+# 上下キー=トスの高さ%(POW_MIN..POW_MAX)。距離と高さは完全に独立
+# (山なりを目の前に、低く速いのを遠くに、どの組合せも可)
 const AIM_MAX := 60
-const POW_MIN := 60   # サーブ威力の下限(%)
-const POW_MAX := 130  # サーブ威力の上限(%)
-const AIM_SIN: Array[int] = [0, 1144, 2287, 3430, 4572, 5712, 6850, 7987, 9121, 10252, 11380, 12505, 13626, 14742, 15855, 16962, 18064, 19161, 20252, 21336, 22415, 23486, 24550, 25607, 26656, 27697, 28729, 29753, 30767, 31772, 32768, 33754, 34729, 35693, 36647, 37590, 38521, 39441, 40348, 41243, 42126, 42995, 43852, 44695, 45525, 46341, 47143, 47930, 48703, 49461, 50203, 50931, 51643, 52339, 53020, 53684, 54332, 54963, 55578, 56175, 56756]
-const AIM_COS: Array[int] = [65536, 65526, 65496, 65446, 65376, 65287, 65177, 65048, 64898, 64729, 64540, 64332, 64104, 63856, 63589, 63303, 62997, 62672, 62328, 61966, 61584, 61183, 60764, 60326, 59870, 59396, 58903, 58393, 57865, 57319, 56756, 56175, 55578, 54963, 54332, 53684, 53020, 52339, 51643, 50931, 50203, 49461, 48703, 47930, 47143, 46341, 45525, 44695, 43852, 42995, 42126, 41243, 40348, 39441, 38521, 37590, 36647, 35693, 34729, 33754, 32768]
+const POW_MIN := 60   # トス高さの下限(%)
+const POW_MAX := 130  # トス高さの上限(%)
 
 static func team_of(i: int) -> int:
 	return i / 2
@@ -202,18 +201,19 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return
-	# 2段階サーブの1段目=セルフトス(本物のバレー式)。
-	# 縦: serve_toss_upに高さ%(60..130)を掛ける=高いトスほど滞空が長く
-	#     走り込みジャンプアタックの時間が作れる。
-	# 横: 照準角が決めるのは「着弾距離」(最大serve_toss_range)。横速度は
-	#     滞空時間から逆算するので、どんな高さ・角度でも着弾は自陣内=
-	#     トス単体では絶対にネットを越えない。トスはタッチ数に数えない
+	# 2段階サーブの1段目=セルフトス(本物のバレー式)。距離と高さは完全に独立:
+	# 縦: serve_toss_upに高さ%(60..130)を掛けるだけ(高いトスほど滞空が長く
+	#     走り込みジャンプアタックの時間が作れる)。
+	# 横: 照準値が決めるのは「着弾距離」(0..serve_toss_rangeを線形)。横速度は
+	#     滞空時間から逆算するので、どんな高さ・距離でも着弾は自陣内=
+	#     トス単体では絶対にネットを越えない。山なりを前面へ、も自由。
+	#     トスはタッチ数に数えない
 	var net_dir: int = _dir_of_team(s.serving_team)
 	var aim: int = clampi(s.serve_aim, 0, AIM_MAX)
 	var pow_pct: int = clampi(s.serve_pow, POW_MIN, POW_MAX)
-	var vy_mag: int = (cfg.serve_toss_up * AIM_COS[aim] / 65536) * pow_pct / 100
+	var vy_mag: int = cfg.serve_toss_up * pow_pct / 100
 	var flight: int = maxi(2 * vy_mag / cfg.gravity, 1)
-	var dx: int = cfg.serve_toss_range * AIM_SIN[aim] / 65536
+	var dx: int = cfg.serve_toss_range * aim / AIM_MAX
 	s.ball_vx = net_dir * (dx / flight)
 	s.ball_vy = -vy_mag
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
@@ -253,6 +253,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 	# サーブの2段目(トス済み)はサーバー本人のみ打てる。それ以外のSERVE中は不可
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	if s.phase != SimStateScript.PHASE_RALLY and not serve_strike:
+		return
+	# サーブは一発で相手コートへ入れる(本物のバレー準拠)。打たれたサーブが
+	# ネットを越えるまでは誰も触れない(味方の中継も、サーバー自身の2度打ちも不可)。
+	# 越えずに自陣へ落ちればサーブミス=床判定で相手の得点になる
+	if s.serve_flight == 1:
 		return
 	var reach: int = cfg.player_reach
 	var side_team: int = 0 if s.ball_x < cfg.net_x else 1

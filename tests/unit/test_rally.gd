@@ -124,6 +124,42 @@ func test_serve_strike_only_by_server() -> void:
 	check_eq(s.phase, SimState.PHASE_SERVE, "相方はサーブ打撃できない")
 	check_eq(s.touches, 0, "タッチも発生しない")
 
+func test_serve_in_flight_is_untouchable() -> void:
+	# サーブは一発で相手コートへ。打たれたサーブがネットを越えるまでは
+	# 味方もサーバー自身も触れない(中継トス・2度打ちの禁止)
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.serve_flight = 1
+	s.last_touch_team = 0
+	s.touches = 1
+	s.ball_x = FP.from_int(160)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.players[1].x = s.ball_x
+	s.players[1].y = cfg.floor_y
+	s.players[1].hit_cooldown = 0
+	Simulation._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
+	check_eq(s.touches, 1, "サーブ飛行中は味方が触れない")
+	# ネットを越えたらserve_flightが消え、通常通り触れる
+	s.serve_flight = 0
+	Simulation._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
+	check_eq(s.touches, 2, "越えた後は触れる")
+
+func test_serve_flight_clears_on_net_cross() -> void:
+	# サーブ打球がネット上空を越えた瞬間にserve_flightが下りる
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.serve_flight = 1
+	s.ball_x = cfg.net_x - FP.from_int(4)
+	s.ball_y = cfg.net_top_y - FP.from_int(40)
+	s.ball_vx = FP.from_int(480) / 60
+	s.ball_vy = 0
+	Simulation.step(s, [0, 0], cfg)
+	check_eq(s.serve_flight, 0, "ネット越えでサーブ飛行が終わる")
+
 func test_server_is_pinned_during_serve() -> void:
 	# サーブ照準中、横キーは角度調整に使うためサーバーは移動しない(白線の位置に固定)
 	var w := _serve_world(0)
