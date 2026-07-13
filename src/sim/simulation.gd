@@ -315,10 +315,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 		else:
+			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
+			# 耐久力まで尽きたら本スタン(長い方が優先)
 			p.guard -= cfg.guard_dmg_power
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
+			else:
+				p.stun = maxi(p.stun, cfg.stagger_ticks)
 	s.ball_power = 0
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
 	var hdir: int = 0

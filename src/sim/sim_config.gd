@@ -44,6 +44,7 @@ var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
+var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
 var guard_heal_just: int   # パワーボールをジャストで受け切った時の回復量
 var serve_vx: int
@@ -122,6 +123,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:
 		_fail("stun_ticksは0以上であること")
+		return
+	stagger_ticks = _int_of(raw, "stagger_ticks")
+	if stagger_ticks < 0 or stagger_ticks > stun_ticks:
+		_fail("stagger_ticksは0..stun_ticksであること")
 		return
 	guard_dmg_power = _int_of(raw, "guard_dmg_power")
 	guard_heal_just = _int_of(raw, "guard_heal_just")

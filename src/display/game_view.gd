@@ -15,9 +15,9 @@ const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒット
 # ボールのへしゃげ(原作: アタック時は弾が潰れて速い)。強度指標は
 # |横速度| + 下向き速度x0.6: 上昇中のトスは横が無いかぎり潰れず、
 # 通常アタックは軽く、パワーボールは最大まで潰れる=威力の緩急
-const SQUASH_V0 := 8.5
-const SQUASH_V1 := 16.0
-const SQUASH_MAX := 0.30
+const SQUASH_V0 := 8.0
+const SQUASH_V1 := 15.0
+const SQUASH_MAX := 0.45
 const SQUASH_VY_W := 0.6  # 下向き速度の寄与率
 
 var cfg

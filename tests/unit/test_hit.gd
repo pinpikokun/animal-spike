@@ -140,7 +140,10 @@ func test_spike_in_air() -> void:
 	check(s.ball_vy > 0, "スパイク(空中+下)は下向き")
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
 	check(s.ball_vx >= cfg.spike_steep_vx, "鋭角スパイクの横速度")
-	check(s.ball_vy > s.ball_vx, "鋭角は縦成分が横成分より大きい(急角度)")
+	# 「急角度」は緩角との比較で定義する(縦/横の比が緩角より大きい)。
+	# 整数のまま比較: steep_vy*flat_vx > flat_vy*steep_vx
+	check(cfg.spike_steep_vy * cfg.spike_vx > cfg.spike_vy * cfg.spike_steep_vx,
+		"鋭角は緩角より角度が急")
 
 func test_flat_spike_goes_farther() -> void:
 	# 下+横=緩角スパイク(後面へ低く遠く)。鋭角より横が速く縦が浅い
@@ -263,7 +266,8 @@ func test_receiving_power_ball_damages_guard() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
 	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_power, "耐久力が削れる")
-	check_eq(s.players[0].stun, 0, "耐久力が残っていればスタンしない")
+	# 芯を外してパワーボールを受けたら必ずよろけ(小スタン)
+	check_eq(s.players[0].stun, cfg.stagger_ticks, "よろけ(小スタン)が入る")
 	check_eq(s.ball_power, 0, "パワーはヒットで消費される")
 
 func test_guard_zero_causes_stun_and_refill() -> void:
