@@ -32,6 +32,17 @@ var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ここは状態を読んでスプライトを駆動する表示専任になる
 var external_sim := false
 var _base_pos := Vector2.ZERO  # 画面揺れの基準位置(揺れはここからのオフセット)
+# ワンショットエフェクト(表示層のみのジュース)。sim状態の遷移(踏切/着地/走り出し/
+# 切り返し/ヒット/ジャスト)を検知して発火し、寿命が尽きたら消える。
+# ロールバック再シミュで稀に重複発火しても一瞬濃く見えるだけで無害
+var _fx_events: Array = []
+var _prev_ground: Array[int] = [1, 1, 1, 1]
+var _prev_vx: Array[int] = [0, 0, 0, 0]
+var _prev_cd: Array[int] = [0, 0, 0, 0]
+var _prev_power := 0
+var _last_dust_frame: Array[int] = [-99, -99, -99, -99]
+const FX_LIFE := {"jump": 0.28, "land": 0.30, "dash": 0.25, "brake": 0.32,
+	"ring": 0.25, "attack": 0.22, "just": 0.42}
 # ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
 # net_match.gdがホスト=0/クライアント=1を設定する
@@ -117,7 +128,47 @@ static func _depth_offset(i: int) -> Vector2:
 		return Vector2(0.0, 5.0)
 	return Vector2(0.0, -5.0)
 
+func _spawn_fx(kind: String, pos: Vector2, dir: float = 0.0) -> void:
+	if _fx_events.size() >= 32:
+		_fx_events.pop_front()
+	_fx_events.append({"k": kind, "p": pos, "f0": Engine.get_frames_drawn(), "d": dir})
+
+func _detect_fx() -> void:
+	# sim状態の1フレーム差分からエフェクト発火点を検知する。
+	# 入力は見ない(観測できるのは物理状態だけ=ネット対戦でも同じ絵になる)
+	var f := Engine.get_frames_drawn()
+	var bpos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
+	var just_fired: bool = _prev_power == 0 and state.ball_power == 1
+	for i in state.players.size():
+		var p = state.players[i]
+		var foot := ViewTransform.pos_of(p) + _depth_offset(i)
+		if _prev_ground[i] == 1 and p.on_ground == 0:
+			_spawn_fx("jump", foot)
+		elif _prev_ground[i] == 0 and p.on_ground == 1:
+			_spawn_fx("land", foot)
+		elif p.on_ground == 1 and f - _last_dust_frame[i] > 12:
+			# 走り出し=静止からの発進(煙は進行の逆側へ)、切り返し=速度の符号反転
+			if _prev_vx[i] == 0 and p.vx != 0:
+				_spawn_fx("dash", foot, -signf(float(p.vx)))
+				_last_dust_frame[i] = f
+			elif _prev_vx[i] != 0 and p.vx != 0 and signi(p.vx) != signi(_prev_vx[i]):
+				_spawn_fx("brake", foot, signf(float(_prev_vx[i])))
+				_last_dust_frame[i] = f
+		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
+			# ヒットの瞬間。ジャストは専用の炸裂、地上=リング、空中=衝撃閃光
+			if just_fired:
+				_spawn_fx("just", bpos)
+			elif p.on_ground == 1:
+				_spawn_fx("ring", bpos)
+			else:
+				_spawn_fx("attack", bpos)
+		_prev_ground[i] = p.on_ground
+		_prev_vx[i] = p.vx
+		_prev_cd[i] = p.hit_cooldown
+	_prev_power = state.ball_power
+
 func _sync_sprites() -> void:
+	_detect_fx()
 	# 画面揺れ: ヒットストップ中とパワーボール直後は基準位置から細かくブレる。
 	# 表示層のみ(floatも描画フレーム由来の乱れも許される)
 	var shake := 0.0
@@ -234,8 +285,72 @@ func draw_fx(c: CanvasItem) -> void:
 	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team \
 			and state.serve_tossed == 0:
 		_draw_serve_preview(c)
+	_draw_one_shots(c)
 	_draw_stun_spirals(c)
 	_draw_control_marker(c)
+
+func _draw_one_shots(c: CanvasItem) -> void:
+	# ワンショットFXの描画: 膨張→拡散→フェード。円でなくピクセルにスナップした
+	# 小矩形で描く(ドット絵の質感を守る)。tは0..1の寿命進行
+	var f := Engine.get_frames_drawn()
+	for e_i in range(_fx_events.size() - 1, -1, -1):
+		var e: Dictionary = _fx_events[e_i]
+		var life: float = FX_LIFE.get(e["k"], 0.3)
+		var t := float(f - e["f0"]) / (60.0 * life)
+		if t >= 1.0:
+			_fx_events.remove_at(e_i)
+			continue
+		var a := 1.0 - t
+		var pos: Vector2 = e["p"]
+		var dust := Color(0.93, 0.9, 0.82, 0.85 * a)
+		match e["k"]:
+			"jump":
+				# 足元の左右にぽわッと土煙(外へ流れながら小さく)
+				for s in [-1.0, 1.0]:
+					for k in 3:
+						var px := pos + Vector2(s * (3.0 + 10.0 * t + k * 2.5),
+							-1.0 - k * 1.5 - 4.0 * t)
+						var sz := 2.0 if k < 2 and t < 0.6 else 1.0
+						c.draw_rect(Rect2(px.round(), Vector2(sz, sz)), dust)
+			"land":
+				# 着地は横へ平たく広がる
+				for s in [-1.0, 1.0]:
+					for k in 3:
+						var px := pos + Vector2(s * (4.0 + 15.0 * t + k * 3.0),
+							-1.0 - 2.0 * t - float(k % 2))
+						c.draw_rect(Rect2(px.round(), Vector2(2, 1)), dust)
+			"dash", "brake":
+				# 走り出し/切り返しの蹴り煙(dirの側へ流れる)。切り返しは少し濃く長い
+				var d: float = e["d"]
+				var n := 4 if e["k"] == "brake" else 3
+				for k in n:
+					var px := pos + Vector2(d * (2.0 + 11.0 * t + k * 3.0),
+						-1.0 - k * 1.8 - 3.0 * t)
+					var sz2 := 2.0 if t < 0.5 else 1.0
+					c.draw_rect(Rect2(px.round(), Vector2(sz2, sz2)), dust)
+			"ring":
+				# レシーブ/トス: ボール位置に白い輪がふわっと広がる
+				c.draw_arc(pos.round(), 4.0 + 11.0 * t, 0.0, TAU, 20,
+					Color(1.0, 1.0, 1.0, 0.7 * a), 1.0)
+			"attack":
+				# アタック: 斜め4方向の短い閃光(ボール半径14pxの外側で光る)
+				for k in 4:
+					var ang := float(k) * TAU / 4.0 + TAU / 8.0
+					var v := Vector2.from_angle(ang)
+					c.draw_line((pos + v * (9.0 + 10.0 * t)).round(),
+						(pos + v * (16.0 + 14.0 * t)).round(),
+						Color(1.0, 1.0, 0.85, 0.9 * a), 1.0)
+			"just":
+				# ジャストミート: 8方向の放射光+白い炸裂リング(祝祭の瞬間)。
+				# ボール半径14pxの外から始めないとスプライトに埋もれる
+				for k in 8:
+					var ang2 := float(k) * TAU / 8.0
+					var v2 := Vector2.from_angle(ang2)
+					c.draw_line((pos + v2 * (12.0 + 22.0 * t)).round(),
+						(pos + v2 * (22.0 + 30.0 * t)).round(),
+						Color(1.0, 0.8, 0.25, 0.95 * a), 2.0)
+				c.draw_arc(pos.round(), 15.0 + 26.0 * t, 0.0, TAU, 28,
+					Color(1.0, 1.0, 0.9, 0.85 * a), 2.0)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
 	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
