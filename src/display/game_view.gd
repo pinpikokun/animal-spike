@@ -46,6 +46,11 @@ var _prev_bvy := 0
 var _prev_score := Vector2i.ZERO
 var _last_dust_frame: Array[int] = [-99, -99, -99, -99]
 var _flash: Array[int] = [0, 0, 0, 0]  # 被弾白フラッシュの残りフレーム
+# スカッシュ&ストレッチ(表示層のみのジュース)。踏切で縦伸び/着地で横潰れを
+# バネで0へ戻す。当たり判定サイズには一切触れない。ロールバック無関係の飾り
+var _squash: Array[float] = [0.0, 0.0, 0.0, 0.0]
+var _squash_v: Array[float] = [0.0, 0.0, 0.0, 0.0]
+var _shake_amp := 0.0  # 画面揺れの減衰インパルス(衝撃でドンと入り数フレームで収束)
 var _ball_hist: Array[Vector2] = []    # 残像トレイル用のボール位置履歴
 var _sfx: Dictionary = {}              # 仮SE(自前合成WAV)。無ければ黙って鳴らさない
 const FxParticles := preload("res://src/display/fx_particles.gd")
@@ -200,10 +205,14 @@ func _detect_fx() -> void:
 		var pvel := Vector2(ViewTransform.to_px(p.vx), ViewTransform.to_px(p.vy))
 		if _prev_ground[i] == 1 and p.on_ground == 0:
 			_spawn_fx("jump", foot, up, pvel)          # 縦へ+横速度で流れる
+			_squash[i] = 0.42                          # 踏切: 縦にビヨーンと伸びる
+			_squash_v[i] = 0.0
 		elif _prev_ground[i] == 0 and p.on_ground == 1:
 			# 着地: キャラの左右へ地を這うように土煙。右(dir=0)と左(dir=PI)の2枚に分ける
 			_spawn_fx("land", foot, 0.0, pvel)
 			_spawn_fx("land", foot, PI, pvel)
+			_squash[i] = -0.48                         # 着地: 横にペチャッと潰れる
+			_squash_v[i] = 0.0
 		elif p.on_ground == 1 and f - _last_dust_frame[i] > 12:
 			# 走り出し=進行の逆へ蹴る煙、切り返し=元の進行方向へ蹴る
 			if _prev_vx[i] == 0 and p.vx != 0:
@@ -215,9 +224,12 @@ func _detect_fx() -> void:
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
 			# ヒットの瞬間。打った逆方向へ散る(=-ボール速度の向き)
 			var away := (-bvel).angle() if bvel.length() > 0.5 else up
+			_squash[i] = 0.30                          # 打撃の瞬間: グッと伸びる張り
+			_squash_v[i] = 0.0
 			if just_fired:
 				_spawn_fx("just", bpos, away, bvel * 0.25)
 				_play_sfx("just")
+				_shake_amp = maxf(_shake_amp, 4.5)     # ジャスト: 画面がドンと揺れる
 			elif p.on_ground == 0 and state.touches == 0:
 				_spawn_fx("block", bpos, up, bvel * 0.25)
 				_play_sfx("block")
@@ -230,6 +242,8 @@ func _detect_fx() -> void:
 		# 被弾フラッシュ: よろけ/気絶の開始フレームで白く点滅させる
 		if _prev_stun[i] == 0 and p.stun > 0:
 			_flash[i] = 14 if p.stun > cfg.stagger_ticks else 8
+			# ガード破壊(気絶)は画面も揺らす。よろけ(stagger)は軽く
+			_shake_amp = maxf(_shake_amp, 3.0 if p.stun > cfg.stagger_ticks else 1.4)
 		_prev_ground[i] = p.on_ground
 		_prev_vx[i] = p.vx
 		_prev_cd[i] = p.hit_cooldown
@@ -247,6 +261,10 @@ func _detect_fx() -> void:
 	var bground := bpos.y >= floor_px - ViewTransform.to_px(cfg.ball_radius)
 	if bground and not _prev_bground and state.phase == SimState.PHASE_RALLY:
 		_spawn_fx("ballground", Vector2(bpos.x, floor_px), up, Vector2(bvel.x, 0.0))
+		# 速い球の着弾ほど地面が揺れる(パワーボールの突き刺さりが決まる)
+		var impact := clampf((bvel.y - 6.0) / 12.0, 0.0, 1.0)
+		if impact > 0.0:
+			_shake_amp = maxf(_shake_amp, 1.5 + 2.0 * impact)
 	_prev_bground = bground
 	# トスの頂点キラン: 上昇から落下に転じた瞬間、高い球にだけ光る(打つ目印)
 	if _prev_bvy < 0 and state.ball_vy >= 0 and state.phase == SimState.PHASE_RALLY \
@@ -268,24 +286,30 @@ func _detect_fx() -> void:
 
 func _sync_sprites() -> void:
 	_detect_fx()
-	# 画面揺れ: ヒットストップ中とパワーボール直後は基準位置から細かくブレる。
-	# 表示層のみ(floatも描画フレーム由来の乱れも許される)
-	# 揺れるのは大物だけ: 気絶級の長い瞬止(>=5)かパワーボールの瞬止。
-	# 通常アタックの軽い瞬止(2tick)は止まるだけで揺らさない(ユーザー指定)
-	var shake := 0.0
-	if state.hit_freeze >= 5 or (state.hit_freeze > 0 and state.ball_power == 1):
-		shake = 2.5
-	elif state.ball_power == 1 and state.tick - state.last_hit_tick < 10:
-		shake = 1.2
-	if shake > 0.0:
+	# 画面揺れ: インパルス減衰式。大きな衝撃(ジャスト/速い球の着弾/ガード破壊)で
+	# ドンと入り数フレームで収束する。impulseは_detect_fxが衝撃の瞬間に積む。
+	# 表示層のみ(floatも描画フレーム由来の乱れも許される・ロールバック無関係)
+	_shake_amp *= 0.78
+	if _shake_amp < 0.1:
+		_shake_amp = 0.0
+	if _shake_amp > 0.0:
 		var f := Engine.get_frames_drawn()
 		position = _base_pos + Vector2(
-			(float(f % 2) * 2.0 - 1.0) * shake, (float((f / 2) % 2) * 2.0 - 1.0) * shake * 0.6)
+			(float(f % 2) * 2.0 - 1.0) * _shake_amp,
+			(float((f / 2) % 2) * 2.0 - 1.0) * _shake_amp * 0.7)
 	else:
 		position = _base_pos
 	for i in _sprites.size():
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
+		# スカッシュ&ストレッチ: 踏切/着地/打撃で立てた_squashをバネで0へ戻す
+		# (行き過ぎて軽く反動=ゴムまり感)。足元が原点なので地に足を着けたまま潰れる。
+		# 表示層のみの飾りで当たり判定サイズには影響しない
+		var dt := 1.0 / 60.0
+		_squash_v[i] += (-120.0 * _squash[i] - 16.0 * _squash_v[i]) * dt
+		_squash[i] += _squash_v[i] * dt
+		var sq: float = clampf(_squash[i], -0.6, 0.6)
+		spr.scale = Vector2(1.0 - 0.5 * sq, 1.0 + 0.5 * sq)
 		var pos := ViewTransform.pos_of(p) + _depth_offset(i)
 		# レシーブの小ホップ: 接地ヒット中はhit_cooldownから上下オフセットを導出。
 		# 打った瞬間(cooldown最大)に最も持ち上がり、硬直が抜けるにつれ着地する。
