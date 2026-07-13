@@ -41,6 +41,9 @@ var serve_tossed: int = 0  # 2段階サーブ: 0=構え(照準中)、1=トス済
 # 1=サーブ打球がまだ最初のネット越えをしていない。物理には影響せず、
 # 味方CPUが「上げ球だ」と誤認してサーブにジャンプするのを抑えるためにAIが読む
 var serve_flight: int = 0
+# ヒットストップの残りtick。パワーボール成立や気絶の瞬間に数tick全員が止まり
+# 「重さ」を出す。simが凍るだけなので決定論・ロールバック安全
+var hit_freeze: int = 0
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -83,6 +86,7 @@ func to_int_array() -> Array[int]:
 	out.append(serve_pow)
 	out.append(serve_tossed)
 	out.append(serve_flight)
+	out.append(hit_freeze)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -124,6 +128,7 @@ func load_int_array(arr: Array) -> void:
 	serve_pow = arr[k]; k += 1
 	serve_tossed = arr[k]; k += 1
 	serve_flight = arr[k]; k += 1
+	hit_freeze = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1

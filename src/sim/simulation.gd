@@ -62,6 +62,11 @@ static func _cpu_input(state, idx: int, cfg) -> int:
 static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
+	# ヒットストップ: パワーボール成立や気絶の瞬間、数tick世界が止まる(重さの演出)。
+	# tickは進める(ネットコードの入力消費と1対1を保つ)が物理・入力は凍結
+	if state.hit_freeze > 0:
+		state.hit_freeze -= 1
+		return
 	if state.phase == SimStateScript.PHASE_SERVE:
 		if state.serve_tossed == 0:
 			state.timer -= 1
@@ -154,6 +159,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.serve_pow = 100
 	s.serve_tossed = 0
 	s.serve_flight = 0
+	s.hit_freeze = 0
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for p in s.players:
 		p.stun = 0
@@ -321,8 +327,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
+				s.hit_freeze = 8  # 気絶の瞬間は長めに止めて「効いた」を見せる
 			else:
 				p.stun = maxi(p.stun, cfg.stagger_ticks)
+				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
 	var hdir: int = 0
@@ -378,6 +386,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
+			s.hit_freeze = maxi(s.hit_freeze, 4)  # ジャストミートの瞬止(ヒットストップ)
 		var svx: int
 		var svy: int
 		if hdir != 0:

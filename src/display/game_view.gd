@@ -31,6 +31,7 @@ var _ball_roll_frames := 1  # 転がりシートのフレーム数
 # ネット対戦モード。cfg/stateは外部(SimRoot)が所有しtickも外部が回す。
 # ここは状態を読んでスプライトを駆動する表示専任になる
 var external_sim := false
+var _base_pos := Vector2.ZERO  # 画面揺れの基準位置(揺れはここからのオフセット)
 # ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
 # net_match.gdがホスト=0/クライアント=1を設定する
@@ -53,7 +54,8 @@ func _ready() -> void:
 	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
 	# コートが画面より狭いぶん中央寄せ。縦は上へ寄せて下端の顔HUD帯(y=332..356)と
 	# コート床(floor_y=320)・キャラの足元が重ならないようにする
-	position = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, -12.0)
+	_base_pos = Vector2((640.0 - ViewTransform.to_px(cfg.court_width)) * 0.5, -12.0)
+	position = _base_pos
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
 	$ScoreUI.setup(cfg)
@@ -116,6 +118,19 @@ static func _depth_offset(i: int) -> Vector2:
 	return Vector2(0.0, -5.0)
 
 func _sync_sprites() -> void:
+	# 画面揺れ: ヒットストップ中とパワーボール直後は基準位置から細かくブレる。
+	# 表示層のみ(floatも描画フレーム由来の乱れも許される)
+	var shake := 0.0
+	if state.hit_freeze > 0:
+		shake = 2.5
+	elif state.ball_power == 1 and state.tick - state.last_hit_tick < 10:
+		shake = 1.2
+	if shake > 0.0:
+		var f := Engine.get_frames_drawn()
+		position = _base_pos + Vector2(
+			(float(f % 2) * 2.0 - 1.0) * shake, (float((f / 2) % 2) * 2.0 - 1.0) * shake * 0.6)
+	else:
+		position = _base_pos
 	for i in _sprites.size():
 		var p = state.players[i]
 		var spr: AnimatedSprite2D = _sprites[i]
