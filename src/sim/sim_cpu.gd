@@ -36,17 +36,19 @@ const SALT_AIM := 1
 const SALT_MISS := 2
 const SALT_SWEET := 3
 
-# 難易度プリセット(調査docの数値。最強でも遅延6tick=約100msを残し、ミス床3%を保証する)
+# 難易度プリセット(2026-07-13「人間化」改訂)。方針:
+# - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
+#   読み(予測深度)・技(ブロック/ジャスト)・判断(配球IQ)で出す
+# - 設計された弱点: 弱=予測なし(ネット際ドロップが拾えない)、
+#   普通=壁反射を読めない(depth0)、強=精度と判断は高いが役割分担なし。
+#   プレイヤーが「こいつにはアレが効く」と発見できる穴を各段に残す
 const PRESET_WEAK := (24 << P_DELAY) | (40 << P_AIM) | (64 << P_MISS) | (26 << P_SWEET)
-const PRESET_NORMAL := AB_PREDICT | (14 << P_DELAY) | (25 << P_AIM) | (26 << P_MISS) \
-	| (102 << P_SWEET) | (1 << P_DEPTH) | (1 << P_TIQ)
-# 強にはアタック(攻撃の上積み)を先に与える。役割分担は最強専用:
-# KPI計測でROLES(単独レシーバー制)は攻撃力の裏付けなしでは2人収束の冗長性に
-# 劣ると判明したため(普通>強の逆転)、順序を能力の実効値で決めている
-const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK) | (10 << P_DELAY) \
+const PRESET_NORMAL := AB_PREDICT | (16 << P_DELAY) | (25 << P_AIM) | (26 << P_MISS) \
+	| (102 << P_SWEET) | (1 << P_TIQ)
+const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK) | (13 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
 const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK) \
-	| (6 << P_DELAY) | (5 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
+	| (12 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
 const PRESETS: Array[int] = [PRESET_WEAK, PRESET_NORMAL, PRESET_STRONG, PRESET_MAX]
 
 static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
