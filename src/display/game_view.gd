@@ -365,7 +365,9 @@ func _draw_ball_shadow(c: CanvasItem) -> void:
 	var a := clampf(0.30 - h * 0.0007, 0.06, 0.30)
 	var fy := ViewTransform.to_px(cfg.floor_y) - 1.0
 	c.draw_set_transform(Vector2(bx, fy).round(), 0.0, Vector2(1.0, 0.35))
-	c.draw_circle(Vector2.ZERO, r, Color(0.05, 0.05, 0.15, a))
+	# 暗い芯(明背景で効く)+細い明色リング(暗背景で効く)=床面の明暗を問わず見える
+	c.draw_circle(Vector2.ZERO, r, Color(0.05, 0.05, 0.12, a))
+	c.draw_arc(Vector2.ZERO, r, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, a * 0.35), 1.0)
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_ball_trail(c: CanvasItem) -> void:
@@ -375,16 +377,44 @@ func _draw_ball_trail(c: CanvasItem) -> void:
 	var powered: bool = state.ball_power == 1
 	if not powered and spd < 9.0:
 		return
+	# 芯色は熱色/白。暗い縁を1px重ねて明るい背景でも尾が消えないようにする
+	var core := Color(1.0, 0.55, 0.3) if powered else Color(1.0, 1.0, 1.0)
 	var n := _ball_hist.size()
 	for k in range(maxi(0, n - 8), n - 1):
 		var u := float(k - (n - 8)) / 8.0  # 古いほど0
-		var col := Color(1.0, 0.55, 0.3, 0.35 * u) if powered \
-			else Color(1.0, 1.0, 1.0, 0.18 * u)
-		c.draw_circle(_ball_hist[k].round(), 2.0 + 3.0 * u, col)
+		var alpha := (0.35 if powered else 0.20) * u
+		var r := 2.0 + 3.0 * u
+		var p := _ball_hist[k].round()
+		c.draw_circle(p, r + 1.0, Color(FX_OUTLINE, alpha * 0.8))
+		c.draw_circle(p, r, Color(core, alpha))
+
+# エフェクトの縁取り色。ほぼ黒だが完全な黒ではない暗色=どんな背景(雪原/砂浜/
+# 白い体育館でも紺コートでも)でも芯の明色が沈まず浮き上がる。背景非依存の要。
+const FX_OUTLINE := Color(0.10, 0.08, 0.13)
+
+# 縁取り付きプリミティブ: 先に暗色で1回り大きく描いてから明色の芯を重ねる。
+# 明るい背景でも輪郭が背景と芯を分離するので視認性が保たれる
+func _fx_line(c: CanvasItem, p1: Vector2, p2: Vector2, col: Color, w: float, a: float) -> void:
+	c.draw_line(p1, p2, Color(FX_OUTLINE, a), w + 2.0)
+	c.draw_line(p1, p2, Color(col, a), w)
+
+func _fx_arc(c: CanvasItem, ctr: Vector2, r: float, a0: float, a1: float,
+		col: Color, w: float, a: float, pts: int = 24) -> void:
+	c.draw_arc(ctr, r, a0, a1, pts, Color(FX_OUTLINE, a), w + 2.0)
+	c.draw_arc(ctr, r, a0, a1, pts, Color(col, a), w)
+
+func _fx_dot(c: CanvasItem, pos: Vector2, r: float, col: Color, a: float) -> void:
+	c.draw_circle(pos, r + 1.0, Color(FX_OUTLINE, a))
+	c.draw_circle(pos, r, Color(col, a))
+
+func _fx_rect(c: CanvasItem, pos: Vector2, sz: Vector2, col: Color, a: float) -> void:
+	c.draw_rect(Rect2(pos - Vector2.ONE, sz + Vector2(2, 2)), Color(FX_OUTLINE, a))
+	c.draw_rect(Rect2(pos, sz), Color(col, a))
 
 func _draw_one_shots(c: CanvasItem) -> void:
 	# ワンショットFXの描画: 膨張→拡散→フェード。円でなくピクセルにスナップした
-	# 小矩形で描く(ドット絵の質感を守る)。tは0..1の寿命進行
+	# 小矩形で描く(ドット絵の質感を守る)。tは0..1の寿命進行。
+	# 色は全て「暗い縁取り+明るい芯」で背景非依存(FX_OUTLINE参照)
 	var f := Engine.get_frames_drawn()
 	for e_i in range(_fx_events.size() - 1, -1, -1):
 		var e: Dictionary = _fx_events[e_i]
@@ -395,7 +425,8 @@ func _draw_one_shots(c: CanvasItem) -> void:
 			continue
 		var a := 1.0 - t
 		var pos: Vector2 = e["p"]
-		var dust := Color(0.93, 0.9, 0.82, 0.85 * a)
+		# 土煙の芯色: 明るいオフホワイト(縁取りが背景から分離するので明背景でも可)
+		var dust := Color(0.95, 0.93, 0.86)
 		match e["k"]:
 			"jump":
 				# 足元の左右にぽわッと土煙(外へ流れながら小さく)
@@ -404,14 +435,14 @@ func _draw_one_shots(c: CanvasItem) -> void:
 						var px := pos + Vector2(s * (3.0 + 10.0 * t + k * 2.5),
 							-1.0 - k * 1.5 - 4.0 * t)
 						var sz := 2.0 if k < 2 and t < 0.6 else 1.0
-						c.draw_rect(Rect2(px.round(), Vector2(sz, sz)), dust)
+						_fx_rect(c, px.round(), Vector2(sz, sz), dust, 0.85 * a)
 			"land":
 				# 着地は横へ平たく広がる
 				for s in [-1.0, 1.0]:
 					for k in 3:
 						var px := pos + Vector2(s * (4.0 + 15.0 * t + k * 3.0),
 							-1.0 - 2.0 * t - float(k % 2))
-						c.draw_rect(Rect2(px.round(), Vector2(2, 1)), dust)
+						_fx_rect(c, px.round(), Vector2(2, 1), dust, 0.85 * a)
 			"dash", "brake":
 				# 走り出し/切り返しの蹴り煙(dirの側へ流れる)。切り返しは少し濃く長い
 				var d: float = e["d"]
@@ -420,58 +451,58 @@ func _draw_one_shots(c: CanvasItem) -> void:
 					var px := pos + Vector2(d * (2.0 + 11.0 * t + k * 3.0),
 						-1.0 - k * 1.8 - 3.0 * t)
 					var sz2 := 2.0 if t < 0.5 else 1.0
-					c.draw_rect(Rect2(px.round(), Vector2(sz2, sz2)), dust)
+					_fx_rect(c, px.round(), Vector2(sz2, sz2), dust, 0.85 * a)
 			"ring":
-				# レシーブ/トス: ボール位置に白い輪がふわっと広がる
-				c.draw_arc(pos.round(), 4.0 + 11.0 * t, 0.0, TAU, 20,
-					Color(1.0, 1.0, 1.0, 0.7 * a), 1.0)
+				# レシーブ/トス: ボール位置に輪がふわっと広がる
+				_fx_arc(c, pos.round(), 4.0 + 11.0 * t, 0.0, TAU,
+					Color(1.0, 1.0, 1.0), 1.0, 0.7 * a, 20)
 			"attack":
 				# アタック: 斜め4方向の短い閃光(ボール半径14pxの外側で光る)
 				for k in 4:
 					var ang := float(k) * TAU / 4.0 + TAU / 8.0
 					var v := Vector2.from_angle(ang)
-					c.draw_line((pos + v * (9.0 + 10.0 * t)).round(),
+					_fx_line(c, (pos + v * (9.0 + 10.0 * t)).round(),
 						(pos + v * (16.0 + 14.0 * t)).round(),
-						Color(1.0, 1.0, 0.85, 0.9 * a), 1.0)
+						Color(1.0, 1.0, 0.85), 1.0, 0.9 * a)
 			"just":
-				# ジャストミート: 8方向の放射光+白い炸裂リング(祝祭の瞬間)。
+				# ジャストミート: 8方向の放射光+炸裂リング(祝祭の瞬間)。
 				# ボール半径14pxの外から始めないとスプライトに埋もれる
 				for k in 8:
 					var ang2 := float(k) * TAU / 8.0
 					var v2 := Vector2.from_angle(ang2)
-					c.draw_line((pos + v2 * (12.0 + 22.0 * t)).round(),
+					_fx_line(c, (pos + v2 * (12.0 + 22.0 * t)).round(),
 						(pos + v2 * (22.0 + 30.0 * t)).round(),
-						Color(1.0, 0.8, 0.25, 0.95 * a), 2.0)
-				c.draw_arc(pos.round(), 15.0 + 26.0 * t, 0.0, TAU, 28,
-					Color(1.0, 1.0, 0.9, 0.85 * a), 2.0)
+						Color(1.0, 0.8, 0.25), 2.0, 0.95 * a)
+				_fx_arc(c, pos.round(), 15.0 + 26.0 * t, 0.0, TAU,
+					Color(1.0, 1.0, 0.9), 2.0, 0.85 * a, 28)
 			"kiran":
 				# トス頂点の目印: 4方向に伸びて縮む十字の輝き(ここで打て!の合図)
 				var s4 := 3.0 + 5.0 * sin(t * PI)
 				for k in 4:
 					var v4 := Vector2.from_angle(float(k) * TAU / 4.0)
-					c.draw_line(pos.round(), (pos + v4 * s4).round(),
-						Color(1.0, 1.0, 1.0, 0.9 * a), 1.0)
+					_fx_line(c, pos.round(), (pos + v4 * s4).round(),
+						Color(1.0, 1.0, 1.0), 1.0, 0.9 * a)
 			"smear":
-				# 振り抜きの弧(スミア): 打点の周りを白い弧が一瞬走る
+				# 振り抜きの弧(スミア): 打点の周りを弧が一瞬走る
 				var d4: float = e["d"]
 				var a0 := -1.9 if d4 > 0.0 else PI + 1.9
 				var sweep := 2.4 * (0.3 + 0.7 * t) * d4
-				c.draw_arc(pos.round(), 14.0, a0, a0 + sweep, 12,
-					Color(1.0, 1.0, 1.0, 0.55 * a), 2.0)
+				_fx_arc(c, pos.round(), 14.0, a0, a0 + sweep,
+					Color(1.0, 1.0, 1.0), 2.0, 0.55 * a, 12)
 			"block":
 				# ブロック成功: バチンと弾けるXの火花
 				for k in 4:
 					var v5 := Vector2.from_angle(float(k) * TAU / 4.0 + TAU / 8.0)
-					c.draw_line((pos + v5 * (4.0 + 8.0 * t)).round(),
+					_fx_line(c, (pos + v5 * (4.0 + 8.0 * t)).round(),
 						(pos + v5 * (12.0 + 12.0 * t)).round(),
-						Color(1.0, 0.9, 0.4, 0.95 * a), 2.0)
-				c.draw_circle(pos.round(), 3.0 * (1.0 - t), Color(1.0, 1.0, 1.0, 0.9 * a))
+						Color(1.0, 0.9, 0.4), 2.0, 0.95 * a)
+				_fx_dot(c, pos.round(), 3.0 * (1.0 - t), Color(1.0, 1.0, 1.0), 0.9 * a)
 			"score":
 				# 得点の瞬間: 落下点から金色のリングが大きく広がる
-				c.draw_arc(pos.round(), 6.0 + 44.0 * t, 0.0, TAU, 32,
-					Color(1.0, 0.85, 0.3, 0.8 * a), 2.0)
-				c.draw_arc(pos.round(), 3.0 + 30.0 * t, 0.0, TAU, 24,
-					Color(1.0, 1.0, 0.85, 0.5 * a), 1.0)
+				_fx_arc(c, pos.round(), 6.0 + 44.0 * t, 0.0, TAU,
+					Color(1.0, 0.85, 0.3), 2.0, 0.8 * a, 32)
+				_fx_arc(c, pos.round(), 3.0 + 30.0 * t, 0.0, TAU,
+					Color(1.0, 1.0, 0.85), 1.0, 0.5 * a, 24)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
 	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
