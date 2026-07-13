@@ -559,32 +559,45 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # 出だし速く後半ゆっくり
 	var center := Vector2(wall_x, impact_y)
 	var center_angle := 0.0 if dir > 0.0 else PI
-	# 衝突点の白い閃光(最初の一瞬だけ)
-	var core_a := (1.0 - u) * (1.0 - u) * 0.8
-	if core_a > 0.02:
-		c.draw_circle(center, 5.0 + 6.0 * ease_out, Color(1.0, 1.0, 1.0, core_a))
-	# レインボーの火花: 衝突点からコート内側へ扇状に飛び散る。
-	# 散り方はバウンドごとに変える: 種は「衝突時点の回転量と衝突高さ」から作る。
-	# どちらもアニメ中は不変で、バウンドごとに異なる値=毎回違う散り方かつ
-	# ビュー状態レスでロールバック安全
+	# 衝突点の白い閃光コア+熱色のハロー(局所疑似発光=ROUNDS風の「光ってる」感)。
+	# 最初の一瞬だけ強く光り、周りにオレンジのにじみを重ねる
+	# コアは素早く消す(pow3): 薄い層は紺背景でくすんで「紫のシミ」になるので使わず、
+	# 不透明に近い黄コア+白コアの2層だけで明るく光らせる(発光感は火花先端が担う)
+	# 閾値0.25で早期に消す(薄い暖色は紺背景でくすんで紫のシミになるため)。
+	# コアが生きている間は暗縁+黄+白の三層で紫化を防ぎつつ明るく光らせる
+	var core_a := pow(1.0 - u, 3.0)
+	if core_a > 0.25:
+		c.draw_circle(center, 7.0 + 6.0 * ease_out, Color(FX_OUTLINE, core_a * 0.6))
+		c.draw_circle(center, 6.0 + 6.0 * ease_out, Color(1.0, 0.85, 0.45, core_a))
+		c.draw_circle(center, 3.0 + 4.0 * ease_out, Color(1.0, 1.0, 0.95, core_a))
+	# 熱色の発光火花: 衝突点からコート内側へ扇状に飛び散る。虹色はやめ、炎の物理で
+	# 色を絞る=若く速い火花ほど白熱、散り際・古い火花ほどオレンジに冷める。
+	# 各火花は「暗縁+明芯」で背景非依存。散り方の種は衝突時点の回転量と高さから作り
+	# (アニメ中不変=バウンド毎に別の散り方)、ビュー状態レスでロールバック安全
 	var spin_imp := ViewTransform.to_px(state.ball_spin) - dir * dist
 	var seed := absi(int(roundf(spin_imp)) * 131 + int(roundf(impact_y)) * 31)
 	var fade := 1.0 - u
-	for i in 16:
+	for i in 14:
 		var h1 := float(posmod(seed + i * 2654435761, 4096)) / 4096.0  # 角度用
 		var h2 := float(posmod(seed * 3 + i * 1597334677, 4096)) / 4096.0  # 速さ用
-		var h3 := float(posmod(seed * 7 + i * 805459861, 4096)) / 4096.0  # 色/垂れ用
+		var h3 := float(posmod(seed * 7 + i * 805459861, 4096)) / 4096.0  # 垂れ用
 		var ang := center_angle + (h1 - 0.5) * 2.6
-		var spd := 30.0 + 52.0 * h2
+		var spd := 34.0 + 58.0 * h2
 		var d := Vector2(cos(ang), sin(ang))
 		var dist_now := spd * ease_out
 		var droop := 26.0 * u * u * (0.4 + h3)  # 重力で垂れる
 		var head := center + d * dist_now + Vector2(0.0, droop)
-		var tail := center + d * maxf(dist_now - 7.0 - 5.0 * fade, 0.0) + Vector2(0.0, droop * 0.8)
-		var hue := fmod(h3 + float(i) / 16.0 + u * 0.25, 1.0)
-		c.draw_line(tail, head, Color.from_hsv(hue, 0.85, 1.0, fade * 0.95), 2.0)
+		var tail := center + d * maxf(dist_now - 8.0 - 6.0 * fade, 0.0) + Vector2(0.0, droop * 0.8)
+		# 温度: 速い火花(h2大)ほど白熱、遅い火花はオレンジ。時間が経つほど全体が
+		# 冷めてオレンジ→赤へ(炎の物理)。heat=1で白、0で赤オレンジ
+		var heat := clampf(h2 * 0.7 * (1.0 - u * 0.7), 0.0, 1.0)
+		var spark := Color(1.0, 0.4 + 0.55 * heat, 0.1 + 0.55 * heat)
+		c.draw_line(tail, head, Color(FX_OUTLINE, fade * 0.8), 4.0)  # 暗縁
+		c.draw_line(tail, head, Color(spark, fade * 0.95), 2.0)      # 明芯
+		# 火花の先端は白く光る玉(発光の芯)
 		if fade > 0.3:
-			c.draw_circle(head, 1.5, Color.from_hsv(hue, 0.55, 1.0, fade))
+			c.draw_circle(head, 2.5, Color(1.0, 0.85, 0.6, fade * 0.5))
+			c.draw_circle(head, 1.3, Color(1.0, 1.0, 0.9, fade * 0.95))
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブトスの軌跡プレビュー(2段階サーブの1段目)。simの_try_serveと同じ式:
