@@ -48,8 +48,8 @@ var _flash: Array[int] = [0, 0, 0, 0]  # 被弾白フラッシュの残りフレ
 var _ball_hist: Array[Vector2] = []    # 残像トレイル用のボール位置履歴
 var _sfx: Dictionary = {}              # 仮SE(自前合成WAV)。無ければ黙って鳴らさない
 const FX_LIFE := {"jump": 0.28, "land": 0.30, "dash": 0.25, "brake": 0.32,
-	"ring": 0.25, "attack": 0.22, "just": 0.42, "kiran": 0.30, "smear": 0.16,
-	"block": 0.28, "score": 0.55}
+	"ring": 0.25, "attack": 0.22, "just": 0.50, "kiran": 0.30, "smear": 0.16,
+	"block": 0.36, "score": 0.62}
 const KIRAN_MIN_H_FP := 120 << 16  # 頂点キランを出す最低高度(床から120px、fp)
 # ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
@@ -411,6 +411,22 @@ func _fx_rect(c: CanvasItem, pos: Vector2, sz: Vector2, col: Color, a: float) ->
 	c.draw_rect(Rect2(pos - Vector2.ONE, sz + Vector2(2, 2)), Color(FX_OUTLINE, a))
 	c.draw_rect(Rect2(pos, sz), Color(col, a))
 
+# 飛散する破片: 中心から放射状にcount個の小片が、イーズアウトで外へ飛びつつ
+# 重力で少し落ち、縮小しながら消える(ROUNDS風の「抜け」のある爆発の核)。
+# 方向はseed(発火フレーム)から決定的に散らす=Math.random不要でロールバック安全
+func _fx_shards(c: CanvasItem, pos: Vector2, t: float, col: Color,
+		count: int, reach: float, seed: int) -> void:
+	var ease := 1.0 - pow(1.0 - t, 2.5)  # イーズアウト(出だし速く、末で減速)
+	var a := pow(1.0 - t, 1.5)           # 末に向けて加速度的に消える
+	for k in count:
+		var h := (seed * 2654435761 + k * 40503) & 0xFFFF
+		var ang := float(h) / 65536.0 * TAU
+		var dist := reach * (0.6 + 0.4 * float((h >> 3) & 7) / 7.0)
+		var off := Vector2.from_angle(ang) * dist * ease
+		off.y += ease * ease * 6.0  # 重力で軌道が少し垂れる
+		var sz := maxf(1.0, 3.5 - 2.5 * t)  # 序盤は大きく、末で1pxまで縮んで抜ける
+		_fx_rect(c, (pos + off).round(), Vector2(sz, sz), col, 0.9 * a)
+
 func _draw_one_shots(c: CanvasItem) -> void:
 	# ワンショットFXの描画: 膨張→拡散→フェード。円でなくピクセルにスナップした
 	# 小矩形で描く(ドット絵の質感を守る)。tは0..1の寿命進行。
@@ -465,16 +481,23 @@ func _draw_one_shots(c: CanvasItem) -> void:
 						(pos + v * (16.0 + 14.0 * t)).round(),
 						Color(1.0, 1.0, 0.85), 1.0, 0.9 * a)
 			"just":
-				# ジャストミート: 8方向の放射光+炸裂リング(祝祭の瞬間)。
-				# ボール半径14pxの外から始めないとスプライトに埋もれる
+				# ジャストミート=多層爆発(ROUNDS風の抜けのある弾け):
+				# 中心の白い閃光コア+衝撃波リング2枚+8方向の放射光+飛散破片。
+				# 消える時は破片が縮小して抜ける。ボール半径14pxの外から放射する
+				if t < 0.35:
+					_fx_dot(c, pos.round(), 10.0 * (1.0 - t / 0.35),
+						Color(1.0, 1.0, 0.92), 0.95)
 				for k in 8:
 					var ang2 := float(k) * TAU / 8.0
 					var v2 := Vector2.from_angle(ang2)
 					_fx_line(c, (pos + v2 * (12.0 + 22.0 * t)).round(),
 						(pos + v2 * (22.0 + 30.0 * t)).round(),
 						Color(1.0, 0.8, 0.25), 2.0, 0.95 * a)
-				_fx_arc(c, pos.round(), 15.0 + 26.0 * t, 0.0, TAU,
+				_fx_arc(c, pos.round(), 15.0 + 30.0 * t, 0.0, TAU,
 					Color(1.0, 1.0, 0.9), 2.0, 0.85 * a, 28)
+				_fx_arc(c, pos.round(), 8.0 + 44.0 * t, 0.0, TAU,
+					Color(1.0, 0.7, 0.2), 1.0, 0.6 * a, 28)
+				_fx_shards(c, pos, t, Color(1.0, 0.85, 0.4), 10, 34.0, e["f0"])
 			"kiran":
 				# トス頂点の目印: 4方向に伸びて縮む十字の輝き(ここで打て!の合図)
 				var s4 := 3.0 + 5.0 * sin(t * PI)
@@ -490,19 +513,26 @@ func _draw_one_shots(c: CanvasItem) -> void:
 				_fx_arc(c, pos.round(), 14.0, a0, a0 + sweep,
 					Color(1.0, 1.0, 1.0), 2.0, 0.55 * a, 12)
 			"block":
-				# ブロック成功: バチンと弾けるXの火花
+				# ブロック成功: バチンと弾けるXの火花+短い衝撃波+少量の破片
+				if t < 0.3:
+					_fx_dot(c, pos.round(), 5.0 * (1.0 - t / 0.3),
+						Color(1.0, 1.0, 1.0), 0.95)
 				for k in 4:
 					var v5 := Vector2.from_angle(float(k) * TAU / 4.0 + TAU / 8.0)
 					_fx_line(c, (pos + v5 * (4.0 + 8.0 * t)).round(),
 						(pos + v5 * (12.0 + 12.0 * t)).round(),
 						Color(1.0, 0.9, 0.4), 2.0, 0.95 * a)
-				_fx_dot(c, pos.round(), 3.0 * (1.0 - t), Color(1.0, 1.0, 1.0), 0.9 * a)
+				_fx_arc(c, pos.round(), 6.0 + 20.0 * t, 0.0, TAU,
+					Color(1.0, 0.95, 0.7), 1.0, 0.6 * a, 20)
+				_fx_shards(c, pos, t, Color(1.0, 0.9, 0.5), 5, 20.0, e["f0"])
 			"score":
-				# 得点の瞬間: 落下点から金色のリングが大きく広がる
-				_fx_arc(c, pos.round(), 6.0 + 44.0 * t, 0.0, TAU,
+				# 得点=金色の多層バースト: 二重の衝撃波リング+放射状に飛散する破片。
+				# 大きく広がってから破片が縮小して抜ける(得点の余韻)
+				_fx_arc(c, pos.round(), 6.0 + 48.0 * t, 0.0, TAU,
 					Color(1.0, 0.85, 0.3), 2.0, 0.8 * a, 32)
-				_fx_arc(c, pos.round(), 3.0 + 30.0 * t, 0.0, TAU,
+				_fx_arc(c, pos.round(), 3.0 + 32.0 * t, 0.0, TAU,
 					Color(1.0, 1.0, 0.85), 1.0, 0.5 * a, 24)
+				_fx_shards(c, pos, t, Color(1.0, 0.88, 0.4), 12, 40.0, e["f0"])
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
 	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
