@@ -211,6 +211,30 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	p.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
 
+func test_support_zone_complements_human_mate() -> void:
+	# 相方が操作キャラの時、CPUは相方の居ない前後ゾーンを守る
+	# (相方に張り付いて随伴しない)
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.controlled_l = 0
+	var cpu = s.players[1]
+	cpu.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ROLES | SimCpu.AB_ATTACK)
+	# ボールは操作キャラ(slot0)のすぐ側=レシーバーは相方、CPUは支援位置へ
+	s.players[0].x = FP.from_int(200)  # 相方は前衛圏(ネット224の近く)
+	s.ball_x = FP.from_int(200)
+	s.ball_y = FP.from_int(150)
+	cpu.x = FP.from_int(157)
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_LEFT, "相方が前なのでCPUは後衛位置へ下がる")
+	# 相方が後衛に居るならCPUは前衛位置(ネット-48=176)へ
+	s.players[0].x = FP.from_int(60)
+	s.ball_x = FP.from_int(60)
+	cpu.x = FP.from_int(120)
+	input = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_RIGHT, "相方が後ろなのでCPUは前衛位置へ出る")
+
 func test_no_jump_at_serve_in_flight() -> void:
 	# サーブ打球がまだネットを越えていない間(serve_flight)は、味方の上げ球と
 	# 同じ観測条件でもジャンプアタックしない(サーブに跳びつく誤反応の抑止)

@@ -323,12 +323,13 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		and _roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS)
 	if miss_roll:
 		land_x += -reach * 3 / 4 if team == 0 else reach * 3 / 4
+	var mate_slot: int = 1 - idx % 2
+	var mate = s.players[team * 2 + mate_slot]
+	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
 	# 役割分担: 落下点に近い方がレシーバー。人間の相方が同じ球を追えるなら譲る
 	# (人間とのお見合い衝突は事故なのでCPU側が広めに退く)
 	var receiver := true
 	if ab & AB_ROLES:
-		var mate_slot: int = 1 - idx % 2
-		var mate = s.players[team * 2 + mate_slot]
 		var my_d: int = absi(p.x - land_x)
 		var mate_d: int = absi(mate.x - land_x)
 		# 担当の相補分割(margin=リーチ1/4)。操作スロット側は境界を含めて広く取り、
@@ -336,7 +337,6 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		# 「両者譲り」のデッドロックも「両者突進」のお見合いも構造的に起きない。
 		# 人間が操作している時はこの margin が「人間優先の譲り」として働き、
 		# 人間がボール方向へ移動中ならさらに広く譲る
-		var controlled: int = s.controlled_l if team == 0 else s.controlled_r
 		var margin: int = reach / 4
 		if idx % 2 == controlled:
 			receiver = my_d <= mate_d + margin
@@ -347,10 +347,18 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var input: int
 	if receiver:
 		input = _walk_to(p, land_x, deadzone)
+	elif mate_slot == controlled:
+		# 相方が操作キャラ(=人間の可能性が高い)なら前後ゾーン分担で支える:
+		# 相方が前衛圏(ネット寄り1/4)に居れば自分は後衛位置、居なければ前衛位置。
+		# 人間に張り付いて随伴する動き(守備カバー24px)は窮屈なのでやめる
+		var front_x: int = cfg.net_x - FP.from_int(48) if team == 0 \
+			else cfg.net_x + FP.from_int(48)
+		var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
+		input = _walk_to(p, _spawn_x(team * 2, cfg) if mate_is_front else front_x, deadzone)
 	else:
 		var support_x: int
 		if receiving:
-			# 守備時のカバー: レシーバーのネット寄り24pxに詰めて並び、後逸・ミスを拾う。
+			# CPU同士の守備カバー: レシーバーのネット寄り24pxに詰めて後逸・ミスを拾う。
 			# 単独レシーバー制は相方のミス1回が即失点になる(役割分担が冗長性を壊す)
 			# ため、受けの局面は必ず2人で狭く挟む。カバーの立ち位置は精密に
 			# (deadzone半分)取らないと網の外に立ってしまう
