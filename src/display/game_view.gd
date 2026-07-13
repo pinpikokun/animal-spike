@@ -12,13 +12,13 @@ const InputPoll := preload("res://src/display/input_poll.gd")
 
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒットの手続き演出)
-# ボールのへしゃげ(原作: アタック時は弾が潰れて速い)。速度がV0(px/tick)を
-# 超えると進行方向に伸び垂直に潰れ始め、V1で最大MAXまで潰れる。
-# スパイク級(約9px/tick)から発動し、通常の浮遊球では真円のまま
-const SQUASH_V0 := 11.5
-const SQUASH_V1 := 17.0
+# ボールのへしゃげ(原作: アタック時は弾が潰れて速い)。強度指標は
+# |横速度| + 下向き速度x0.6: 上昇中のトスは横が無いかぎり潰れず、
+# 通常アタックは軽く、パワーボールは最大まで潰れる=威力の緩急
+const SQUASH_V0 := 8.5
+const SQUASH_V1 := 16.0
 const SQUASH_MAX := 0.30
-const SQUASH_VY_W := 0.6  # 縦速度の寄与を下げる(トスは縦に速いだけ=潰れない)
+const SQUASH_VY_W := 0.6  # 下向き速度の寄与率
 
 var cfg
 var state
@@ -157,8 +157,7 @@ func _sync_sprites() -> void:
 	# へしゃげ: 速度がスパイク級のとき進行方向に伸び垂直に潰れる。
 	# sim速度から毎フレーム導出しビューに状態を持たない(ロールバック安全)
 	var bv := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))
-	# 強度は横速度重視: 通常スパイクはわずか、パワーボールが大きく潰れる=威力の緩急
-	var sq_speed := Vector2(bv.x, bv.y * SQUASH_VY_W).length()
+	var sq_speed := absf(bv.x) + maxf(bv.y, 0.0) * SQUASH_VY_W
 	var squash := clampf((sq_speed - SQUASH_V0) / (SQUASH_V1 - SQUASH_V0), 0.0, 1.0) * SQUASH_MAX
 	if squash > 0.01 and state.phase != SimState.PHASE_SERVE:
 		_ball.rotation = bv.angle()

@@ -363,8 +363,11 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 			support_x = _spawn_x(idx, cfg)
 		input = _walk_to(p, support_x, deadzone)
 	# ジャンプアタック: 自チームの上げ球へ会合できるなら跳ぶ。ミス抽選が出た
-	# タッチでは跳ばない(=1拍遅れる、という惜しい失敗)
+	# タッチでは跳ばない(=1拍遅れる、という惜しい失敗)。
+	# サーブ打球が飛行中(serve_flight)は「上げ球」ではないので跳ばない
+	# (味方がサーブに跳びついてトスし返す誤反応の抑止)
 	if (ab & AB_ATTACK) and p.on_ground == 1 and p.stun == 0 and not miss_roll \
+			and s.serve_flight == 0 \
 			and s.last_touch_team == team and s.touches < cfg.max_touches:
 		var meet_limit: int = reach
 		if (ab & AB_SWEET) and _sweet_ok(s, idx, prof):

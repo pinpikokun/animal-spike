@@ -154,6 +154,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
 	s.serve_pow = 100
 	s.serve_tossed = 0
+	s.serve_flight = 0
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for p in s.players:
 		p.stun = 0
@@ -285,9 +286,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
 		_apply_hit(s, best_i, cfg, winner_input, best_d2)
 		if serve_strike:
-			# サーブの打撃が成立した瞬間にラリー開始
+			# サーブの打撃が成立した瞬間にラリー開始。ネットを越えるまでは
+			# serve_flightを立て、味方CPUのジャンプアタック誤反応を抑える
 			s.phase = SimStateScript.PHASE_RALLY
 			s.serve_tossed = 0
+			s.serve_flight = 1
 
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
@@ -506,5 +509,6 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
 	elif was_left != is_left:
-		# ネット上空を越えた: 攻守交代なのでタッチ数リセット
+		# ネット上空を越えた: 攻守交代なのでタッチ数リセット。サーブ打球も渡り切り
 		s.touches = 0
+		s.serve_flight = 0

@@ -38,6 +38,9 @@ var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPU
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
 var serve_tossed: int = 0  # 2段階サーブ: 0=構え(照準中)、1=トス済み(打撃待ち)
+# 1=サーブ打球がまだ最初のネット越えをしていない。物理には影響せず、
+# 味方CPUが「上げ球だ」と誤認してサーブにジャンプするのを抑えるためにAIが読む
+var serve_flight: int = 0
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -79,6 +82,7 @@ func to_int_array() -> Array[int]:
 	out.append(serve_aim)
 	out.append(serve_pow)
 	out.append(serve_tossed)
+	out.append(serve_flight)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -119,6 +123,7 @@ func load_int_array(arr: Array) -> void:
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
 	serve_tossed = arr[k]; k += 1
+	serve_flight = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1

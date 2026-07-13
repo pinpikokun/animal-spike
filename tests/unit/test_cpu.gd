@@ -211,6 +211,26 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	p.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
 
+func test_no_jump_at_serve_in_flight() -> void:
+	# サーブ打球がまだネットを越えていない間(serve_flight)は、味方の上げ球と
+	# 同じ観測条件でもジャンプアタックしない(サーブに跳びつく誤反応の抑止)
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 0
+	s.touches = 1
+	var p = s.players[1]
+	p.x = FP.from_int(176)
+	s.ball_x = p.x
+	s.ball_y = cfg.floor_y - FP.from_int(160)
+	s.ball_vy = 0
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK)
+	s.serve_flight = 1
+	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "サーブ飛行中は跳ばない")
+	s.serve_flight = 0
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "越えた後は通常通り跳ぶ")
+
 func test_reaction_delay_freezes_movement() -> void:
 	# 相手の打球直後、遅延tickの間は移動しない(0tick超反応の禁止)。遅延後は動く
 	var w := _world()
