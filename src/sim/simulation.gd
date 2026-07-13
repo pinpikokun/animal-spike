@@ -239,6 +239,9 @@ static func _check_floor_point(s, cfg) -> void:
 		return
 	if s.ball_y < cfg.floor_y - cfg.ball_radius:
 		return
+	# 着地したらパワーボールを解除=通常ボールに戻す(レシーブ時と同様)。
+	# ポーズ中のバウンドで熱色や残像トレイルが残らないようにする
+	s.ball_power = 0
 	var landed_left: bool = s.ball_x < cfg.net_x
 	_award_point(s, 1 if landed_left else 0, cfg)
 
@@ -394,10 +397,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
 			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
-			# スローモーション18tick(1/3速=実0.3秒ぶんを0.9秒かけて魅せる)でボールが
-			# 撃ち出される様をスロー再生する(スマブラの決めカット)。
+			# スローモーション12tick(1/3速)でボールが撃ち出される様をスロー再生する。
+			# 18tickは過剰との指摘で12へ短縮(スマブラの決めカットより軽め)
 			s.hit_freeze = maxi(s.hit_freeze, 5)
-			s.slow_ticks = maxi(s.slow_ticks, 18)
+			s.slow_ticks = maxi(s.slow_ticks, 12)
 		else:
 			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
 			s.hit_freeze = maxi(s.hit_freeze, 4)

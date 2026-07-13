@@ -43,12 +43,17 @@ static func _particle(kd: Dictionary, pos0: Vector2, base_dir: float, inertia: V
 	if lt >= 1.0:
 		return [Vector2.ZERO, 0.0, false, 0.0, 1.0, 0.0]
 	var ease := 1.0 - pow(1.0 - lt, 2.0)
-	var ang: float = base_dir + (hv(seed, i, 1) - 0.5) * float(kd["spread"])
+	# 発生ごとの"揺らぎ"(粒indexに依存しないseed由来の乱数)。丸の見た目は変えず
+	# 「塊全体の広がり・傾き・飛距離」だけを毎回散らして同じ煙に見えなくする
+	var ev_spread := 0.5 + 1.0 * hv(seed, 900, 0)   # 扇の広がり倍率(0.5〜1.5)
+	var ev_bias := (hv(seed, 900, 1) - 0.5) * 1.0   # 扇の傾き(左右の偏り, ±0.5rad)
+	var ev_reach := 0.6 + 0.8 * hv(seed, 900, 2)    # 飛距離倍率(0.6〜1.4)
+	var ang: float = base_dir + ev_bias + (hv(seed, i, 1) - 0.5) * float(kd["spread"]) * ev_spread
 	var spd_n: float = hv(seed, i, 2)
 	var big: float = hv(seed, i, 3)
 	# 散開距離はキャラ(~48px)を大きく超えない範囲に抑える(以前の約1/3)。
 	# 横移動でコート半分まで飛ぶ・ジャンプ煙が頭を越えるのを防ぐ
-	var reach := (5.0 + 15.0 * spd_n) * (1.2 - 0.6 * big) * float(kd.get("reach_mul", 1.0))
+	var reach := (5.0 + 15.0 * spd_n) * (1.2 - 0.6 * big) * float(kd.get("reach_mul", 1.0)) * ev_reach
 	var scatter := Vector2.from_angle(ang) * reach * ease
 	var inert := inertia * (lt * 2.5) * float(kd["ink"])  # 慣性の流れをさらに半分に
 	var grav := Vector2(0.0, float(kd["grav"]) * 0.35 * lt * lt)
@@ -71,6 +76,10 @@ static func expired(kind: String, f0: int, cur_frame: int) -> bool:
 static func _seed(kind: String, f0: int) -> int:
 	return f0 * 131 + hash(kind) % 997
 
+# 発生ごとの粒数(基準の0.7〜1.3倍)。丸の見た目は不変、密度だけ毎回変える
+static func _count(kd: Dictionary, seed: int) -> int:
+	return maxi(3, int(round(float(kd["n"]) * (0.55 + 0.9 * hv(seed, 900, 3)))))
+
 # 不透明の丸/楕円(本体)を通常合成レイヤーに描く。opaque/glowでレイヤーを分けるのは
 # 丸=不透明(加算だと透ける)、火花=加算発光、を正しく合成するため
 static func draw_opaque(c: CanvasItem, kind: String, pos: Vector2, base_dir: float,
@@ -84,7 +93,7 @@ static func draw_opaque(c: CanvasItem, kind: String, pos: Vector2, base_dir: flo
 	var seed := _seed(kind, f0)
 	var col: Color = kd["col"]
 	var bw := float(BLOB.get_width())
-	for i in int(kd["n"]):
+	for i in _count(kd, seed):
 		var r := _particle(kd, pos, base_dir, inertia, seed, i, t, ground_y)
 		if not r[2]:
 			continue
@@ -104,7 +113,7 @@ static func draw_glow(c: CanvasItem, kind: String, pos: Vector2, base_dir: float
 		return
 	var seed := _seed(kind, f0)
 	var gw := float(GLOW.get_width())
-	for i in int(kd["n"]):
+	for i in _count(kd, seed):
 		var spd_n := hv(seed, i, 2)
 		if spd_n < 0.5:
 			continue  # 遅い中心粒には輝きを乗せない

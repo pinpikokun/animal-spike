@@ -266,11 +266,7 @@ func _detect_fx() -> void:
 		if impact > 0.0:
 			_shake_amp = maxf(_shake_amp, 1.5 + 2.0 * impact)
 	_prev_bground = bground
-	# トスの頂点キラン: 上昇から落下に転じた瞬間、高い球にだけ光る(打つ目印)
-	if _prev_bvy < 0 and state.ball_vy >= 0 and state.phase == SimState.PHASE_RALLY \
-			and state.ball_y < cfg.floor_y - KIRAN_MIN_H_FP:
-		_spawn_fx("kiran", bpos)
-	_prev_bvy = state.ball_vy
+	# (トス頂点のキランは廃止=ユーザー指定で不要)
 	_prev_power = state.ball_power
 	# 得点の瞬間: 落下点に金色のバースト
 	var score_now := Vector2i(state.score_l, state.score_r)
@@ -482,9 +478,14 @@ func _draw_ball_trail(c: CanvasItem) -> void:
 	var bw := float(FxParticles.BLOB.get_width())
 	for k in range(maxi(1, n - 7), n - 1):
 		var u := float(k - (n - 7)) / 7.0  # 後方(古い)ほど0=小さく、先頭ほど1=大きく
-		var sz := (2.8 + 6.4 * u) * FxParticles.SIZE_SCALE  # 残像の丸を2倍に
-		# 普通の円バージョン(楕円に寝かせない)。楕円版が良ければelongを戻す
-		c.draw_set_transform(_ball_hist[k], 0.0, Vector2(sz, sz) / bw)
+		# 土煙と同じ揺らぎ: 各残像の丸をサイズ・位置とも毎回散らす(位置で決まる決定論乱数)。
+		# 丸の描画自体は不変=均一な尾でなく生きた煙のような尾になる
+		var pos := _ball_hist[k]
+		var seed := int(pos.x) * 131 + int(pos.y) * 977
+		var sz_j := 0.6 + 0.8 * FxParticles.hv(seed, k, 0)   # サイズ0.6〜1.4倍
+		var sz := (2.8 + 6.4 * u) * FxParticles.SIZE_SCALE * sz_j
+		var off := Vector2(FxParticles.hv(seed, k, 1) - 0.5, FxParticles.hv(seed, k, 2) - 0.5) * 5.0
+		c.draw_set_transform(pos + off, 0.0, Vector2(sz, sz) / bw)
 		c.draw_texture(FxParticles.BLOB, -FxParticles.BLOB.get_size() * 0.5, col)
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
