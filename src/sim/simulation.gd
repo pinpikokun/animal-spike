@@ -485,6 +485,53 @@ static func _step_ball(s, cfg) -> void:
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
 	_ball_vs_net(s, cfg, prev_x)
+	_ball_vs_block(s, cfg)
+
+# ブロック: ネット際(60px圏)で空中にいる体は相手の打球に対して壁になる。
+# 入力不要=ジャンプそのものが防御になる(スパイクvsブロックの読み合いの核)。
+# 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
+# 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
+# サーブは飛行中ブロック不可(バレーのルール準拠)。ボールのパワーは
+# ブロックでは消費されない(自分のメテオが跳ね返ってくるスリルは残す)
+static func _ball_vs_block(s, cfg) -> void:
+	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+		return
+	if s.last_touch_team < 0:
+		return
+	var zone: int = FP.from_int(60)
+	for i in s.players.size():
+		var team: int = team_of(i)
+		if team == s.last_touch_team:
+			continue  # 自チームの打球は自分たちの体に当たらない(空中戦の自滅防止)
+		var p = s.players[i]
+		if p.on_ground == 1 or p.stun > 0 or p.hit_cooldown > 0:
+			continue
+		if absi(p.x - cfg.net_x) > zone:
+			continue
+		# ボールが自陣へ向かって飛んでいる時だけ(離れる球に壁は要らない)
+		var dir_in: int = -1 if team == 0 else 1
+		if s.ball_vx == 0 or signi(s.ball_vx) != dir_in:
+			continue
+		# 手のひらゾーン: 頭上(reach_up)中心の小さい楕円(横reach/2、縦reach_up/2)
+		var cx: int = p.x
+		var cy: int = p.y - cfg.player_reach_up
+		var rx: int = cfg.player_reach / 2
+		var ry: int = cfg.player_reach_up / 2
+		var dx: int = s.ball_x - cx
+		var dy_n: int = (s.ball_y - cy) * rx / ry
+		if dx * dx + dy_n * dy_n > rx * rx:
+			continue
+		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+		if team == 0:
+			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
+		else:
+			s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
+		s.last_touch_team = team
+		s.touches = 0  # ブロックはタッチ数に数えない(バレー準拠)
+		s.last_hit_tick = s.tick
+		p.hit_cooldown = cfg.hit_cooldown_ticks
+		s.hit_freeze = maxi(s.hit_freeze, 2)
+		return
 
 static func _step_ball_loose(s, cfg) -> void:
 	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる

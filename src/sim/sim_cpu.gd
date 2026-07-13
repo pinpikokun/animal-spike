@@ -20,6 +20,7 @@ const AB_ROLES := 2      # 役割分担(落下点に近い方がレシーバー�
 const AB_ATTACK := 4     # 味方が上げた球へジャンプ会合してアタック
 const AB_SWEET := 8      # アタックはジャストミート(スイートスポット)を狙う
 const AB_SERVE_VAR := 16 # サーブの角度・威力を決定論的に散らす
+const AB_BLOCK := 32     # 相手のネット際アタックに対しネットへ詰めて跳ぶ(ブロック)
 
 # プロファイルの欄(8bitずつ)
 const P_AB := 0      # 能力フラグ
@@ -42,9 +43,9 @@ const PRESET_NORMAL := AB_PREDICT | (14 << P_DELAY) | (25 << P_AIM) | (26 << P_M
 # 強にはアタック(攻撃の上積み)を先に与える。役割分担は最強専用:
 # KPI計測でROLES(単独レシーバー制)は攻撃力の裏付けなしでは2人収束の冗長性に
 # 劣ると判明したため(普通>強の逆転)、順序を能力の実効値で決めている
-const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR) | (10 << P_DELAY) | (15 << P_AIM) \
-	| (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
-const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR) \
+const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK) | (10 << P_DELAY) \
+	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
+const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK) \
 	| (6 << P_DELAY) | (5 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
 const PRESETS: Array[int] = [PRESET_WEAK, PRESET_NORMAL, PRESET_STRONG, PRESET_MAX]
 
@@ -263,7 +264,11 @@ static func decide(s, idx: int, cfg) -> int:
 	var input: int = 0
 	if not frozen:
 		if not on_own_side:
-			input = _walk_to(p, _spawn_x(idx, cfg), deadzone)
+			# 相手コートにボール=守備局面。ブロック能力があれば相手アタッカーの
+			# ネット際ジャンプに反応してネットへ詰めて跳ぶ。それ以外は持ち場へ
+			input = _decide_block(s, p, cfg, team, ab, deadzone)
+			if input == 0:
+				input = _walk_to(p, _spawn_x(idx, cfg), deadzone)
 		else:
 			input = _decide_positioning(s, idx, p, cfg, team, prof, deadzone)
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
@@ -385,6 +390,30 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		if _jump_will_meet(s, p, cfg, meet_limit):
 			input |= SimInput.IN_JUMP
 	return input
+
+# ブロック迎撃: 相手アタッカーがネット際で空中+ボールが打点圏なら、
+# 自陣ネット際へ走り、着いていれば跳ぶ(体が壁になるのはsimulation._ball_vs_block)。
+# 0を返したら通常の持ち場戻りにフォールバック
+static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
+	if not (ab & AB_BLOCK) or p.stun > 0:
+		return 0
+	var reach: int = cfg.player_reach
+	for j in 2:
+		var o = s.players[(1 - team) * 2 + j]
+		if o.on_ground == 1:
+			continue
+		if absi(o.x - cfg.net_x) > FP.from_int(120):
+			continue
+		var bdx: int = s.ball_x - o.x
+		var bdy: int = s.ball_y - o.y
+		if bdx * bdx + bdy * bdy > reach * reach * 4:
+			continue  # ボールがアタッカーの打点圏にない=まだ跳ぶ局面ではない
+		var post: int = cfg.net_x - FP.from_int(20) if team == 0 \
+			else cfg.net_x + FP.from_int(20)
+		if absi(p.x - post) <= FP.from_int(24):
+			return SimInput.IN_JUMP if p.on_ground == 1 else 0
+		return _walk_to(p, post, deadzone / 2)
+	return 0
 
 static func _sweet_ok(s, idx: int, prof: int) -> bool:
 	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)

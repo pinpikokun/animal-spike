@@ -131,8 +131,8 @@ func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, t
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(21, 10, 15, 13, 153, 2, 2)
-	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 21, "能力")
+	var prof: int = SimCpu.make_profile(53, 10, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 53, "能力")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 10, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
@@ -234,6 +234,30 @@ func test_support_zone_complements_human_mate() -> void:
 	cpu.x = FP.from_int(120)
 	input = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_RIGHT, "相方が後ろなのでCPUは前衛位置へ出る")
+
+func test_cpu_jumps_to_block() -> void:
+	# ブロック能力: 相手アタッカーがネット際で空中+ボールが打点圏なら、
+	# ネット際に着いているCPUは跳ぶ
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 1
+	s.tick = 200
+	s.last_hit_tick = 100  # 反応遅延は消化済み
+	var atk = s.players[2]  # 右チームのアタッカー
+	atk.x = cfg.net_x + FP.from_int(40)
+	atk.y = cfg.floor_y - FP.from_int(140)
+	atk.on_ground = 0
+	s.ball_x = atk.x + FP.from_int(5)
+	s.ball_y = atk.y - FP.from_int(10)
+	var blk = s.players[1]  # 左チームの前衛
+	blk.x = cfg.net_x - FP.from_int(20)  # ネット際ポストに到着済み
+	blk.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_BLOCK)
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "ブロックで跳ぶ")
+	# 能力なしは跳ばない
+	blk.cpu = _prof(SimCpu.AB_PREDICT)
+	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
 
 func test_no_jump_at_serve_in_flight() -> void:
 	# サーブ打球がまだネットを越えていない間(serve_flight)は、味方の上げ球と

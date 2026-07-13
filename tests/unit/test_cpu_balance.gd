@@ -5,9 +5,10 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
 
-# KPI自動対戦ハーネス(調査doc §8)。決定論simの強み=CPU対CPUの試合結果が
-# 毎回同一なので、プリセットの強さの単調性(弱<普通<強<最強)を回帰テストにできる。
-# ノブの数値をいじって順序が壊れたらここが割れる
+# KPI自動対戦ハーネス(煙感知器)。2026-07-13ユーザー決定により方針転換:
+# CPU対CPUの厳密な単調性(弱<普通<強<最強)はゲートにしない。
+# 「CPU同士なら強>最強が起きてもいい。対人間で最強が一番強ければいい」。
+# ここで守るのは(1)全プリセットが弱に勝ち越す (2)試合が止まらない、の2点だけ
 
 const MAX_TICKS := 120000  # 3点先取なら余裕(無限ラリー・進行停止の検出も兼ねる)
 
@@ -42,13 +43,13 @@ func _series(prof_a: int, prof_b: int) -> Array[int]:
 		diff_b += (m1[2] - m1[1]) + (m2[1] - m2[2])
 	return [wins_b, diff_b]
 
-func test_preset_strength_is_monotonic() -> void:
-	# 隣接プリセット間の強さの単調性(調査doc §8のKPI)。4試合中、強い側が
-	# 勝ち越すこと(同数勝ちなら得点差で上回ること)。ノブ調整で割れたら数値を見直す
+func test_every_preset_beats_weak() -> void:
+	# 煙感知器: どのプリセットも弱には勝ち越す(強さの土台が壊れていないこと)。
+	# 隣接同士の順序はゲートにしない(対人間の強さ・面白さが本基準)
 	var pairs := [
 		[SimCpu.PRESET_WEAK, SimCpu.PRESET_NORMAL, "普通>弱"],
-		[SimCpu.PRESET_NORMAL, SimCpu.PRESET_STRONG, "強>普通"],
-		[SimCpu.PRESET_STRONG, SimCpu.PRESET_MAX, "最強>強"],
+		[SimCpu.PRESET_WEAK, SimCpu.PRESET_STRONG, "強>弱"],
+		[SimCpu.PRESET_WEAK, SimCpu.PRESET_MAX, "最強>弱"],
 	]
 	for pr in pairs:
 		var r := _series(pr[0], pr[1])

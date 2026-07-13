@@ -253,6 +253,60 @@ func test_just_receive_holds_aim() -> void:
 	var expect: int = FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den
 	check_eq(s.ball_vx, expect, "真上トスの横ブレがjust慣性分だけに収まる")
 
+func test_block_reflects_opponent_shot() -> void:
+	# ネット際で空中の体は相手の打球に対して壁になる(入力不要のブロック)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]  # 左チームのブロッカー
+	p.x = cfg.net_x - FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 1  # 相手の打球
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up  # 手のひらゾーン
+	s.ball_vx = -FP.from_int(8)  # 左(自陣)へ向かう強打
+	s.ball_vy = FP.from_int(6)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "ブロックで打球が跳ね返る")
+	check_eq(s.last_touch_team, 0, "跳ね返した球はブロッカー側の球になる")
+	check_eq(s.touches, 0, "ブロックはタッチ数に数えない")
+
+func test_own_shot_is_not_blocked() -> void:
+	# 自チームの打球は自分たちの空中の体に当たらない(空中戦の自滅防止)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.x = cfg.net_x - FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 0  # 自チームの打球
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(8)
+	var before_vx: int = s.ball_vx
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx < 0, "自チームの球は体を素通りする")
+	check_eq(s.ball_vx, before_vx, "速度も変わらない(重力以外)")
+
+func test_serve_cannot_be_blocked() -> void:
+	# サーブ飛行中の打球はブロック不可(バレーのルール準拠)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.serve_flight = 1
+	var p = s.players[2]  # 右チームのブロッカー
+	p.x = cfg.net_x + FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 0
+	s.ball_x = p.x - FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = FP.from_int(8)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "サーブはブロックされず通り抜ける")
+
 func test_receiving_power_ball_damages_guard() -> void:
 	# パワーボールを(スイート外で)受けるとヒットは成立し、耐久力が削れる
 	var w := _rally_world()
