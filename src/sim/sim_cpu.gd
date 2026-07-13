@@ -214,7 +214,9 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 			dir * cfg.spike_steep_vx - rvx, cfg.spike_steep_vy - rvy])
 		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
 			dir * cfg.spike_vx - rvx, cfg.spike_vy - rvy])
-	cands.append([SimInput.IN_ACTION, dir * cfg.serve_soft_vx, -cfg.serve_soft_vy])
+	# ニュートラル=軟攻フェイント(ネット際ポトリ)。着弾スコアで強打と競わせる
+	# =相手が下がっていれば自然にフェイントを選ぶ(読み合いの発生)
+	cands.append([SimInput.IN_ACTION, dir * cfg.feint_vx, -cfg.feint_vy])
 	cands.append([SimInput.IN_ACTION | fwd_key, dir * cfg.toss_fwd_vx, -cfg.toss_fwd_vy])
 	var best_input: int = SimInput.IN_ACTION
 	var best_score: int = -1

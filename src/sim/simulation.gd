@@ -406,9 +406,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		s.ball_vy = -cfg.toss_fwd_vy
 		s.ball_vx = hdir * cfg.toss_fwd_vx
 	else:
-		# 空中ニュートラル: 緩やかに相手コート方向へ送る
-		s.ball_vy = -cfg.serve_soft_vy
-		s.ball_vx = dir * cfg.serve_soft_vx
+		# 空中ニュートラル: 軟攻(フェイント)。ふわっとネット越しにポトリと落とす
+		# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
+		s.ball_vy = -cfg.feint_vy
+		s.ball_vx = dir * cfg.feint_vx
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if s.last_touch_team == team:

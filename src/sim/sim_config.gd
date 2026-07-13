@@ -51,6 +51,8 @@ var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
 var serve_soft_vy: int
+var feint_vx: int  # 軟攻(フェイント): ネット際にポトリと落とすチョン当て
+var feint_vy: int
 var serve_power: int
 var serve_toss_up: int     # 2段階サーブのトス縦速度(高い=ジャンプアタックの滞空)
 var serve_toss_range: int  # トスの最大前方距離(fp)。横速度は滞空時間から逆算=ネット到達不能
@@ -137,6 +139,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	serve_vy = FP.from_int(_int_of(raw, "serve_vy_px_s")) / tick_rate
 	serve_soft_vx = FP.from_int(_int_of(raw, "serve_soft_vx_px_s")) / tick_rate
 	serve_soft_vy = FP.from_int(_int_of(raw, "serve_soft_vy_px_s")) / tick_rate
+	feint_vx = FP.from_int(_int_of(raw, "feint_vx_px_s")) / tick_rate
+	feint_vy = FP.from_int(_int_of(raw, "feint_vy_px_s")) / tick_rate
 	serve_power = FP.from_int(_int_of(raw, "serve_power_px_s")) / tick_rate
 	serve_toss_up = FP.from_int(_int_of(raw, "serve_toss_up_px_s")) / tick_rate
 	serve_toss_range = FP.from_int(_int_of(raw, "serve_toss_range_px"))

@@ -40,6 +40,8 @@
 	"serve_vy_px_s": 480,
 	"serve_soft_vx_px_s": 280,
 	"serve_soft_vy_px_s": 560,
+	"feint_vx_px_s": 80,
+	"feint_vy_px_s": 260,
 	"serve_power_px_s": 620,
 	"serve_toss_up_px_s": 620,
 	"serve_toss_range_px": 190,
