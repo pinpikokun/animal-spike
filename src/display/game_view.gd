@@ -171,8 +171,10 @@ func _sync_sprites() -> void:
 	_detect_fx()
 	# 画面揺れ: ヒットストップ中とパワーボール直後は基準位置から細かくブレる。
 	# 表示層のみ(floatも描画フレーム由来の乱れも許される)
+	# 揺れるのは大物だけ: 気絶級の長い瞬止(>=5)かパワーボールの瞬止。
+	# 通常アタックの軽い瞬止(2tick)は止まるだけで揺らさない(ユーザー指定)
 	var shake := 0.0
-	if state.hit_freeze > 0:
+	if state.hit_freeze >= 5 or (state.hit_freeze > 0 and state.ball_power == 1):
 		shake = 2.5
 	elif state.ball_power == 1 and state.tick - state.last_hit_tick < 10:
 		shake = 1.2

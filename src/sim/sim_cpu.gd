@@ -267,10 +267,10 @@ static func decide(s, idx: int, cfg) -> int:
 	if not frozen:
 		if not on_own_side:
 			# 相手コートにボール=守備局面。ブロック能力があれば相手アタッカーの
-			# ネット際ジャンプに反応してネットへ詰めて跳ぶ。それ以外は持ち場へ
+			# ネット際ジャンプに反応してネットへ詰めて跳ぶ。それ以外は構え位置へ
 			input = _decide_block(s, p, cfg, team, ab, deadzone)
 			if input == 0:
-				input = _walk_to(p, _spawn_x(idx, cfg), deadzone)
+				input = _ready_position(s, idx, p, cfg, team, ab, deadzone)
 		else:
 			input = _decide_positioning(s, idx, p, cfg, team, prof, deadzone)
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
@@ -350,20 +350,43 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		if idx % 2 == controlled:
 			receiver = my_d <= mate_d + margin
 		else:
+			# 相方(操作キャラ)がボールへ移動中なら譲るが、止まっているなら
+			# 自分が近い時は積極的に取りに行く(譲り過ぎの見送り事故の抑制)
 			var mate_moving: bool = (mate.vx > 0 and land_x > mate.x) \
 				or (mate.vx < 0 and land_x < mate.x)
-			receiver = not mate_moving and mate_d > my_d + margin
+			if mate_moving:
+				receiver = mate_d > my_d + margin
+			else:
+				receiver = mate_d > my_d - margin
+		# 目の前(リーチ内)のボールは誰の担当だろうと必ず拾いに行く
+		if not receiver and my_d <= reach and my_d < mate_d:
+			receiver = true
 	var input: int
 	if receiver:
 		input = _walk_to(p, land_x, deadzone)
 	elif mate_slot == controlled:
 		# 相方が操作キャラ(=人間の可能性が高い)なら前後ゾーン分担で支える:
-		# 相方が前衛圏(ネット寄り1/4)に居れば自分は後衛位置、居なければ前衛位置。
-		# 人間に張り付いて随伴する動き(守備カバー24px)は窮屈なのでやめる
-		var front_x: int = cfg.net_x - FP.from_int(48) if team == 0 \
-			else cfg.net_x + FP.from_int(48)
+		# 相方が前衛圏(ネット寄り1/4)に居れば自分は後衛ゾーン、居なければ前衛ゾーン。
+		# 固定点に棒立ちせず、ゾーンの幅の中でボールの落下点を横に追い続ける
+		# (人間らしい「構えながらの小刻みな移動」が出る)
 		var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
-		input = _walk_to(p, _spawn_x(team * 2, cfg) if mate_is_front else front_x, deadzone)
+		var zmin: int
+		var zmax: int
+		if team == 0:
+			if mate_is_front:
+				zmin = FP.from_int(30)
+				zmax = cfg.net_x - cfg.court_width / 4
+			else:
+				zmin = cfg.net_x - FP.from_int(96)
+				zmax = cfg.net_x - FP.from_int(20)
+		else:
+			if mate_is_front:
+				zmin = cfg.net_x + cfg.court_width / 4
+				zmax = cfg.court_width - FP.from_int(30)
+			else:
+				zmin = cfg.net_x + FP.from_int(20)
+				zmax = cfg.net_x + FP.from_int(96)
+		input = _walk_to(p, clampi(land_x, zmin, zmax), deadzone)
 	else:
 		var support_x: int
 		if receiving:
@@ -392,6 +415,34 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		if _jump_will_meet(s, p, cfg, meet_limit):
 			input |= SimInput.IN_JUMP
 	return input
+
+# 相手コートにボールがある間の構え。棒立ちのスポーン戻りをやめ、
+# 相方が操作キャラなら前後の役割で生きた待機をする:
+# 前衛担当(相方が後ろ)=ネット際に張り付いてブロック・速攻に備える、
+# 後衛担当(相方が前)=ボールの動きを鏡写しに追って落下に先回りする(人間っぽさの核)
+static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: int) -> int:
+	var mate_slot: int = 1 - idx % 2
+	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
+	if mate_slot != controlled:
+		return _walk_to(p, _spawn_x(idx, cfg), deadzone)
+	var mate = s.players[team * 2 + mate_slot]
+	var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
+	if not mate_is_front and (ab & AB_BLOCK):
+		# 前衛担当: ネット際で待つ(ブロックの初動が1歩で済む)
+		var post: int = cfg.net_x - FP.from_int(36) if team == 0 \
+			else cfg.net_x + FP.from_int(36)
+		return _walk_to(p, post, deadzone)
+	# 後衛担当(または非ブロック型): 相手コートのボールを鏡写しで追う
+	var mirror: int = 2 * cfg.net_x - s.ball_x
+	var zmin: int
+	var zmax: int
+	if team == 0:
+		zmin = FP.from_int(30)
+		zmax = cfg.net_x - FP.from_int(40)
+	else:
+		zmin = cfg.net_x + FP.from_int(40)
+		zmax = cfg.court_width - FP.from_int(30)
+	return _walk_to(p, clampi(mirror, zmin, zmax), deadzone)
 
 # ブロック迎撃: 相手アタッカーがネット際で空中+ボールが打点圏なら、
 # 自陣ネット際へ走り、着いていれば跳ぶ(体が壁になるのはsimulation._ball_vs_block)。

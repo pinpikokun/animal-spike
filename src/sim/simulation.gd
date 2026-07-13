@@ -387,6 +387,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
 			s.hit_freeze = maxi(s.hit_freeze, 4)  # ジャストミートの瞬止(ヒットストップ)
+		else:
+			s.hit_freeze = maxi(s.hit_freeze, 2)  # 通常アタックにも軽い瞬止(揺れは無し)
 		var svx: int
 		var svy: int
 		if hdir != 0:

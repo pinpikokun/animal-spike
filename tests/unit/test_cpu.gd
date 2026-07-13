@@ -227,13 +227,13 @@ func test_support_zone_complements_human_mate() -> void:
 	s.ball_y = FP.from_int(150)
 	cpu.x = FP.from_int(157)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_LEFT, "相方が前なのでCPUは後衛位置へ下がる")
-	# 相方が後衛に居るならCPUは前衛位置(ネット-48=176)へ
+	check(input & Simulation.IN_LEFT, "相方が前なのでCPUは後衛ゾーンへ下がる")
+	# 相方が後衛に居るならCPUは前衛ゾーンへ出て、ゾーン内でボールを横に追う
 	s.players[0].x = FP.from_int(60)
 	s.ball_x = FP.from_int(60)
-	cpu.x = FP.from_int(120)
+	cpu.x = FP.from_int(90)
 	input = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "相方が後ろなのでCPUは前衛位置へ出る")
+	check(input & Simulation.IN_RIGHT, "相方が後ろなのでCPUは前衛ゾーンへ出る")
 
 func test_cpu_jumps_to_block() -> void:
 	# ブロック能力: 相手アタッカーがネット際で空中+ボールが打点圏なら、
