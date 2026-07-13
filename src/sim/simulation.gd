@@ -327,7 +327,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
-				s.hit_freeze = 8  # 気絶の瞬間は長めに止めて「効いた」を見せる
+				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
 			else:
 				p.stun = maxi(p.stun, cfg.stagger_ticks)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
@@ -386,7 +386,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
-			s.hit_freeze = maxi(s.hit_freeze, 4)  # ジャストミートの瞬止(ヒットストップ)
+			# ジャストの瞬止は6tick=100ms(スマブラの強攻撃級)。4tickでは「見せ所で
+			# 止める」(桜井)には短かった。通常2/よろけ3/ジャスト6/気絶10の威力階段
+			s.hit_freeze = maxi(s.hit_freeze, 6)
 		else:
 			s.hit_freeze = maxi(s.hit_freeze, 2)  # 通常アタックにも軽い瞬止(揺れは無し)
 		var svx: int

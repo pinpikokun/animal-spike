@@ -39,10 +39,18 @@ var _fx_events: Array = []
 var _prev_ground: Array[int] = [1, 1, 1, 1]
 var _prev_vx: Array[int] = [0, 0, 0, 0]
 var _prev_cd: Array[int] = [0, 0, 0, 0]
+var _prev_stun: Array[int] = [0, 0, 0, 0]
 var _prev_power := 0
+var _prev_bvy := 0
+var _prev_score := Vector2i.ZERO
 var _last_dust_frame: Array[int] = [-99, -99, -99, -99]
+var _flash: Array[int] = [0, 0, 0, 0]  # 被弾白フラッシュの残りフレーム
+var _ball_hist: Array[Vector2] = []    # 残像トレイル用のボール位置履歴
+var _sfx: Dictionary = {}              # 仮SE(自前合成WAV)。無ければ黙って鳴らさない
 const FX_LIFE := {"jump": 0.28, "land": 0.30, "dash": 0.25, "brake": 0.32,
-	"ring": 0.25, "attack": 0.22, "just": 0.42}
+	"ring": 0.25, "attack": 0.22, "just": 0.42, "kiran": 0.30, "smear": 0.16,
+	"block": 0.28, "score": 0.55}
+const KIRAN_MIN_H_FP := 120 << 16  # 頂点キランを出す最低高度(床から120px、fp)
 # ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
 # net_match.gdがホスト=0/クライアント=1を設定する
@@ -70,6 +78,7 @@ func _ready() -> void:
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	$Court.setup(cfg)
 	$ScoreUI.setup(cfg)
+	_setup_sfx()
 	var fox := SpriteFactory.build_fox()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
@@ -128,6 +137,21 @@ static func _depth_offset(i: int) -> Vector2:
 		return Vector2(0.0, 5.0)
 	return Vector2(0.0, -5.0)
 
+func _setup_sfx() -> void:
+	# 仮SE(tools/gen_sfx.gdが合成したWAV)。ファイルが無ければ無音のまま動く
+	for sfx_name in ["hit", "just", "block", "score"]:
+		var path := "res://assets/sfx/%s.wav" % sfx_name
+		if ResourceLoader.exists(path):
+			var pl := AudioStreamPlayer.new()
+			pl.stream = load(path)
+			pl.volume_db = -8.0
+			add_child(pl)
+			_sfx[sfx_name] = pl
+
+func _play_sfx(sfx_name: String) -> void:
+	if _sfx.has(sfx_name):
+		_sfx[sfx_name].play()
+
 func _spawn_fx(kind: String, pos: Vector2, dir: float = 0.0) -> void:
 	if _fx_events.size() >= 32:
 		_fx_events.pop_front()
@@ -155,17 +179,48 @@ func _detect_fx() -> void:
 				_spawn_fx("brake", foot, signf(float(_prev_vx[i])))
 				_last_dust_frame[i] = f
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
-			# ヒットの瞬間。ジャストは専用の炸裂、地上=リング、空中=衝撃閃光
+			# ヒットの瞬間。ジャスト=炸裂、ブロック(タッチ数0)=火花、
+			# 地上=リング、空中=衝撃閃光。空中打ちは腕の振り抜きスミアも重ねる
+			var team_dir := 1.0 if Simulation.team_of(i) == 0 else -1.0
 			if just_fired:
 				_spawn_fx("just", bpos)
+				_spawn_fx("smear", foot + Vector2(0, -14.0), team_dir)
+				_play_sfx("just")
+			elif p.on_ground == 0 and state.touches == 0:
+				_spawn_fx("block", bpos)
+				_play_sfx("block")
 			elif p.on_ground == 1:
 				_spawn_fx("ring", bpos)
+				_play_sfx("hit")
 			else:
 				_spawn_fx("attack", bpos)
+				_spawn_fx("smear", foot + Vector2(0, -14.0), team_dir)
+				_play_sfx("hit")
+		# 被弾フラッシュ: よろけ/気絶の開始フレームで白く点滅させる
+		if _prev_stun[i] == 0 and p.stun > 0:
+			_flash[i] = 14 if p.stun > cfg.stagger_ticks else 8
 		_prev_ground[i] = p.on_ground
 		_prev_vx[i] = p.vx
 		_prev_cd[i] = p.hit_cooldown
+		_prev_stun[i] = p.stun
+	# トスの頂点キラン: 上昇から落下に転じた瞬間、高い球にだけ光る
+	# (=ジャストミートを狙う目印。演出でタイミングを教える)
+	if _prev_bvy < 0 and state.ball_vy >= 0 and state.phase == SimState.PHASE_RALLY \
+			and state.ball_y < cfg.floor_y - KIRAN_MIN_H_FP:
+		_spawn_fx("kiran", bpos)
+	_prev_bvy = state.ball_vy
 	_prev_power = state.ball_power
+	# 得点の瞬間: 落下点に金色のバースト
+	var score_now := Vector2i(state.score_l, state.score_r)
+	if score_now != _prev_score:
+		if _prev_score != Vector2i.ZERO or score_now.x + score_now.y == 1:
+			_spawn_fx("score", bpos)
+			_play_sfx("score")
+		_prev_score = score_now
+	# 残像トレイル: ボール位置の履歴(描画側が速度に応じて使う)
+	_ball_hist.append(bpos)
+	if _ball_hist.size() > 10:
+		_ball_hist.pop_front()
 
 func _sync_sprites() -> void:
 	_detect_fx()
@@ -210,8 +265,13 @@ func _sync_sprites() -> void:
 			spr.rotation = lean * 0.9
 		else:
 			spr.rotation = 0.0
-		# スタン中は倒れポーズ(hurt)+薄い赤み。頭上の渦巻きはFxLayerが描く
-		if p.stun > 0:
+		# 被弾直後は白/赤の高速点滅(ダメージフラッシュ)。その後スタン中は薄い赤み。
+		# 頭上の渦巻きはFxLayerが描く
+		if _flash[i] > 0:
+			_flash[i] -= 1
+			spr.modulate = Color.WHITE if (_flash[i] / 2) % 2 == 0 \
+				else Color(1.0, 0.3, 0.3)
+		elif p.stun > 0:
 			spr.modulate = Color(1.0, 0.75, 0.75)
 		else:
 			spr.modulate = Color.WHITE
@@ -287,9 +347,40 @@ func draw_fx(c: CanvasItem) -> void:
 	if state.phase == SimState.PHASE_SERVE and state.serving_team == local_team \
 			and state.serve_tossed == 0:
 		_draw_serve_preview(c)
+	_draw_ball_shadow(c)
+	_draw_ball_trail(c)
 	_draw_one_shots(c)
 	_draw_stun_spirals(c)
 	_draw_control_marker(c)
+
+func _draw_ball_shadow(c: CanvasItem) -> void:
+	# ボールの床影(可読性): 高いほど小さく薄い。空中戦の距離感の基準になる
+	if state.phase == SimState.PHASE_SERVE and state.serve_tossed == 0:
+		return
+	var bx := ViewTransform.to_px(state.ball_x)
+	var h := ViewTransform.to_px(cfg.floor_y) - ViewTransform.to_px(state.ball_y)
+	if h < 0.0:
+		return
+	var r := clampf(9.0 - h * 0.02, 3.0, 9.0)
+	var a := clampf(0.30 - h * 0.0007, 0.06, 0.30)
+	var fy := ViewTransform.to_px(cfg.floor_y) - 1.0
+	c.draw_set_transform(Vector2(bx, fy).round(), 0.0, Vector2(1.0, 0.35))
+	c.draw_circle(Vector2.ZERO, r, Color(0.05, 0.05, 0.15, a))
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func _draw_ball_trail(c: CanvasItem) -> void:
+	# 残像トレイル: スパイク級の速度で尾を引く。パワーボールは熱色で強く
+	var spd := Vector2(ViewTransform.to_px(state.ball_vx),
+		ViewTransform.to_px(state.ball_vy)).length()
+	var powered: bool = state.ball_power == 1
+	if not powered and spd < 9.0:
+		return
+	var n := _ball_hist.size()
+	for k in range(maxi(0, n - 8), n - 1):
+		var u := float(k - (n - 8)) / 8.0  # 古いほど0
+		var col := Color(1.0, 0.55, 0.3, 0.35 * u) if powered \
+			else Color(1.0, 1.0, 1.0, 0.18 * u)
+		c.draw_circle(_ball_hist[k].round(), 2.0 + 3.0 * u, col)
 
 func _draw_one_shots(c: CanvasItem) -> void:
 	# ワンショットFXの描画: 膨張→拡散→フェード。円でなくピクセルにスナップした
@@ -353,6 +444,34 @@ func _draw_one_shots(c: CanvasItem) -> void:
 						Color(1.0, 0.8, 0.25, 0.95 * a), 2.0)
 				c.draw_arc(pos.round(), 15.0 + 26.0 * t, 0.0, TAU, 28,
 					Color(1.0, 1.0, 0.9, 0.85 * a), 2.0)
+			"kiran":
+				# トス頂点の目印: 4方向に伸びて縮む十字の輝き(ここで打て!の合図)
+				var s4 := 3.0 + 5.0 * sin(t * PI)
+				for k in 4:
+					var v4 := Vector2.from_angle(float(k) * TAU / 4.0)
+					c.draw_line(pos.round(), (pos + v4 * s4).round(),
+						Color(1.0, 1.0, 1.0, 0.9 * a), 1.0)
+			"smear":
+				# 振り抜きの弧(スミア): 打点の周りを白い弧が一瞬走る
+				var d4: float = e["d"]
+				var a0 := -1.9 if d4 > 0.0 else PI + 1.9
+				var sweep := 2.4 * (0.3 + 0.7 * t) * d4
+				c.draw_arc(pos.round(), 14.0, a0, a0 + sweep, 12,
+					Color(1.0, 1.0, 1.0, 0.55 * a), 2.0)
+			"block":
+				# ブロック成功: バチンと弾けるXの火花
+				for k in 4:
+					var v5 := Vector2.from_angle(float(k) * TAU / 4.0 + TAU / 8.0)
+					c.draw_line((pos + v5 * (4.0 + 8.0 * t)).round(),
+						(pos + v5 * (12.0 + 12.0 * t)).round(),
+						Color(1.0, 0.9, 0.4, 0.95 * a), 2.0)
+				c.draw_circle(pos.round(), 3.0 * (1.0 - t), Color(1.0, 1.0, 1.0, 0.9 * a))
+			"score":
+				# 得点の瞬間: 落下点から金色のリングが大きく広がる
+				c.draw_arc(pos.round(), 6.0 + 44.0 * t, 0.0, TAU, 32,
+					Color(1.0, 0.85, 0.3, 0.8 * a), 2.0)
+				c.draw_arc(pos.round(), 3.0 + 30.0 * t, 0.0, TAU, 24,
+					Color(1.0, 1.0, 0.85, 0.5 * a), 1.0)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
 	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
