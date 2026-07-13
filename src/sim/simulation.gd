@@ -67,6 +67,12 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	if state.hit_freeze > 0:
 		state.hit_freeze -= 1
 		return
+	# スローモーション: ジャストスマッシュ成立後、世界を1/3速で流す(スマブラの決めの間)。
+	# tickは進めて入力を1:1で消費するが、3tickに1回だけ物理を進める=決定論・ロールバック安全
+	if state.slow_ticks > 0:
+		state.slow_ticks -= 1
+		if state.slow_ticks % 3 != 0:
+			return
 	if state.phase == SimStateScript.PHASE_SERVE:
 		if state.serve_tossed == 0:
 			state.timer -= 1
@@ -160,6 +166,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.serve_tossed = 0
 	s.serve_flight = 0
 	s.hit_freeze = 0
+	s.slow_ticks = 0
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for p in s.players:
 		p.stun = 0
@@ -386,11 +393,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			pct = cfg.spike_power_pct
 			s.ball_power = 1
-			# ジャストの瞬止は6tick=100ms(スマブラの強攻撃級)。4tickでは「見せ所で
-			# 止める」(桜井)には短かった。通常2/よろけ3/ジャスト6/気絶10の威力階段
-			s.hit_freeze = maxi(s.hit_freeze, 6)
+			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
+			# スローモーション18tick(1/3速=実0.3秒ぶんを0.9秒かけて魅せる)でボールが
+			# 撃ち出される様をスロー再生する(スマブラの決めカット)。
+			s.hit_freeze = maxi(s.hit_freeze, 5)
+			s.slow_ticks = maxi(s.slow_ticks, 18)
 		else:
-			s.hit_freeze = maxi(s.hit_freeze, 2)  # 通常アタックにも軽い瞬止(揺れは無し)
+			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
+			s.hit_freeze = maxi(s.hit_freeze, 4)
 		var svx: int
 		var svy: int
 		if hdir != 0:

@@ -85,6 +85,26 @@ static func _walk_to(p, target_x: int, deadzone: int) -> int:
 		return SimInput.IN_LEFT
 	return 0
 
+# 非レシーバー時の守備ホーム。自チームの2定位置(後衛/前衛)のうち、相棒(操作キャラ)
+# に対して自分が今いる側のホームを選ぶ=相棒とボールを横切らず反対側を埋める。
+# 交差しないのでボール落下点へ吸い寄せられて再び相棒へ張り付くのを防ぐ。決定論・読み取りのみ
+static func _cover_home(p, mate, idx: int, cfg) -> int:
+	var team: int = idx / 2
+	var home_a: int = _spawn_x(team * 2, cfg)      # 後衛(壁寄り)
+	var home_b: int = _spawn_x(team * 2 + 1, cfg)  # 前衛(ネット寄り)
+	var lo: int = mini(home_a, home_b)
+	var hi: int = maxi(home_a, home_b)
+	return hi if p.x >= mate.x else lo
+
+# 非レシーバーの守備目標: 相棒と反対側のホームへ回り、最低sep(リーチ1.5倍)離す。
+# 相棒(人間)が前に出たら自分は下がる、という追従がこの1関数で決まる
+static func _cover_target(p, mate, idx: int, cfg) -> int:
+	var tx: int = _cover_home(p, mate, idx, cfg)
+	var sep: int = cfg.player_reach * 3 / 2
+	if absi(tx - mate.x) < sep:
+		tx = mate.x + sep if tx >= mate.x else mate.x - sep
+	return clampi(tx, cfg.player_reach, cfg.court_width - cfg.player_reach)
+
 # 任意の初期条件から高さtarget_yへ落ちる位置xを弾道積分で予測する。
 # max_bounce=壁反射を読む深さ(0なら放物線のみ=壁で崩せる弱いCPUになる)。
 # ネット反射は無視する簡易版(ネット直撃は稀で、外れても追い直すだけ)
@@ -249,7 +269,18 @@ static func decide(s, idx: int, cfg) -> int:
 	var ab: int = prof_byte(prof, P_AB)
 	var deadzone: int = cfg.player_reach / 2
 	if s.phase == SimStateScript.PHASE_SERVE:
-		return _decide_serve(s, idx, cfg, ab)
+		var serve_in: int = _decide_serve(s, idx, cfg, ab)
+		if serve_in != 0:
+			return serve_in
+		# サーブ準備中でも棒立ちしない: 受け手チームの味方CPUは相棒(人間)と反対側へ
+		# 陣取り直す(相棒が前に出れば下がる)。サーブ側は照準/トスに専念=そのまま
+		if team != s.serving_team:
+			var mslot: int = 1 - idx % 2
+			var ctrl: int = s.controlled_l if team == 0 else s.controlled_r
+			if mslot == ctrl:
+				var m = s.players[team * 2 + mslot]
+				return _walk_to(p, _cover_target(p, m, idx, cfg), deadzone / 2)
+		return 0
 	if s.phase == SimStateScript.PHASE_POINT_PAUSE:
 		# ポーズ中は棒立ちせず持ち場へ歩いて戻る(次ラリーの準備)
 		return _walk_to(p, _spawn_x(idx, cfg), deadzone)
@@ -361,32 +392,15 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		# 目の前(リーチ内)のボールは誰の担当だろうと必ず拾いに行く
 		if not receiver and my_d <= reach and my_d < mate_d:
 			receiver = true
+	var mate_is_human: bool = (mate_slot == controlled)
 	var input: int
 	if receiver:
+		# レシーバーは球を取る側=最短で落下点へ(スペーシングは掛けない)
 		input = _walk_to(p, land_x, deadzone)
-	elif mate_slot == controlled:
-		# 相方が操作キャラ(=人間の可能性が高い)なら前後ゾーン分担で支える:
-		# 相方が前衛圏(ネット寄り1/4)に居れば自分は後衛ゾーン、居なければ前衛ゾーン。
-		# 固定点に棒立ちせず、ゾーンの幅の中でボールの落下点を横に追い続ける
-		# (人間らしい「構えながらの小刻みな移動」が出る)
-		var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
-		var zmin: int
-		var zmax: int
-		if team == 0:
-			if mate_is_front:
-				zmin = FP.from_int(30)
-				zmax = cfg.net_x - cfg.court_width / 4
-			else:
-				zmin = cfg.net_x - FP.from_int(96)
-				zmax = cfg.net_x - FP.from_int(20)
-		else:
-			if mate_is_front:
-				zmin = cfg.net_x + cfg.court_width / 4
-				zmax = cfg.court_width - FP.from_int(30)
-			else:
-				zmin = cfg.net_x + FP.from_int(20)
-				zmax = cfg.net_x + FP.from_int(96)
-		input = _walk_to(p, clampi(land_x, zmin, zmax), deadzone)
+	elif mate_is_human:
+		# 非レシーバー×相棒が人間: 相棒と反対側のホームへ回り、空きコートを埋める。
+		# ボールを横切らないので張り付きが起きない(相棒が前へ出れば自分は下がる)
+		input = _walk_to(p, _cover_target(p, mate, idx, cfg), deadzone / 2)
 	else:
 		var support_x: int
 		if receiving:
@@ -442,7 +456,13 @@ static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: i
 	else:
 		zmin = cfg.net_x + FP.from_int(40)
 		zmax = cfg.court_width - FP.from_int(30)
-	return _walk_to(p, clampi(mirror, zmin, zmax), deadzone)
+	# 鏡写しで追いつつ、相棒(人間)とは最低sep離す(張り付き防止)
+	var mtx: int = clampi(mirror, zmin, zmax)
+	var sep: int = cfg.player_reach * 3 / 2
+	if absi(mtx - mate.x) < sep:
+		mtx = mate.x + sep if mtx >= mate.x else mate.x - sep
+	mtx = clampi(mtx, zmin, zmax)
+	return _walk_to(p, mtx, deadzone / 2)
 
 # ブロック迎撃: 相手アタッカーがネット際で空中+ボールが打点圏なら、
 # 自陣ネット際へ走り、着いていれば跳ぶ(体が壁になるのはsimulation._ball_vs_block)。

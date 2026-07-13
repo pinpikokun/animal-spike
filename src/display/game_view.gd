@@ -24,7 +24,8 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
-var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer)
+var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer、通常合成)
+var _fxg: Node2D  # 発光エフェクトレイヤー(FxGlowLayer、加算合成)
 var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
 var _ball_base_scale := 1.0  # 真円時のボール表示スケール(へしゃげの基準)
 var _ball_roll_frames := 1  # 転がりシートのフレーム数
@@ -47,9 +48,11 @@ var _last_dust_frame: Array[int] = [-99, -99, -99, -99]
 var _flash: Array[int] = [0, 0, 0, 0]  # 被弾白フラッシュの残りフレーム
 var _ball_hist: Array[Vector2] = []    # 残像トレイル用のボール位置履歴
 var _sfx: Dictionary = {}              # 仮SE(自前合成WAV)。無ければ黙って鳴らさない
-const FX_LIFE := {"jump": 0.28, "land": 0.30, "dash": 0.25, "brake": 0.32,
-	"ring": 0.25, "attack": 0.22, "just": 0.50, "kiran": 0.30, "smear": 0.16,
-	"block": 0.36, "score": 0.62}
+const FxParticles := preload("res://src/display/fx_particles.gd")
+# kiranのみ旧発光方式(タイミングUI)。粒エフェクトはFxParticles.KINDSが寿命を持つ
+const FX_LIFE := {"kiran": 0.30}
+var _prev_bvx := 0  # 壁反射検知用(ボールvxの符号反転)
+var _prev_bground := false  # ボール着地検知用
 const KIRAN_MIN_H_FP := 120 << 16  # 頂点キランを出す最低高度(床から120px、fp)
 # ローカルプレイヤーのチーム(0=左,1=右)。▽マーカーとサーブ軌跡は自チームのみ
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
@@ -111,11 +114,20 @@ func _ready() -> void:
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
 	_ball_base_scale = ball_px / float(_ball_frame_w)
 	_ball.scale = Vector2.ONE * _ball_base_scale
-	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する
+	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する。
+	# 通常レイヤー(_fx)=影/マーカー等の暗色・単色UI。
+	# 加算合成レイヤー(_fxg)=発光エフェクト(重なると白飛びして光る=ROUNDS風)
 	_fx = FxLayer.new()
 	_fx.view = self
 	_fx.z_index = 10
 	add_child(_fx)
+	_fxg = FxGlowLayer.new()
+	_fxg.view = self
+	_fxg.z_index = 11
+	var glow_mat := CanvasItemMaterial.new()
+	glow_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_fxg.material = glow_mat
+	add_child(_fxg)
 
 func _physics_process(_delta: float) -> void:
 	if external_sim:
@@ -152,49 +164,68 @@ func _play_sfx(sfx_name: String) -> void:
 	if _sfx.has(sfx_name):
 		_sfx[sfx_name].play()
 
-func _spawn_fx(kind: String, pos: Vector2, dir: float = 0.0) -> void:
+func _spawn_fx(kind: String, pos: Vector2, dir: float = 0.0,
+		inertia: Vector2 = Vector2.ZERO) -> void:
 	if _fx_events.size() >= 32:
 		_fx_events.pop_front()
-	_fx_events.append({"k": kind, "p": pos, "f0": Engine.get_frames_drawn(), "d": dir})
+	_fx_events.append({"k": kind, "p": pos, "f0": Engine.get_frames_drawn(),
+		"d": dir, "iner": inertia})
+
+func _prune_fx(f: int) -> void:
+	# 期限切れイベントを破棄。粒はFxParticles.KINDSの寿命、kiranはFX_LIFE
+	for e_i in range(_fx_events.size() - 1, -1, -1):
+		var e: Dictionary = _fx_events[e_i]
+		var k: String = e["k"]
+		var expired := false
+		if k == "kiran":
+			expired = float(f - e["f0"]) / (60.0 * FX_LIFE["kiran"]) >= 1.0
+		else:
+			expired = FxParticles.expired(k, e["f0"], f)
+		if expired:
+			_fx_events.remove_at(e_i)
 
 func _detect_fx() -> void:
 	# sim状態の1フレーム差分からエフェクト発火点を検知する。
 	# 入力は見ない(観測できるのは物理状態だけ=ネット対戦でも同じ絵になる)
 	var f := Engine.get_frames_drawn()
 	var bpos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
+	var bvel := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))
+	var up := -PI / 2.0
 	var just_fired: bool = _prev_power == 0 and state.ball_power == 1
+	# 期限切れイベントを掃除(粒=KINDS寿命 / kiran=FX_LIFE)
+	_prune_fx(f)
 	for i in state.players.size():
 		var p = state.players[i]
 		var foot := ViewTransform.pos_of(p) + _depth_offset(i)
+		var pvel := Vector2(ViewTransform.to_px(p.vx), ViewTransform.to_px(p.vy))
 		if _prev_ground[i] == 1 and p.on_ground == 0:
-			_spawn_fx("jump", foot)
+			_spawn_fx("jump", foot, up, pvel)          # 縦へ+横速度で流れる
 		elif _prev_ground[i] == 0 and p.on_ground == 1:
-			_spawn_fx("land", foot)
+			# 着地: キャラの左右へ地を這うように土煙。右(dir=0)と左(dir=PI)の2枚に分ける
+			_spawn_fx("land", foot, 0.0, pvel)
+			_spawn_fx("land", foot, PI, pvel)
 		elif p.on_ground == 1 and f - _last_dust_frame[i] > 12:
-			# 走り出し=静止からの発進(煙は進行の逆側へ)、切り返し=速度の符号反転
+			# 走り出し=進行の逆へ蹴る煙、切り返し=元の進行方向へ蹴る
 			if _prev_vx[i] == 0 and p.vx != 0:
-				_spawn_fx("dash", foot, -signf(float(p.vx)))
+				_spawn_fx("dash", foot, (0.0 if p.vx < 0 else PI), pvel)
 				_last_dust_frame[i] = f
 			elif _prev_vx[i] != 0 and p.vx != 0 and signi(p.vx) != signi(_prev_vx[i]):
-				_spawn_fx("brake", foot, signf(float(_prev_vx[i])))
+				_spawn_fx("brake", foot, (0.0 if _prev_vx[i] > 0 else PI), pvel)
 				_last_dust_frame[i] = f
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
-			# ヒットの瞬間。ジャスト=炸裂、ブロック(タッチ数0)=火花、
-			# 地上=リング、空中=衝撃閃光。空中打ちは腕の振り抜きスミアも重ねる
-			var team_dir := 1.0 if Simulation.team_of(i) == 0 else -1.0
+			# ヒットの瞬間。打った逆方向へ散る(=-ボール速度の向き)
+			var away := (-bvel).angle() if bvel.length() > 0.5 else up
 			if just_fired:
-				_spawn_fx("just", bpos)
-				_spawn_fx("smear", foot + Vector2(0, -14.0), team_dir)
+				_spawn_fx("just", bpos, away, bvel * 0.25)
 				_play_sfx("just")
 			elif p.on_ground == 0 and state.touches == 0:
-				_spawn_fx("block", bpos)
+				_spawn_fx("block", bpos, up, bvel * 0.25)
 				_play_sfx("block")
 			elif p.on_ground == 1:
-				_spawn_fx("ring", bpos)
+				_spawn_fx("ring", bpos, up, bvel * 0.3)
 				_play_sfx("hit")
 			else:
-				_spawn_fx("attack", bpos)
-				_spawn_fx("smear", foot + Vector2(0, -14.0), team_dir)
+				_spawn_fx("attack", bpos, away, bvel * 0.25)
 				_play_sfx("hit")
 		# 被弾フラッシュ: よろけ/気絶の開始フレームで白く点滅させる
 		if _prev_stun[i] == 0 and p.stun > 0:
@@ -203,8 +234,21 @@ func _detect_fx() -> void:
 		_prev_vx[i] = p.vx
 		_prev_cd[i] = p.hit_cooldown
 		_prev_stun[i] = p.stun
-	# トスの頂点キラン: 上昇から落下に転じた瞬間、高い球にだけ光る
-	# (=ジャストミートを狙う目印。演出でタイミングを教える)
+	# ボールが壁で跳ねた瞬間: vxの符号反転を壁際で検知→壁から離れる向きに火花
+	var w := ViewTransform.to_px(cfg.court_width)
+	var bx := bpos.x
+	if signi(state.ball_vx) != signi(_prev_bvx) and _prev_bvx != 0 \
+			and (bx < 24.0 or bx > w - 24.0) and state.phase == SimState.PHASE_RALLY:
+		var wall_dir := 0.0 if state.ball_vx > 0 else PI  # 離れる向き
+		_spawn_fx("wall", Vector2(clampf(bx, 2.0, w - 2.0), bpos.y), wall_dir, bvel)
+	_prev_bvx = state.ball_vx
+	# ボールが地面に着いた瞬間: 入射慣性で土煙(真下→左右/斜め→横)
+	var floor_px := ViewTransform.to_px(cfg.floor_y)
+	var bground := bpos.y >= floor_px - ViewTransform.to_px(cfg.ball_radius)
+	if bground and not _prev_bground and state.phase == SimState.PHASE_RALLY:
+		_spawn_fx("ballground", Vector2(bpos.x, floor_px), up, Vector2(bvel.x, 0.0))
+	_prev_bground = bground
+	# トスの頂点キラン: 上昇から落下に転じた瞬間、高い球にだけ光る(打つ目印)
 	if _prev_bvy < 0 and state.ball_vy >= 0 and state.phase == SimState.PHASE_RALLY \
 			and state.ball_y < cfg.floor_y - KIRAN_MIN_H_FP:
 		_spawn_fx("kiran", bpos)
@@ -214,7 +258,7 @@ func _detect_fx() -> void:
 	var score_now := Vector2i(state.score_l, state.score_r)
 	if score_now != _prev_score:
 		if _prev_score != Vector2i.ZERO or score_now.x + score_now.y == 1:
-			_spawn_fx("score", bpos)
+			_spawn_fx("score", bpos, up, bvel * 0.2)
 			_play_sfx("score")
 		_prev_score = score_now
 	# 残像トレイル: ボール位置の履歴(描画側が速度に応じて使う)
@@ -307,6 +351,7 @@ func _sync_sprites() -> void:
 			frame = posmod(roundi(angle / step), _ball_roll_frames)
 	_ball.region_rect = Rect2(frame * _ball_frame_w, 0, _ball_frame_w, _ball_frame_w)
 	_fx.queue_redraw()  # 壁の波紋とマーカーはsim状態から毎フレーム導出する
+	_fxg.queue_redraw()  # 発光レイヤーも同時に再描画
 
 # エフェクト専用の最前面レイヤー。親ノード自身の_drawは子(コート背景)の下に
 # 描かれて埋もれるため、必ず最後の子ノードとして重ねる
@@ -318,20 +363,22 @@ class FxLayer:
 		if view != null:
 			view.draw_fx(self)
 
+# 加算合成の発光レイヤー。ここに描いたものは重なると白飛びして「光る」。
+# 影・マーカー等の暗色/単色UIは加算だと消えるので通常レイヤー(FxLayer)に残す
+class FxGlowLayer:
+	extends Node2D
+	var view
+
+	func _draw() -> void:
+		if view != null:
+			view.draw_fx_glow(self)
+
 func draw_fx(c: CanvasItem) -> void:
-	# 透明な壁(コート端)の「ブイン」: 壁で跳ね返った直後=壁の近くで壁から離れる向きに
-	# 飛んでいる時だけ描く。強さは壁からの距離で減衰。
-	# 全てsim状態からの導出でビュー側に状態を持たない(ロールバック安全)
+	# 通常合成レイヤー: 影・案内マーカー・サーブ軌跡・渦巻きなど発光しない要素
 	if state == null or cfg == null:
 		return
 	var w := ViewTransform.to_px(cfg.court_width)
 	var bx := ViewTransform.to_px(state.ball_x)
-	var vx := ViewTransform.to_px(state.ball_vx)
-	# 壁から離れる向きに飛んでいる=直前に跳ねた可能性。寿命判定は波紋側(u>=1で消灯)
-	if vx > 0.01:
-		_draw_wall_ripple(c, 0.0, bx, 1.0)
-	elif vx < -0.01:
-		_draw_wall_ripple(c, w, w - bx, -1.0)
 	# 画面外(上)に飛んだボールの現在位置を▼で示す(x追従)。強反射やジャンプトスで
 	# 天井を突き抜けるのは正しい物理なので、見失わないための案内だけを出す
 	var by := ViewTransform.to_px(state.ball_y)
@@ -348,10 +395,38 @@ func draw_fx(c: CanvasItem) -> void:
 			and state.serve_tossed == 0:
 		_draw_serve_preview(c)
 	_draw_ball_shadow(c)
-	_draw_ball_trail(c)
-	_draw_one_shots(c)
 	_draw_stun_spirals(c)
 	_draw_control_marker(c)
+	# 統一パーティクルの不透明の丸/楕円(土煙・火色の塊)。加算だと透けるので通常合成側
+	var f := Engine.get_frames_drawn()
+	var ground := ViewTransform.to_px(cfg.floor_y)
+	_draw_ball_trail(c)  # 残像トレイル: ジャスト(パワーボール)の時だけ出す
+	for e in _fx_events:
+		if e["k"] == "kiran":
+			continue
+		FxParticles.draw_opaque(c, e["k"], e["p"], e["d"], e["iner"], e["f0"], f, ground)
+
+func draw_fx_glow(c: CanvasItem) -> void:
+	# 加算合成レイヤー: 発光する要素(火花)。sim状態から導出でロールバック安全
+	if state == null or cfg == null:
+		return
+	var f := Engine.get_frames_drawn()
+	var ground := ViewTransform.to_px(cfg.floor_y)
+	for e in _fx_events:
+		if e["k"] == "kiran":
+			_draw_kiran(c, e["p"], float(f - e["f0"]) / (60.0 * FX_LIFE["kiran"]))
+		else:
+			FxParticles.draw_glow(c, e["k"], e["p"], e["d"], e["iner"], e["f0"], f, ground)
+
+func _draw_kiran(c: CanvasItem, pos: Vector2, t: float) -> void:
+	# トス頂点の目印(タイミングUI): 4方向に伸びて縮む十字の輝き(ここで打て!)
+	if t < 0.0 or t >= 1.0:
+		return
+	var a := pow(1.0 - t, 1.4)
+	var s4 := 3.0 + 5.0 * sin(t * PI)
+	for k in 4:
+		var v4 := Vector2.from_angle(float(k) * TAU / 4.0)
+		_glow_line(c, pos.round(), (pos + v4 * s4).round(), Color(1.0, 1.0, 0.9), 1.5, 0.9 * a)
 
 func _draw_ball_shadow(c: CanvasItem) -> void:
 	# ボールの床影(可読性): 高いほど小さく薄い。空中戦の距離感の基準になる
@@ -362,59 +437,61 @@ func _draw_ball_shadow(c: CanvasItem) -> void:
 	if h < 0.0:
 		return
 	var r := clampf(9.0 - h * 0.02, 3.0, 9.0)
-	var a := clampf(0.30 - h * 0.0007, 0.06, 0.30)
+	var a := clampf(0.26 - h * 0.0007, 0.05, 0.26)
 	var fy := ViewTransform.to_px(cfg.floor_y) - 1.0
-	c.draw_set_transform(Vector2(bx, fy).round(), 0.0, Vector2(1.0, 0.35))
-	# 暗い芯(明背景で効く)+細い明色リング(暗背景で効く)=床面の明暗を問わず見える
-	c.draw_circle(Vector2.ZERO, r, Color(0.05, 0.05, 0.12, a))
-	c.draw_arc(Vector2.ZERO, r, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, a * 0.35), 1.0)
+	c.draw_set_transform(Vector2(bx, fy).round(), 0.0, Vector2(1.0, 0.32))
+	# 柔らかい楕円影(距離感の基準)。2層で中心を濃く外周をぼかす=素朴で埋もれない
+	c.draw_circle(Vector2.ZERO, r, Color(0.04, 0.04, 0.10, a * 0.55))
+	c.draw_circle(Vector2.ZERO, r * 0.6, Color(0.03, 0.03, 0.08, a))
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_ball_trail(c: CanvasItem) -> void:
-	# 残像トレイル: スパイク級の速度で尾を引く。パワーボールは熱色で強く
-	var spd := Vector2(ViewTransform.to_px(state.ball_vx),
-		ViewTransform.to_px(state.ball_vy)).length()
+	# 残像トレイル: 統一パーティクルと同じ「不透明・進行方向に伸びた楕円・後方ほど縮小」で
+	# ボールの尾を描く(加算発光ではなく通常合成=土煙と同じ質感)。ジャスト時のみ
 	var powered: bool = state.ball_power == 1
-	if not powered and spd < 9.0:
-		return
-	# 芯色は熱色/白。暗い縁を1px重ねて明るい背景でも尾が消えないようにする
-	var core := Color(1.0, 0.55, 0.3) if powered else Color(1.0, 1.0, 1.0)
+	if not powered:
+		return  # ジャストスマッシュ(パワーボール)の飛翔中だけ残像を出す
+	var col := Color(0.92, 0.86, 0.72)  # ジャスト由来=暖色クリーム
 	var n := _ball_hist.size()
-	for k in range(maxi(0, n - 8), n - 1):
-		var u := float(k - (n - 8)) / 8.0  # 古いほど0
-		var alpha := (0.35 if powered else 0.20) * u
-		var r := 2.0 + 3.0 * u
-		var p := _ball_hist[k].round()
-		c.draw_circle(p, r + 1.0, Color(FX_OUTLINE, alpha * 0.8))
-		c.draw_circle(p, r, Color(core, alpha))
+	if n < 2:
+		return
+	var bw := float(FxParticles.BLOB.get_width())
+	for k in range(maxi(1, n - 7), n - 1):
+		var u := float(k - (n - 7)) / 7.0  # 後方(古い)ほど0=小さく、先頭ほど1=大きく
+		var sz := (2.8 + 6.4 * u) * FxParticles.SIZE_SCALE  # 残像の丸を2倍に
+		# 普通の円バージョン(楕円に寝かせない)。楕円版が良ければelongを戻す
+		c.draw_set_transform(_ball_hist[k], 0.0, Vector2(sz, sz) / bw)
+		c.draw_texture(FxParticles.BLOB, -FxParticles.BLOB.get_size() * 0.5, col)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-# エフェクトの縁取り色。ほぼ黒だが完全な黒ではない暗色=どんな背景(雪原/砂浜/
-# 白い体育館でも紺コートでも)でも芯の明色が沈まず浮き上がる。背景非依存の要。
-const FX_OUTLINE := Color(0.10, 0.08, 0.13)
+# 加算合成レイヤー用の発光プリミティブ。中心ほど白く明るく、外周は彩度の高い色が
+# にじむ多層描画=重なって白飛びし「光っている」ように見える(ROUNDS風)。黒縁は使わない。
+# ROUNDS実映像の解析結果: コアはほぼ白、その外に彩度の高い色がにじみ、フェードは
+# 塊がバラバラの火花に砕けて飛散・縮小して消える。
+func _glow_dot(c: CanvasItem, pos: Vector2, r: float, col: Color, a: float) -> void:
+	var hot := col.lerp(Color(1, 1, 1), 0.75)
+	c.draw_circle(pos, r * 2.4, Color(col, a * 0.10))   # 外周のにじみ
+	c.draw_circle(pos, r * 1.4, Color(col, a * 0.22))
+	c.draw_circle(pos, r * 0.85, Color(hot, a * 0.70))  # 高温部
+	c.draw_circle(pos, r * 0.4, Color(1, 1, 1, a * 0.9))  # 白熱コア
 
-# 縁取り付きプリミティブ: 先に暗色で1回り大きく描いてから明色の芯を重ねる。
-# 明るい背景でも輪郭が背景と芯を分離するので視認性が保たれる
-func _fx_line(c: CanvasItem, p1: Vector2, p2: Vector2, col: Color, w: float, a: float) -> void:
-	c.draw_line(p1, p2, Color(FX_OUTLINE, a), w + 2.0)
-	c.draw_line(p1, p2, Color(col, a), w)
+func _glow_line(c: CanvasItem, p1: Vector2, p2: Vector2, col: Color, w: float, a: float) -> void:
+	var hot := col.lerp(Color(1, 1, 1), 0.6)
+	c.draw_line(p1, p2, Color(col, a * 0.28), w * 2.4)  # 光のにじみ
+	c.draw_line(p1, p2, Color(col, a * 0.5), w * 1.3)
+	c.draw_line(p1, p2, Color(hot, a * 0.95), maxf(1.0, w * 0.55))  # 明芯
 
-func _fx_arc(c: CanvasItem, ctr: Vector2, r: float, a0: float, a1: float,
+func _glow_arc(c: CanvasItem, ctr: Vector2, r: float, a0: float, a1: float,
 		col: Color, w: float, a: float, pts: int = 24) -> void:
-	c.draw_arc(ctr, r, a0, a1, pts, Color(FX_OUTLINE, a), w + 2.0)
-	c.draw_arc(ctr, r, a0, a1, pts, Color(col, a), w)
+	var hot := col.lerp(Color(1, 1, 1), 0.5)
+	c.draw_arc(ctr, r, a0, a1, pts, Color(col, a * 0.30), w * 2.6)  # 発光の帯
+	c.draw_arc(ctr, r, a0, a1, pts, Color(hot, a * 0.9), w)         # 明るい線
 
-func _fx_dot(c: CanvasItem, pos: Vector2, r: float, col: Color, a: float) -> void:
-	c.draw_circle(pos, r + 1.0, Color(FX_OUTLINE, a))
-	c.draw_circle(pos, r, Color(col, a))
-
-func _fx_rect(c: CanvasItem, pos: Vector2, sz: Vector2, col: Color, a: float) -> void:
-	c.draw_rect(Rect2(pos - Vector2.ONE, sz + Vector2(2, 2)), Color(FX_OUTLINE, a))
-	c.draw_rect(Rect2(pos, sz), Color(col, a))
-
-# 飛散する破片: 中心から放射状にcount個の小片が、イーズアウトで外へ飛びつつ
+# 飛散する火花(発光): 中心から放射状にcount個が、イーズアウトで外へ飛びつつ
 # 重力で少し落ち、縮小しながら消える(ROUNDS風の「抜け」のある爆発の核)。
-# 方向はseed(発火フレーム)から決定的に散らす=Math.random不要でロールバック安全
-func _fx_shards(c: CanvasItem, pos: Vector2, t: float, col: Color,
+# 各火花は白熱の頭+色の短い尾=加算で光る。方向はseed(発火フレーム)から決定的に
+# 散らす=Math.random不要でロールバック安全
+func _glow_shards(c: CanvasItem, pos: Vector2, t: float, col: Color,
 		count: int, reach: float, seed: int) -> void:
 	var ease := 1.0 - pow(1.0 - t, 2.5)  # イーズアウト(出だし速く、末で減速)
 	var a := pow(1.0 - t, 1.5)           # 末に向けて加速度的に消える
@@ -423,14 +500,18 @@ func _fx_shards(c: CanvasItem, pos: Vector2, t: float, col: Color,
 		var ang := float(h) / 65536.0 * TAU
 		var dist := reach * (0.6 + 0.4 * float((h >> 3) & 7) / 7.0)
 		var off := Vector2.from_angle(ang) * dist * ease
-		off.y += ease * ease * 6.0  # 重力で軌道が少し垂れる
-		var sz := maxf(1.0, 3.5 - 2.5 * t)  # 序盤は大きく、末で1pxまで縮んで抜ける
-		_fx_rect(c, (pos + off).round(), Vector2(sz, sz), col, 0.9 * a)
+		off.y += ease * ease * 7.0  # 重力で軌道が少し垂れる
+		var head := (pos + off).round()
+		var tail := (pos + off * 0.72).round()  # 尾は内側へ
+		var hr := maxf(0.8, 2.2 - 1.6 * t)  # 序盤は大きく、末で縮んで抜ける
+		c.draw_line(tail, head, Color(col, a * 0.6), 2.0)     # 色の尾
+		c.draw_circle(head, hr * 1.9, Color(col, a * 0.3))    # にじみ
+		c.draw_circle(head, hr, Color(1, 1, 1, a * 0.9))      # 白熱の頭
 
 func _draw_one_shots(c: CanvasItem) -> void:
-	# ワンショットFXの描画: 膨張→拡散→フェード。円でなくピクセルにスナップした
-	# 小矩形で描く(ドット絵の質感を守る)。tは0..1の寿命進行。
-	# 色は全て「暗い縁取り+明るい芯」で背景非依存(FX_OUTLINE参照)
+	# ワンショットFXの描画(加算発光): 膨張→拡散→フェード。tは0..1の寿命進行。
+	# ROUNDS実映像解析に基づく: 出だしに白い閃光、そこから彩度の高い光が広がり、
+	# 塊は火花に砕けて飛散・縮小して消える。黒縁は使わない(加算で光らせる)
 	var f := Engine.get_frames_drawn()
 	for e_i in range(_fx_events.size() - 1, -1, -1):
 		var e: Dictionary = _fx_events[e_i]
@@ -439,100 +520,101 @@ func _draw_one_shots(c: CanvasItem) -> void:
 		if t >= 1.0:
 			_fx_events.remove_at(e_i)
 			continue
-		var a := 1.0 - t
-		var pos: Vector2 = e["p"]
-		# 土煙の芯色: 明るいオフホワイト(縁取りが背景から分離するので明背景でも可)
-		var dust := Color(0.95, 0.93, 0.86)
-		match e["k"]:
+		_draw_fx_shape(c, e["k"], e["p"], t, e.get("d", 0.0), e["f0"])
+
+# 1つのワンショットFXを寿命進行t(0..1)で描く純描画関数。tを外から与えられるので
+# プレビュー生成(scripts/gen_fx_preview.gd)が実ゲームと同一のコードで各断面を描ける。
+# seedは飛散火花の散り方の種(発火フレーム)
+func _draw_fx_shape(c: CanvasItem, kind: String, pos: Vector2, t: float,
+		dir: float, seed: int) -> void:
+	# フェードは末で加速的に消える(a)。閃光は出だしだけ強い(flash)
+	var a := pow(1.0 - t, 1.4)
+	var flash := pow(1.0 - t, 3.0)
+	# 土煙の色: 淡い青白(加算でふわっと発光する煙)
+	var dust := Color(0.55, 0.65, 0.8)
+	match kind:
 			"jump":
 				# 足元の左右にぽわッと土煙(外へ流れながら小さく)
 				for s in [-1.0, 1.0]:
 					for k in 3:
 						var px := pos + Vector2(s * (3.0 + 10.0 * t + k * 2.5),
 							-1.0 - k * 1.5 - 4.0 * t)
-						var sz := 2.0 if k < 2 and t < 0.6 else 1.0
-						_fx_rect(c, px.round(), Vector2(sz, sz), dust, 0.85 * a)
+						var r := (2.6 if k < 2 else 1.6) * (1.0 - 0.4 * t)
+						c.draw_circle(px.round(), r, Color(dust, 0.5 * a))
 			"land":
 				# 着地は横へ平たく広がる
 				for s in [-1.0, 1.0]:
 					for k in 3:
 						var px := pos + Vector2(s * (4.0 + 15.0 * t + k * 3.0),
 							-1.0 - 2.0 * t - float(k % 2))
-						_fx_rect(c, px.round(), Vector2(2, 1), dust, 0.85 * a)
+						c.draw_circle(px.round(), 2.0 * (1.0 - 0.4 * t), Color(dust, 0.45 * a))
 			"dash", "brake":
 				# 走り出し/切り返しの蹴り煙(dirの側へ流れる)。切り返しは少し濃く長い
-				var d: float = e["d"]
-				var n := 4 if e["k"] == "brake" else 3
+				var d: float = dir
+				var n := 4 if kind == "brake" else 3
 				for k in n:
 					var px := pos + Vector2(d * (2.0 + 11.0 * t + k * 3.0),
 						-1.0 - k * 1.8 - 3.0 * t)
-					var sz2 := 2.0 if t < 0.5 else 1.0
-					_fx_rect(c, px.round(), Vector2(sz2, sz2), dust, 0.85 * a)
+					c.draw_circle(px.round(), 2.2 * (1.0 - 0.4 * t), Color(dust, 0.45 * a))
 			"ring":
-				# レシーブ/トス: ボール位置に輪がふわっと広がる
-				_fx_arc(c, pos.round(), 4.0 + 11.0 * t, 0.0, TAU,
-					Color(1.0, 1.0, 1.0), 1.0, 0.7 * a, 20)
+				# レシーブ/トス: ボール位置に光の輪がふわっと広がる
+				_glow_arc(c, pos.round(), 4.0 + 11.0 * t, 0.0, TAU,
+					Color(0.6, 0.85, 1.0), 1.5, 0.7 * a, 20)
 			"attack":
-				# アタック: 斜め4方向の短い閃光(ボール半径14pxの外側で光る)
+				# アタック: 斜め4方向の短い白閃光(ボール半径14pxの外側で光る)
 				for k in 4:
 					var ang := float(k) * TAU / 4.0 + TAU / 8.0
 					var v := Vector2.from_angle(ang)
-					_fx_line(c, (pos + v * (9.0 + 10.0 * t)).round(),
+					_glow_line(c, (pos + v * (9.0 + 10.0 * t)).round(),
 						(pos + v * (16.0 + 14.0 * t)).round(),
-						Color(1.0, 1.0, 0.85), 1.0, 0.9 * a)
+						Color(1.0, 0.95, 0.7), 2.0, 0.9 * a)
 			"just":
 				# ジャストミート=多層爆発(ROUNDS風の抜けのある弾け):
-				# 中心の白い閃光コア+衝撃波リング2枚+8方向の放射光+飛散破片。
-				# 消える時は破片が縮小して抜ける。ボール半径14pxの外から放射する
-				if t < 0.35:
-					_fx_dot(c, pos.round(), 10.0 * (1.0 - t / 0.35),
-						Color(1.0, 1.0, 0.92), 0.95)
-				for k in 8:
-					var ang2 := float(k) * TAU / 8.0
-					var v2 := Vector2.from_angle(ang2)
-					_fx_line(c, (pos + v2 * (12.0 + 22.0 * t)).round(),
-						(pos + v2 * (22.0 + 30.0 * t)).round(),
-						Color(1.0, 0.8, 0.25), 2.0, 0.95 * a)
-				_fx_arc(c, pos.round(), 15.0 + 30.0 * t, 0.0, TAU,
-					Color(1.0, 1.0, 0.9), 2.0, 0.85 * a, 28)
-				_fx_arc(c, pos.round(), 8.0 + 44.0 * t, 0.0, TAU,
-					Color(1.0, 0.7, 0.2), 1.0, 0.6 * a, 28)
-				_fx_shards(c, pos, t, Color(1.0, 0.85, 0.4), 10, 34.0, e["f0"])
+				# 白い閃光コア+衝撃波リング2枚(白熱→オレンジ)+不規則な飛散火花を多めに。
+				# ROUNDSの爆発はカオスで有機的=等間隔スポークではなく火花の乱舞で放射する。
+				# 消える時は火花が縮小して抜ける
+				_glow_dot(c, pos.round(), 4.0 + 9.0 * flash, Color(1.0, 0.9, 0.6), 0.95 * (0.3 + 0.7 * flash))
+				_glow_arc(c, pos.round(), 15.0 + 30.0 * t, 0.0, TAU,
+					Color(1.0, 1.0, 0.85), 2.0, 0.8 * a, 28)
+				_glow_arc(c, pos.round(), 8.0 + 46.0 * t, 0.0, TAU,
+					Color(1.0, 0.6, 0.2), 1.5, 0.5 * a, 28)
+				# 2層の火花(速い白熱の外飛び+遅いオレンジの内側)でカオス感を出す
+				_glow_shards(c, pos, t, Color(1.0, 0.8, 0.4), 16, 46.0, seed)
+				_glow_shards(c, pos, t, Color(1.0, 0.55, 0.2), 10, 26.0, seed * 7 + 13)
 			"kiran":
 				# トス頂点の目印: 4方向に伸びて縮む十字の輝き(ここで打て!の合図)
 				var s4 := 3.0 + 5.0 * sin(t * PI)
 				for k in 4:
 					var v4 := Vector2.from_angle(float(k) * TAU / 4.0)
-					_fx_line(c, pos.round(), (pos + v4 * s4).round(),
-						Color(1.0, 1.0, 1.0), 1.0, 0.9 * a)
+					_glow_line(c, pos.round(), (pos + v4 * s4).round(),
+						Color(1.0, 1.0, 0.9), 1.5, 0.9 * a)
 			"smear":
 				# 振り抜きの弧(スミア): 打点の周りを弧が一瞬走る
-				var d4: float = e["d"]
+				var d4: float = dir
 				var a0 := -1.9 if d4 > 0.0 else PI + 1.9
 				var sweep := 2.4 * (0.3 + 0.7 * t) * d4
-				_fx_arc(c, pos.round(), 14.0, a0, a0 + sweep,
-					Color(1.0, 1.0, 1.0), 2.0, 0.55 * a, 12)
+				_glow_arc(c, pos.round(), 14.0, a0, a0 + sweep,
+					Color(1.0, 1.0, 1.0), 2.0, 0.5 * a, 12)
 			"block":
-				# ブロック成功: バチンと弾けるXの火花+短い衝撃波+少量の破片
-				if t < 0.3:
-					_fx_dot(c, pos.round(), 5.0 * (1.0 - t / 0.3),
-						Color(1.0, 1.0, 1.0), 0.95)
+				# ブロック成功: バチンと弾ける白閃光コア+Xの火花+短い衝撃波+少量の火花
+				_glow_dot(c, pos.round(), 3.0 + 4.0 * flash, Color(1.0, 1.0, 0.85), 0.95 * (0.3 + 0.7 * flash))
 				for k in 4:
 					var v5 := Vector2.from_angle(float(k) * TAU / 4.0 + TAU / 8.0)
-					_fx_line(c, (pos + v5 * (4.0 + 8.0 * t)).round(),
+					_glow_line(c, (pos + v5 * (4.0 + 8.0 * t)).round(),
 						(pos + v5 * (12.0 + 12.0 * t)).round(),
-						Color(1.0, 0.9, 0.4), 2.0, 0.95 * a)
-				_fx_arc(c, pos.round(), 6.0 + 20.0 * t, 0.0, TAU,
-					Color(1.0, 0.95, 0.7), 1.0, 0.6 * a, 20)
-				_fx_shards(c, pos, t, Color(1.0, 0.9, 0.5), 5, 20.0, e["f0"])
+						Color(1.0, 0.9, 0.4), 2.5, 0.95 * a)
+				_glow_arc(c, pos.round(), 6.0 + 20.0 * t, 0.0, TAU,
+					Color(1.0, 0.95, 0.7), 1.5, 0.6 * a, 20)
+				_glow_shards(c, pos, t, Color(1.0, 0.85, 0.45), 6, 22.0, seed)
 			"score":
-				# 得点=金色の多層バースト: 二重の衝撃波リング+放射状に飛散する破片。
-				# 大きく広がってから破片が縮小して抜ける(得点の余韻)
-				_fx_arc(c, pos.round(), 6.0 + 48.0 * t, 0.0, TAU,
-					Color(1.0, 0.85, 0.3), 2.0, 0.8 * a, 32)
-				_fx_arc(c, pos.round(), 3.0 + 32.0 * t, 0.0, TAU,
-					Color(1.0, 1.0, 0.85), 1.0, 0.5 * a, 24)
-				_fx_shards(c, pos, t, Color(1.0, 0.88, 0.4), 12, 40.0, e["f0"])
+				# 得点=金色の多層バースト: 白閃光+二重の衝撃波リング+放射状に飛散する火花。
+				# 大きく広がってから火花が縮小して抜ける(得点の余韻)
+				_glow_dot(c, pos.round(), 5.0 + 6.0 * flash, Color(1.0, 0.9, 0.5), 0.9 * (0.3 + 0.7 * flash))
+				_glow_arc(c, pos.round(), 6.0 + 48.0 * t, 0.0, TAU,
+					Color(1.0, 0.8, 0.3), 2.5, 0.8 * a, 32)
+				_glow_arc(c, pos.round(), 3.0 + 32.0 * t, 0.0, TAU,
+					Color(1.0, 1.0, 0.8), 1.5, 0.5 * a, 24)
+				_glow_shards(c, pos, t, Color(1.0, 0.82, 0.35), 14, 42.0, seed)
 
 func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) -> void:
 	# 透明な壁の「ぶわん」: 衝突点から弾性の波紋が膨らむ。
@@ -556,27 +638,28 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 	var vy := ViewTransform.to_px(state.ball_vy)
 	var g := ViewTransform.to_px(cfg.gravity)
 	var impact_y := ViewTransform.to_px(state.ball_y) - t * vy + g * t * (t + 1.0) * 0.5
-	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # 出だし速く後半ゆっくり
 	var center := Vector2(wall_x, impact_y)
 	var center_angle := 0.0 if dir > 0.0 else PI
-	# 衝突点の白い閃光コア+熱色のハロー(局所疑似発光=ROUNDS風の「光ってる」感)。
-	# 最初の一瞬だけ強く光り、周りにオレンジのにじみを重ねる
-	# コアは素早く消す(pow3): 薄い層は紺背景でくすんで「紫のシミ」になるので使わず、
-	# 不透明に近い黄コア+白コアの2層だけで明るく光らせる(発光感は火花先端が担う)
-	# 閾値0.25で早期に消す(薄い暖色は紺背景でくすんで紫のシミになるため)。
-	# コアが生きている間は暗縁+黄+白の三層で紫化を防ぎつつ明るく光らせる
-	var core_a := pow(1.0 - u, 3.0)
-	if core_a > 0.25:
-		c.draw_circle(center, 7.0 + 6.0 * ease_out, Color(FX_OUTLINE, core_a * 0.6))
-		c.draw_circle(center, 6.0 + 6.0 * ease_out, Color(1.0, 0.85, 0.45, core_a))
-		c.draw_circle(center, 3.0 + 4.0 * ease_out, Color(1.0, 1.0, 0.95, core_a))
-	# 熱色の発光火花: 衝突点からコート内側へ扇状に飛び散る。虹色はやめ、炎の物理で
-	# 色を絞る=若く速い火花ほど白熱、散り際・古い火花ほどオレンジに冷める。
-	# 各火花は「暗縁+明芯」で背景非依存。散り方の種は衝突時点の回転量と高さから作り
-	# (アニメ中不変=バウンド毎に別の散り方)、ビュー状態レスでロールバック安全
+	# 散り方の種は衝突時点の回転量と高さから作る(アニメ中不変=バウンド毎に別の散り方)。
+	# ビュー状態レスでロールバック安全
 	var spin_imp := ViewTransform.to_px(state.ball_spin) - dir * dist
 	var seed := absi(int(roundf(spin_imp)) * 131 + int(roundf(impact_y)) * 31)
-	var fade := 1.0 - u
+	_draw_wall_spark(c, center, center_angle, u, seed)
+
+# 壁反射の発光火花を経過率u(0..1)で描く純描画関数。uを外から与えられるので
+# プレビュー生成が実ゲームと同一コードで各断面を描ける
+func _draw_wall_spark(c: CanvasItem, center: Vector2, center_angle: float,
+		u: float, seed: int) -> void:
+	var ease_out := 1.0 - (1.0 - u) * (1.0 - u)   # 出だし速く後半ゆっくり
+	# 衝突点の白い閃光コア(加算発光)。出だしだけ強く光り、白熱→オレンジのにじみ。
+	# 加算合成なので黒縁は不要=白コアが周囲の色に白飛びして「光る」
+	var core_a := pow(1.0 - u, 3.0)  # 閃光は出だしのみ
+	if core_a > 0.02:
+		_glow_dot(c, center, 5.0 + 5.0 * ease_out, Color(1.0, 0.8, 0.4), core_a)
+	# 熱色の発光火花: 衝突点からコート内側へ扇状に飛び散る。炎の物理で色を絞る=
+	# 若く速い火花ほど白熱、散り際・古い火花ほどオレンジに冷める。各火花は白熱の頭+
+	# 色の尾=加算で光る
+	var fade := pow(1.0 - u, 1.4)  # 末で加速的に消える
 	for i in 14:
 		var h1 := float(posmod(seed + i * 2654435761, 4096)) / 4096.0  # 角度用
 		var h2 := float(posmod(seed * 3 + i * 1597334677, 4096)) / 4096.0  # 速さ用
@@ -592,12 +675,12 @@ func _draw_wall_ripple(c: CanvasItem, wall_x: float, dist: float, dir: float) ->
 		# 冷めてオレンジ→赤へ(炎の物理)。heat=1で白、0で赤オレンジ
 		var heat := clampf(h2 * 0.7 * (1.0 - u * 0.7), 0.0, 1.0)
 		var spark := Color(1.0, 0.4 + 0.55 * heat, 0.1 + 0.55 * heat)
-		c.draw_line(tail, head, Color(FX_OUTLINE, fade * 0.8), 4.0)  # 暗縁
-		c.draw_line(tail, head, Color(spark, fade * 0.95), 2.0)      # 明芯
-		# 火花の先端は白く光る玉(発光の芯)
-		if fade > 0.3:
-			c.draw_circle(head, 2.5, Color(1.0, 0.85, 0.6, fade * 0.5))
-			c.draw_circle(head, 1.3, Color(1.0, 1.0, 0.9, fade * 0.95))
+		c.draw_line(tail, head, Color(spark, fade * 0.35), 3.5)  # 色のにじみ
+		c.draw_line(tail, head, Color(spark, fade * 0.85), 1.5)  # 明るい尾
+		# 火花の先端は白く光る玉(発光の芯)。縮みながら消える
+		var hr := maxf(0.8, 2.0 * fade)
+		c.draw_circle(head, hr * 1.8, Color(spark, fade * 0.4))
+		c.draw_circle(head, hr, Color(1.0, 1.0, 0.92, fade * 0.95))
 
 func _draw_serve_preview(c: CanvasItem) -> void:
 	# サーブトスの軌跡プレビュー(2段階サーブの1段目)。simの_try_serveと同じ式:

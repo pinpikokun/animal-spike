@@ -44,6 +44,9 @@ var serve_flight: int = 0
 # ヒットストップの残りtick。パワーボール成立や気絶の瞬間に数tick全員が止まり
 # 「重さ」を出す。simが凍るだけなので決定論・ロールバック安全
 var hit_freeze: int = 0
+# スローモーションの残りtick。ジャストスマッシュ成立時に立ち、スロー中は3tickに
+# 1回だけ物理を進める(1/3速)。tick/入力は1:1で消費し続けるので決定論・ロールバック安全
+var slow_ticks: int = 0
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -87,6 +90,7 @@ func to_int_array() -> Array[int]:
 	out.append(serve_tossed)
 	out.append(serve_flight)
 	out.append(hit_freeze)
+	out.append(slow_ticks)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -129,6 +133,7 @@ func load_int_array(arr: Array) -> void:
 	serve_tossed = arr[k]; k += 1
 	serve_flight = arr[k]; k += 1
 	hit_freeze = arr[k]; k += 1
+	slow_ticks = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1
