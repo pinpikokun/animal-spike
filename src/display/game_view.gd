@@ -46,6 +46,20 @@ var _prev_bvy := 0
 var _prev_score := Vector2i.ZERO
 var _last_dust_frame: Array[int] = [-99, -99, -99, -99]
 var _flash: Array[int] = [0, 0, 0, 0]  # 被弾白フラッシュの残りフレーム
+# キャラの向き(表示層のみ)。移動中はvx符号で更新し、静止中は最後の向きを保持。
+# 既定はチーム0(左)=右向き(+1)、チーム1(右)=左向き(-1)。アタック時だけネット向きに上書き
+var _facing: Array[int] = [1, 1, -1, -1]
+# ジャンプの絵をvyで固定選択するための着地検知(表示層のみ)。
+# _was_air=前フレーム空中だったか、_land=着地ポーズ(jump3枚目)の残り表示フレーム
+var _was_air: Array[bool] = [false, false, false, false]
+var _land: Array[int] = [0, 0, 0, 0]
+# 帽子投げ表示: 帽子中はhatlessスプライトに差し替え、戻った瞬間キャッチ演出。
+var _mario_hat: SpriteFrames       # 帽子ありマリオ
+var _mario_hatless: SpriteFrames   # 帽子投げ中(茶髪)
+var _prev_hat: Array[int] = [1, 1, 1, 1]
+var _catch: Array[int] = [0, 0, 0, 0]  # キャッチ演出(hat-catch)の残りフレーム
+var _victory_on: bool = false  # 勝利演出の発動フラグ(ゲームセット後ボールが止まってから)
+var _cap: AnimatedSprite2D          # 飛んでる帽子
 # スカッシュ&ストレッチ(表示層のみのジュース)。踏切で縦伸び/着地で横潰れを
 # バネで0へ戻す。当たり判定サイズには一切触れない。ロールバック無関係の飾り
 var _squash: Array[float] = [0.0, 0.0, 0.0, 0.0]
@@ -87,21 +101,31 @@ func _ready() -> void:
 	$Court.setup(cfg)
 	$ScoreUI.setup(cfg)
 	_setup_sfx()
-	var fox := SpriteFactory.build_fox()
+	_mario_hat = SpriteFactory.build_mario()
+	_mario_hatless = SpriteFactory.build_mario_hatless()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
 		var s := AnimatedSprite2D.new()
-		# チーム0(左, index0,1)=キツネ、チーム1(右)=カエル
-		s.sprite_frames = fox if Simulation.team_of(i) == 0 else frog
-		# 奇数幅(33px)のセンター配置は常に半ピクセルずれてぼやける。
-		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする
+		# チーム0(左, index0,1)=マリオ(参考素材)、チーム1(右)=カエル
+		var is_mario := Simulation.team_of(i) == 0
+		s.sprite_frames = _mario_hat if is_mario else frog
+		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする。
+		# マリオはセル22x29(足元中央原点)、カエル/キツネは32x32相当
 		s.centered = false
-		s.offset = Vector2(-16, -32)
+		s.offset = Vector2(-11, -29) if is_mario else Vector2(-16, -32)
 		# 手前レーン(偶数slot)を前面に描く(奥のキャラと重なった時に自然な前後関係)
 		s.z_index = 1 if i % 2 == 0 else 0
 		s.play("idle")
 		$Players.add_child(s)
 		_sprites.append(s)
+	# 飛んでる帽子(お邪魔ギミック)。cap_phase!=0のとき表示・回転
+	_cap = AnimatedSprite2D.new()
+	_cap.sprite_frames = SpriteFactory.build_cap()
+	_cap.centered = true
+	_cap.z_index = 2
+	_cap.visible = false
+	_cap.play("default")
+	$Players.add_child(_cap)
 	_ball = $Ball
 	_ball.centered = true
 	# ボール素材はscripts/gen_ball.gdがゲーム実寸へ直接ラスタした焼き込みPNG。
@@ -221,6 +245,10 @@ func _detect_fx() -> void:
 			elif _prev_vx[i] != 0 and p.vx != 0 and signi(p.vx) != signi(_prev_vx[i]):
 				_spawn_fx("brake", foot, (0.0 if _prev_vx[i] > 0 else PI), pvel)
 				_last_dust_frame[i] = f
+		if p.cling != 0 and f - _last_dust_frame[i] > 7:
+			# 壁張り付き中のずり落ち煙(少量)。壁と反対側へ小さく漂わせる
+			_spawn_fx("land", foot, (0.0 if p.cling > 0 else PI), Vector2(0, 12))
+			_last_dust_frame[i] = f
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
 			# ヒットの瞬間。打った逆方向へ散る(=-ボール速度の向き)
 			var away := (-bvel).angle() if bvel.length() > 0.5 else up
@@ -282,6 +310,15 @@ func _detect_fx() -> void:
 
 func _sync_sprites() -> void:
 	_detect_fx()
+	# 勝利演出のトリガー: ゲームセット後、ボールがほぼ止まってから発動(一度立てば継続)。
+	# 決着直後にすぐ踊り出すのを防ぐ
+	if state.phase != SimState.PHASE_GAME_OVER:
+		_victory_on = false
+	elif not _victory_on:
+		var bvx := absf(ViewTransform.to_px(state.ball_vx))
+		var bvy := absf(ViewTransform.to_px(state.ball_vy))
+		if bvx < 1.0 and bvy < 1.0:
+			_victory_on = true
 	# 画面揺れ: インパルス減衰式。大きな衝撃(ジャスト/速い球の着弾/ガード破壊)で
 	# ドンと入り数フレームで収束する。impulseは_detect_fxが衝撃の瞬間に積む。
 	# 表示層のみ(floatも描画フレーム由来の乱れも許される・ロールバック無関係)
@@ -313,10 +350,84 @@ func _sync_sprites() -> void:
 		if p.on_ground == 1 and p.hit_cooldown > 0:
 			var t := float(p.hit_cooldown) / float(cfg.hit_cooldown_ticks)
 			pos.y -= RECEIVE_HOP_PX * t
-		spr.flip_h = AnimSelect.flip_for_team(Simulation.team_of(i))
 		var anim := AnimSelect.anim_for(p)
-		if spr.animation != anim:
-			spr.play(anim)
+		var is_mario := Simulation.team_of(i) == 0
+		# 帽子投げ中(has_hat=0)は茶髪スプライトに差し替え。戻った瞬間はキャッチ演出。
+		if is_mario:
+			if _prev_hat[i] == 0 and p.has_hat == 1:
+				_catch[i] = 12
+			_prev_hat[i] = p.has_hat
+			# 溜め中(p.throw>0)は帽子ありのまま投げモーション。発射後は茶髪(帽子なし)へ
+			var frames: SpriteFrames = _mario_hat if p.has_hat == 1 else _mario_hatless
+			if spr.sprite_frames != frames:
+				spr.sprite_frames = frames
+			if p.throw > 0:
+				anim = "hat-throw"
+			elif _catch[i] > 0:
+				anim = "hat-catch"
+				_catch[i] -= 1
+			# 勝利: ゲームセット後、ボールが止まってから勝者のマリオが演出開始(一度立てば継続)
+			if _victory_on and Simulation.team_of(i) == state.winner:
+				anim = "victory"
+				if spr.sprite_frames != _mario_hat:
+					spr.sprite_frames = _mario_hat
+		# 向き: 移動中はvxの符号で更新、静止中は保持。
+		# ただしアタック(空中打撃)だけはネット(相手)側を向く
+		if p.vx > 0:
+			_facing[i] = 1
+		elif p.vx < 0:
+			_facing[i] = -1
+		var face: int = _facing[i]
+		# アタック中はネット(相手)側を向く。サーブ準備中は「静止時だけ」ネット向き
+		# (開始で後ろを向くのを防ぐ)。移動中はvxの向きに従う=左移動で左を向く
+		if anim == "attack" or (state.phase == SimState.PHASE_SERVE and p.vx == 0):
+			face = 1 if Simulation.team_of(i) == 0 else -1
+			_facing[i] = face
+		elif anim == "brake":
+			# 急ブレーキ中は「これから向かう方向」を向く(滑るのは逆方向)
+			face = -signi(p.brake)
+			_facing[i] = face
+		elif anim == "wallcling":
+			# 壁張り付きは張り付いてる壁側を向く(左壁=cling1→左向き)。相手球でも一定
+			face = -signi(p.cling)
+			_facing[i] = face
+		# 全キャラ素材は右向き基準(マリオのjumpシートも右向きに正規化済み)。
+		# 左を向きたい(face<0)ときだけ反転する
+		spr.flip_h = face < 0
+		# 着地検知(前フレーム空中→今接地)。着地ポーズ(jump3枚目)を数フレーム出す
+		if _was_air[i] and p.on_ground == 1:
+			_land[i] = 6
+		_was_air[i] = p.on_ground == 0
+		# ジャンプは時間再生でなくvy(上下速度)で絵を固定選択する:
+		# 上昇中(vy<0)=1枚目をずっと / 落下中(vy>=0)=2枚目をずっと / 着地=3枚目を数フレーム
+		if anim == "hipdrop":
+			# ヒップアタック: 空中静止中(hip>0)は回転コマ0-8を進行に合わせて,
+			# 急降下中(hip==-1)は10枚目(index9)。フレームはhipから導出(時間再生しない)
+			if spr.animation != "hipdrop":
+				spr.animation = "hipdrop"
+			spr.pause()
+			if p.hip > 0:
+				spr.frame = clampi(int(float(36 - p.hip) * 9.0 / 36.0), 0, 8)
+			else:
+				spr.frame = 9
+		elif anim == "jump":
+			_land[i] = 0
+			if spr.animation != "jump":
+				spr.animation = "jump"
+			spr.pause()
+			spr.frame = 0 if p.vy < 0 else 1
+		elif is_mario and _land[i] > 0 and (anim == "idle" or anim == "run"):
+			# 着地ポーズ=マリオのjump3枚目(frogは2コマなので対象外)
+			if spr.animation != "jump":
+				spr.animation = "jump"
+			spr.pause()
+			spr.frame = 2
+			_land[i] -= 1
+		else:
+			if _land[i] > 0:
+				_land[i] -= 1
+			if spr.animation != anim:
+				spr.play(anim)
 		# カエル素材はidle系の足元に5pxの透明余白があり浮いて見える。
 		# キツネの接地軸に合わせる表示補正(jump素材は余白なしなので補正しない)
 		if Simulation.team_of(i) == 1 and anim != "jump":
@@ -340,12 +451,25 @@ func _sync_sprites() -> void:
 		else:
 			spr.modulate = Color.WHITE
 		# 整数ピクセルにスナップ(小数座標のままだとドットが滲む)
+		# 勝利演出の締め: 16番=軽く跳ぶ, 17番=もっと高く跳ぶ(表示だけ持ち上げ)
+		if anim == "victory":
+			if spr.frame == 15:
+				pos.y -= 5.0
+			elif spr.frame == 16:
+				pos.y -= 13.0
 		spr.position = pos.round()
 	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
 	if state.phase == SimState.PHASE_SERVE and state.serve_tossed == 0:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(state.serving_team * 2)
 	_ball.position = ball_pos.round()
+	if _cap != null:
+		if state.cap_phase != 0:
+			_cap.visible = true
+			_cap.position = Vector2(
+				ViewTransform.to_px(state.cap_x), ViewTransform.to_px(state.cap_y)).round()
+		else:
+			_cap.visible = false
 	# へしゃげ: 速度がスパイク級のとき進行方向に伸び垂直に潰れる。
 	# sim速度から毎フレーム導出しビューに状態を持たない(ロールバック安全)
 	var bv := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))

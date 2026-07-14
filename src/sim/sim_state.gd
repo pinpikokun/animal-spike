@@ -18,6 +18,14 @@ class Player:
 	var hit_cooldown: int = 0
 	var stun: int = 0  # 耐久力が尽きた硬直(移動・ヒット不可)の残りtick
 	var dive: int = 0  # ジャンピングトス演出の残りtick(符号=飛びつき方向)。表示層が読む
+	var hit_kind: int = 0  # 直近の地上ヒット種別(0=レシーブ,1=トス,2=前トス)。表示層が読む
+	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
+	var run: int = 0  # 同方向の連続走行tick。一定以上でのみ反転スキッドが出る(細かい制御は滑らない)
+	var has_hat: int = 1  # 帽子をかぶってるか(0=投げ中)。表示層のスプライト選択に使う
+	var face: int = 0  # 向き(1=右,-1=左,0=未定)。vxから毎tick更新。帽子投げ方向等に使う
+	var hip: int = 0  # ヒップアタック(0=無し, >0=空中静止の残りtick, -1=急降下中)。帽子ありのみ
+	var cling: int = 0  # 壁張り付き(0=無し, 1=左壁, -1=右壁)。表示層が読む
+	var throw: int = 0  # 帽子投げの溜め(windup)残りtick。>0の間は入力を受け付けず空中でも浮く
 	# 耐久力(ガード): アタックをしのぐたびに減り、尽きるとスタン(満タンへ復帰)。
 	# ジャストトスで回復。guard_maxはキャラ別ステータスの器(M4で個体差を接続)
 	var guard: int = 100
@@ -59,6 +67,15 @@ var controlled_r: int = 0
 var switch_latch_l: int = 0
 var switch_latch_r: int = 0
 var winner: int = -1
+# 帽子投げ(お邪魔ギミック)。cap_phase: 0=無し, 1=飛行, 2=滞在, 3=帰還。
+# ボールと当たり判定を持ち、触れると弾く。一度に1個だけ存在する
+var cap_phase: int = 0
+var cap_x: int = 0
+var cap_y: int = 0
+var cap_vx: int = 0
+var cap_vy: int = 0
+var cap_owner: int = 0  # 投げた選手のindex(帰還先)
+var cap_timer: int = 0  # 現フェーズの残りtick
 
 func _init() -> void:
 	for i in PLAYER_COUNT:
@@ -75,6 +92,14 @@ func to_int_array() -> Array[int]:
 		out.append(p.hit_cooldown)
 		out.append(p.stun)
 		out.append(p.dive)
+		out.append(p.hit_kind)
+		out.append(p.brake)
+		out.append(p.run)
+		out.append(p.has_hat)
+		out.append(p.face)
+		out.append(p.hip)
+		out.append(p.cling)
+		out.append(p.throw)
 		out.append(p.guard)
 		out.append(p.guard_max)
 		out.append(p.cpu)
@@ -103,6 +128,13 @@ func to_int_array() -> Array[int]:
 	out.append(switch_latch_l)
 	out.append(switch_latch_r)
 	out.append(winner)
+	out.append(cap_phase)
+	out.append(cap_x)
+	out.append(cap_y)
+	out.append(cap_vx)
+	out.append(cap_vy)
+	out.append(cap_owner)
+	out.append(cap_timer)
 	return out
 
 func load_int_array(arr: Array) -> void:
@@ -118,6 +150,14 @@ func load_int_array(arr: Array) -> void:
 		p.hit_cooldown = arr[k]; k += 1
 		p.stun = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
+		p.hit_kind = arr[k]; k += 1
+		p.brake = arr[k]; k += 1
+		p.run = arr[k]; k += 1
+		p.has_hat = arr[k]; k += 1
+		p.face = arr[k]; k += 1
+		p.hip = arr[k]; k += 1
+		p.cling = arr[k]; k += 1
+		p.throw = arr[k]; k += 1
 		p.guard = arr[k]; k += 1
 		p.guard_max = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
@@ -146,6 +186,13 @@ func load_int_array(arr: Array) -> void:
 	switch_latch_l = arr[k]; k += 1
 	switch_latch_r = arr[k]; k += 1
 	winner = arr[k]; k += 1
+	cap_phase = arr[k]; k += 1
+	cap_x = arr[k]; k += 1
+	cap_y = arr[k]; k += 1
+	cap_vx = arr[k]; k += 1
+	cap_vy = arr[k]; k += 1
+	cap_owner = arr[k]; k += 1
+	cap_timer = arr[k]; k += 1
 
 func state_hash() -> int:
 	# FNV-1a 64bit。オフセット値はint64符号付き表現

@@ -14,6 +14,7 @@ const IN_ACTION := SimInput.IN_ACTION
 const IN_SWITCH := SimInput.IN_SWITCH
 const IN_UP := SimInput.IN_UP
 const IN_DOWN := SimInput.IN_DOWN
+const IN_HAT_THROW := SimInput.IN_HAT_THROW
 
 # サーブトス照準。左右キー=着弾距離(0..AIM_MAXの目盛りをserve_toss_rangeへ線形対応)、
 # 上下キー=トスの高さ%(POW_MIN..POW_MAX)。距離と高さは完全に独立
@@ -21,6 +22,25 @@ const IN_DOWN := SimInput.IN_DOWN
 const AIM_MAX := 60
 const POW_MIN := 60   # トス高さの下限(%)
 const POW_MAX := 130  # トス高さの上限(%)
+const BRAKE_TICKS := 8  # 急ブレーキ(スキッド)で旧方向へ滑る長さ(tick)
+const SKID_MIN_RUN := 12  # この連続走行tick以上でのみ反転スキッドが出る(細かい追尾は滑らない)
+const RUN_CAP := 40       # 走行継続カウンタの上限
+const RUN_DECAY := 3      # ニュートラル時の走行カウンタ減衰/tick(離して押し直す反転の猶予)
+# 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
+const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
+const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
+const CAP_HOVER_TICKS := 90  # その場で滞在する時間
+const CAP_RETURN_PX := 8   # 帰還速度(シュッと速い)
+const CAP_RADIUS_PX := 12  # ボールとの当たり判定半径
+const CAP_CATCH_PX := 10   # 所有者に届いたと見なす距離
+const CAP_HEAD_UP_PX := 20 # キャッチ先の頭の高さ(足元yからの上オフセット)
+const CAP_HAND_UP_PX := 6  # 投げ元の手の高さ(頭より低い=手から放つ)
+const CAP_HAND_FWD_PX := 9 # 投げ元の手の前方オフセット(向いてる方向へ)
+const CAP_BOUNCE_PX := 4   # 反発の最低速度
+const THROW_TICKS := 30    # 帽子投げの溜め(windup)時間。この間は硬直し空中でも浮く
+const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時間
+const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
+const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
 
 static func team_of(i: int) -> int:
 	return i / 2
@@ -147,6 +167,70 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		_step_player(state.players[i], input, cfg, team_of(i))
 	_resolve_hit(state, inputs, cfg)
+	_update_hat(state, inputs, cfg)
+
+# 帽子投げ(お邪魔ギミック): Dキーで前方へ投げ、飛行→滞在→高速帰還→キャッチ。
+# 飛んでる間ボールと当たり判定を持ち、触れると弾く。一度に1個だけ
+static func _update_hat(state, inputs: Array[int], cfg) -> void:
+	# 溜め(windup)管理: D入力で溜め開始→溜め終了フレームで発射(帽子はそれまで頭上)。
+	# _step_playerが溜め中の入力を封じる(投げは強いがリスク=硬直)
+	for i in state.players.size():
+		var inp: int = inputs[i] if i < inputs.size() else 0
+		var p = state.players[i]
+		if p.throw == 0 and p.has_hat == 1 and (inp & IN_HAT_THROW) \
+				and p.stun == 0 and state.cap_phase == 0:
+			p.throw = THROW_TICKS
+		if p.throw > 0:
+			p.throw -= 1
+			if p.throw == 0 and p.has_hat == 1 and state.cap_phase == 0:
+				var net_dir: int = 1 if team_of(i) == 0 else -1
+				var dir: int = p.face if p.face != 0 else net_dir
+				state.cap_phase = 1
+				state.cap_owner = i
+				# 頭ではなく手から放つ: 向いてる方向へ少し前、高さは手のあたり
+				state.cap_x = p.x + dir * FP.from_int(CAP_HAND_FWD_PX)
+				state.cap_y = p.y - FP.from_int(CAP_HAND_UP_PX)
+				state.cap_vx = dir * FP.from_int(CAP_THROW_PX)
+				state.cap_vy = 0
+				state.cap_timer = CAP_OUT_TICKS
+				p.has_hat = 0
+	if state.cap_phase == 0:
+		return
+	if state.cap_phase == 1:  # 飛行(前方へ)
+		state.cap_x += state.cap_vx
+		state.cap_timer -= 1
+		if state.cap_timer <= 0:
+			state.cap_phase = 2
+			state.cap_timer = CAP_HOVER_TICKS
+			state.cap_vx = 0
+	elif state.cap_phase == 2:  # 滞在(その場で回転)
+		state.cap_timer -= 1
+		if state.cap_timer <= 0:
+			state.cap_phase = 3
+	elif state.cap_phase == 3:  # 帰還(所有者の頭へ高速)
+		var owner = state.players[state.cap_owner]
+		var tx: int = owner.x
+		var ty: int = owner.y - FP.from_int(CAP_HEAD_UP_PX)
+		var rv: int = FP.from_int(CAP_RETURN_PX)
+		state.cap_x += clampi(tx - state.cap_x, -rv, rv)
+		state.cap_y += clampi(ty - state.cap_y, -rv, rv)
+		if absi(tx - state.cap_x) <= FP.from_int(CAP_CATCH_PX) \
+				and absi(ty - state.cap_y) <= FP.from_int(CAP_CATCH_PX):
+			state.cap_phase = 0  # キャッチ
+			owner.has_hat = 1
+			return
+	# ボール当たり判定(飛行/滞在/帰還いずれも): 触れたら弾く
+	var r: int = FP.from_int(CAP_RADIUS_PX) + cfg.ball_radius
+	var dx: int = state.ball_x - state.cap_x
+	var dy: int = state.ball_y - state.cap_y
+	if absi(dx) < r and absi(dy) < r:
+		var bounce: int = FP.from_int(CAP_BOUNCE_PX)
+		if absi(dx) >= absi(dy):
+			var sx: int = signi(dx) if dx != 0 else 1
+			state.ball_vx = sx * maxi(absi(state.ball_vx), bounce)
+		else:
+			var sy: int = signi(dy) if dy != 0 else -1
+			state.ball_vy = sy * maxi(absi(state.ball_vy), bounce)
 
 static func reset_rally(s, cfg, serving_team: int) -> void:
 	# ラリーの再開。非サーバーはワープさせない(気持ちよさ優先、ユーザー決定)。
@@ -171,6 +255,17 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	for p in s.players:
 		p.stun = 0
 		p.dive = 0
+		p.brake = 0
+		p.run = 0
+		p.throw = 0
+		p.hip = 0
+		p.cling = 0
+		p.has_hat = 1  # 投げっぱなしの帽子はラリー再開で戻す
+	# 飛んでる帽子も消す
+	s.cap_phase = 0
+	s.cap_vx = 0
+	s.cap_vy = 0
+	s.cap_timer = 0
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
@@ -366,18 +461,22 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			else:
 				desired_vy = -cfg.toss_fwd_vy
 				desired_vx = hdir * cfg.toss_fwd_vx
+			p.hit_kind = 2  # 前トス(横のみ)
 		elif hdir != 0 and up:
 			# 上+横: 中間(高く+そこそこ前)
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = hdir * cfg.toss_mid_vx
+			p.hit_kind = 1  # トス
 		elif up:
 			# 上のみ: 真上へ高く
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = 0
+			p.hit_kind = 1  # トス
 		else:
 			# ニュートラル: 少し前へ=素レシーブ
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = dir * cfg.bump_fwd_speed
+			p.hit_kind = 0  # レシーブ
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
@@ -438,6 +537,13 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		_award_point(s, 1 - team, cfg)
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
+	# 帽子投げの溜め中: 入力を一切受け付けず、その場で凍結(空中なら浮いたまま)。
+	# 投げは強いがリスク=硬直を負う。溜め終了で_update_hatが帽子を発射する
+	if p.throw > 0:
+		p.vx = 0
+		if p.on_ground == 0:
+			p.vy = 0
+		return
 	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
 	if p.stun > 0:
 		p.stun -= 1
@@ -445,12 +551,45 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	# トス構え(上+アクション): その場で小ホップして手を伸ばす。横キーは
 	# トスの方向指定専用になり移動には使わない(「トスだけする」ユーザー指定)
 	var toss_stance: bool = (input & IN_ACTION) != 0 and (input & IN_JUMP) != 0
-	p.vx = 0
+	var in_dir: int = 0
 	if not toss_stance:
 		if input & IN_LEFT:
-			p.vx = -cfg.move_speed
+			in_dir -= 1
 		if input & IN_RIGHT:
-			p.vx = cfg.move_speed
+			in_dir += 1
+	# 急ブレーキ(スキッド): 一定時間"走り続けた"後に逆方向を入れたときだけ、すぐ反転せず
+	# 数tick旧方向へ滑って減速してから向きが変わる(マリオの"キキーッ"の間)。
+	# 追尾の細かい左右振り(オシレーション)ではrunが溜まらず発動しない=制御を壊さない。
+	# p.brake: 符号=滑る方向, 絶対値=残りtick(diveと同じ「表示層も読むヒント」方式)
+	# 走行方向と継続を符号付きp.runで管理(符号=方向, 絶対値=継続tick)。
+	# ニュートラルでは即0にせず徐々に減衰させる=「離して押し直す」反転も拾う猶予。
+	var prev_run: int = p.run
+	if p.on_ground == 0:
+		p.run = 0
+	elif in_dir == 0:
+		p.run = signi(prev_run) * maxi(absi(prev_run) - RUN_DECAY, 0)
+	elif signi(prev_run) == in_dir:
+		p.run = in_dir * mini(absi(prev_run) + 1, RUN_CAP)
+	elif p.brake == 0 and absi(prev_run) >= SKID_MIN_RUN:
+		# 十分走った後の逆方向入力 → 急ブレーキ(旧方向へ滑ってから反転)
+		p.brake = BRAKE_TICKS * signi(prev_run)
+		p.run = 0
+	else:
+		p.run = in_dir  # 走り始め
+	if p.brake != 0 and p.on_ground == 1:
+		var sdir: int = signi(p.brake)
+		var rem: int = absi(p.brake)
+		p.vx = sdir * cfg.move_speed * rem / BRAKE_TICKS  # 線形減速で滑る
+		rem -= 1
+		p.brake = sdir * rem  # 残りゼロで自動的にbrake=0=反転解禁
+	else:
+		p.brake = 0  # 空中やニュートラルではスキッド解除
+		p.vx = in_dir * cfg.move_speed
+	# 向き(face)をvxから更新。動いていない間は直前の向きを保持
+	if p.vx > 0:
+		p.face = 1
+	elif p.vx < 0:
+		p.face = -1
 	if (input & IN_JUMP) and p.on_ground == 1:
 		if toss_stance:
 			p.vy = -cfg.hop_speed
@@ -476,12 +615,38 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		max_x = cfg.net_x - cfg.net_half_w
 	else:
 		min_x = cfg.net_x + cfg.net_half_w
+	# ヒップアタック(帽子ありのみ): 空中+下(スペース無し)で発動。空中で静止して回転し、
+	# その後まっすぐ急降下。専用アニメが帽子ありのみなのでhas_hatを要求する
+	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \
+			and not (input & IN_ACTION) and p.has_hat == 1
+	if p.hip == 0 and want_hip:
+		p.hip = HIP_HOVER_TICKS
+	if p.hip > 0:
+		p.vx = 0
+		p.vy = 0
+		p.hip -= 1
+		if p.hip == 0:
+			p.hip = -1  # 静止終了→急降下へ
+	elif p.hip == -1:
+		p.vx = 0
+		p.vy = FP.from_int(HIP_DROP_PX)
+	# 壁張り付き: 空中で外壁側へ押し付けると、壁を背にずるずる低速降下する
+	p.cling = 0
+	if p.hip == 0 and p.on_ground == 0:
+		var at_left: bool = team == 0 and (input & IN_LEFT) != 0 and p.x <= min_x
+		var at_right: bool = team == 1 and (input & IN_RIGHT) != 0 and p.x >= max_x
+		if at_left or at_right:
+			p.vx = 0
+			p.vy = FP.from_int(CLING_SLIDE_PX)
+			p.cling = 1 if at_left else -1
 	p.x = clampi(p.x + p.vx, min_x, max_x)
 	p.y += p.vy
 	if p.y >= cfg.floor_y:
 		p.y = cfg.floor_y
 		p.vy = 0
 		p.on_ground = 1
+		p.hip = 0
+		p.cling = 0
 
 static func _step_ball(s, cfg) -> void:
 	var prev_x: int = s.ball_x
