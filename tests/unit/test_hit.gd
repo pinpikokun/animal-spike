@@ -321,7 +321,8 @@ func test_receiving_power_ball_damages_guard() -> void:
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
 	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_power, "耐久力が削れる")
 	# 芯を外してパワーボールを受けたら必ずよろけ(小スタン)
-	check_eq(s.players[0].stun, cfg.stagger_ticks, "よろけ(小スタン)が入る")
+	check(s.players[0].flinch > 0, "しりもちリアクションが入る")
+	check(s.players[0].vx < 0, "後ろ(左)へノックバック")
 	check_eq(s.ball_power, 0, "パワーはヒットで消費される")
 
 func test_guard_zero_causes_stun_and_refill() -> void:

@@ -6,9 +6,11 @@ const SimState := preload("res://src/sim/sim_state.gd")
 
 # 顔アイコン(仮): 既存スプライトのidle1フレームから頭部を切り出して使う。
 # 本番キャラ(トラックB)が入ったら専用の顔アイコンに差し替える
+const FACE_MARIO := "res://assets/characters/mario/walk/walk.png"
 const FACE_FOX := "res://assets/third_party/sunny_land/PNG/sprites/player/idle/player-idle-1.png"
 const FACE_FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog/idle/frog-idle-1.png"
-const FACE_REGION_FOX := Rect2(8, 5, 18, 18)   # 33x32素材の頭部(8倍拡大で実測)
+const FACE_REGION_MARIO := Rect2(4, 9, 15, 13)  # 22x29 walk先頭の帽子+顔(実測y9〜21)
+const FACE_REGION_FOX := Rect2(9, 10, 18, 13)  # 33x32 idleの耳+顔(実測y10〜22)
 const FACE_REGION_FROG := Rect2(6, 4, 22, 22)  # 35x32素材の顔(目玉が主役)
 
 # HUD帯レイアウト(内部解像度640x360の最下段)。格ゲー定石: 自チーム左・敵チーム右
@@ -37,7 +39,8 @@ func _ready() -> void:
 	_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_msg.add_theme_font_size_override("font_size", 16)
 	add_child(_msg)
-	_face_tex = [load(FACE_FOX), load(FACE_FROG)]
+	# index別: 0,1=マリオ, 2=キツネ, 3=カエル
+	_face_tex = [load(FACE_MARIO), load(FACE_MARIO), load(FACE_FOX), load(FACE_FROG)]
 	_hud = HudLayer.new()
 	_hud.ui = self
 	_hud.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -84,8 +87,12 @@ func draw_hud(c: Control) -> void:
 		var border := Color(1.0, 0.90, 0.20) if i == controlled else Color(0.30, 0.40, 0.85)
 		c.draw_rect(Rect2(x, PANEL_Y, PANEL_W, PANEL_H), border, false, 1.0)
 		# 顔アイコン(スタン中は点滅させて状態を顔でも伝える)
-		var tex: Texture2D = _face_tex[team]
-		var region: Rect2 = FACE_REGION_FOX if team == 0 else FACE_REGION_FROG
+		var tex: Texture2D = _face_tex[i]
+		var region: Rect2 = FACE_REGION_MARIO
+		if i == 2:
+			region = FACE_REGION_FOX
+		elif i == 3:
+			region = FACE_REGION_FROG
 		var face_mod := Color.WHITE
 		if p.stun > 0 and (_state.tick / 4) % 2 == 0:
 			face_mod = Color(1.0, 0.5, 0.5)

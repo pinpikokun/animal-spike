@@ -26,6 +26,7 @@ class Player:
 	var hip: int = 0  # ヒップアタック(0=無し, >0=空中静止の残りtick, -1=急降下中)。帽子ありのみ
 	var cling: int = 0  # 壁張り付き(0=無し, 1=左壁, -1=右壁)。表示層が読む
 	var throw: int = 0  # 帽子投げの溜め(windup)残りtick。>0の間は入力を受け付けず空中でも浮く
+	var flinch: int = 0  # ジャストアタック被弾のしりもち(butt-drop)残りtick。後ろへ滑る
 	# 耐久力(ガード): アタックをしのぐたびに減り、尽きるとスタン(満タンへ復帰)。
 	# ジャストトスで回復。guard_maxはキャラ別ステータスの器(M4で個体差を接続)
 	var guard: int = 100
@@ -100,6 +101,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.hip)
 		out.append(p.cling)
 		out.append(p.throw)
+		out.append(p.flinch)
 		out.append(p.guard)
 		out.append(p.guard_max)
 		out.append(p.cpu)
@@ -158,6 +160,7 @@ func load_int_array(arr: Array) -> void:
 		p.hip = arr[k]; k += 1
 		p.cling = arr[k]; k += 1
 		p.throw = arr[k]; k += 1
+		p.flinch = arr[k]; k += 1
 		p.guard = arr[k]; k += 1
 		p.guard_max = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1

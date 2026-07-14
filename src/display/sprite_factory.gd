@@ -26,6 +26,7 @@ static func build_fox() -> SpriteFrames:
 	_add(sf, "jump", FOX + "/jump/player-jump-%d.png", 2, 6.0, false)
 	_add(sf, "crouch", FOX + "/crouch/player-crouch-%d.png", 2, 8.0, false)
 	_add(sf, "hurt", FOX + "/hurt/player-hurt-%d.png", 2, 8.0, false)
+	_add(sf, "stun", FOX + "/hurt/player-hurt-%d.png", 2, 8.0, true)
 	# 仮素材のキツネに専用アタック/トス絵は無いので既存を流用(名前を存在させる)
 	_add(sf, "attack", FOX + "/jump/player-jump-%d.png", 2, 6.0, false)
 	_add(sf, "toss", FOX + "/crouch/player-crouch-%d.png", 2, 8.0, false)
@@ -72,7 +73,10 @@ static func build_mario() -> SpriteFrames:
 	_add_sheet(sf, "toss", MARIO + "/hurt/hurt.png", [0, 1, 2], [3, 4, 4], false)
 	_add_sheet(sf, "toss_fwd", MARIO + "/hip-attack/hip-attack.png", [1], [1], false)
 	_add_sheet(sf, "crouch", MARIO + "/crouch/crouch.png", [0], [1], false)
-	_add_sheet(sf, "hurt", MARIO + "/dead/dead.png", [2, 3], [6, 6], true)
+	# スタン(気絶): deadの3・4番を分かりやすい速度で交互(目回し)
+	_add_sheet(sf, "stun", MARIO + "/dead/dead.png", [2, 3], [8, 8], true)
+	# しりもち(ジャストアタック被弾): hurtシートで尻もちをつくリアクション
+	_add_sheet(sf, "hurt", MARIO + "/hurt/hurt.png", [0, 1, 2, 3, 4], [3, 3, 4, 4, 6], false)
 	# 急ブレーキ(踏ん張り1コマを滑ってる間ずっと表示)
 	_add_sheet(sf, "brake", MARIO + "/brake/brake.png", [0], [1], false)
 	# 帽子投げ(振りかぶって前へ投げるモーション)。溜め時間(30tick)に合わせてゆったり再生
@@ -106,7 +110,8 @@ static func build_mario_hatless() -> SpriteFrames:
 	_add_sheet(sf, "toss", H + "/hurt.png", [0, 1, 2], [3, 4, 4], false)
 	_add_sheet(sf, "toss_fwd", H + "/hurt.png", [0, 1, 2], [3, 4, 4], false)
 	_add_sheet(sf, "crouch", H + "/walk.png", [1], [1], false)
-	_add_sheet(sf, "hurt", H + "/dead.png", [2, 3], [6, 6], true)
+	_add_sheet(sf, "stun", H + "/dead.png", [2, 3], [8, 8], true)
+	_add_sheet(sf, "hurt", H + "/hurt.png", [0, 1, 2, 3, 4], [3, 3, 4, 4, 6], false)
 	_add_sheet(sf, "brake", H + "/brake.png", [0], [1], false)
 	# 帽子なしでも壁張り付きは起こりうる。ヒップアタックは帽子ありのみなので不要
 	_add_sheet(sf, "wallcling", H + "/wall-cling.png", [0], [1], true)
@@ -142,6 +147,7 @@ static func build_frog() -> SpriteFrames:
 	_add(sf, "run", FROG + "/idle/frog-idle-%d.png", 4, 10.0, true)
 	_add(sf, "crouch", FROG + "/idle/frog-idle-%d.png", 4, 8.0, true)
 	_add(sf, "hurt", FROG + "/idle/frog-idle-%d.png", 4, 8.0, true)
+	_add(sf, "stun", FROG + "/idle/frog-idle-%d.png", 4, 8.0, true)
 	_add(sf, "attack", FROG + "/jump/frog-jump-%d.png", 2, 6.0, false)
 	_add(sf, "toss", FROG + "/idle/frog-idle-%d.png", 4, 8.0, true)
 	_add(sf, "toss_fwd", FROG + "/idle/frog-idle-%d.png", 4, 8.0, true)

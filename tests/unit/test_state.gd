@@ -20,7 +20,7 @@ func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x11(stun/dive/guard/guard_max/cpu含む)
 	# + ボール6(spin/power含む) + last_hit_tick(1)
 	# + サーブ系4(aim/pow/tossed/flight) + hit_freeze(1) + slow_ticks(1) + フェーズ系(12) = 70
-	check_eq(SimState.new().to_int_array().size(), 109, "シリアライズ長")
+	check_eq(SimState.new().to_int_array().size(), 113, "シリアライズ長")
 
 func test_load_int_array_roundtrip() -> void:
 	# to_int_array→load_int_arrayの往復で全フィールドが復元される(ロールバックの土台)

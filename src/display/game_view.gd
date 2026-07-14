@@ -40,6 +40,7 @@ var _fx_events: Array = []
 var _prev_ground: Array[int] = [1, 1, 1, 1]
 var _prev_vx: Array[int] = [0, 0, 0, 0]
 var _prev_cd: Array[int] = [0, 0, 0, 0]
+var _prev_flinch: Array[int] = [0, 0, 0, 0]  # しりもち検知用(0→>0で砂煙)
 var _prev_stun: Array[int] = [0, 0, 0, 0]
 var _prev_power := 0
 var _prev_bvy := 0
@@ -103,12 +104,18 @@ func _ready() -> void:
 	_setup_sfx()
 	_mario_hat = SpriteFactory.build_mario()
 	_mario_hatless = SpriteFactory.build_mario_hatless()
+	var fox := SpriteFactory.build_fox()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
 		var s := AnimatedSprite2D.new()
-		# チーム0(左, index0,1)=マリオ(参考素材)、チーム1(右)=カエル
+		# チーム0(左, index0,1)=マリオ。敵チーム1は index2=キツネ, index3=カエル
 		var is_mario := Simulation.team_of(i) == 0
-		s.sprite_frames = _mario_hat if is_mario else frog
+		if is_mario:
+			s.sprite_frames = _mario_hat
+		elif i == 2:
+			s.sprite_frames = fox
+		else:
+			s.sprite_frames = frog
 		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする。
 		# マリオはセル22x29(足元中央原点)、カエル/キツネは32x32相当
 		s.centered = false
@@ -249,6 +256,10 @@ func _detect_fx() -> void:
 			# 壁張り付き中のずり落ち煙(少量)。壁と反対側へ小さく漂わせる
 			_spawn_fx("land", foot, (0.0 if p.cling > 0 else PI), Vector2(0, 12))
 			_last_dust_frame[i] = f
+		# しりもち(ジャストアタック被弾)の砂煙: 尻をついた瞬間に控えめに1回
+		if p.flinch > 0 and _prev_flinch[i] == 0:
+			_spawn_fx("land", foot, 0.0, Vector2(0, 6))
+		_prev_flinch[i] = p.flinch
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
 			# ヒットの瞬間。打った逆方向へ散る(=-ボール速度の向き)
 			var away := (-bvel).angle() if bvel.length() > 0.5 else up
@@ -428,9 +439,9 @@ func _sync_sprites() -> void:
 				_land[i] -= 1
 			if spr.animation != anim:
 				spr.play(anim)
-		# カエル素材はidle系の足元に5pxの透明余白があり浮いて見える。
-		# キツネの接地軸に合わせる表示補正(jump素材は余白なしなので補正しない)
-		if Simulation.team_of(i) == 1 and anim != "jump":
+		# カエル素材(index3)はidle系の足元に5pxの透明余白があり浮いて見える補正。
+		# キツネ・マリオは補正不要
+		if i == 3 and anim != "jump":
 			pos.y += 5.0
 		# ジャンピングトス(リーチ縁の救済)は体を倒して飛びつく。sim状態の
 		# dive(符号=方向、絶対値=残tick)から毎フレーム導出(ロールバック安全)。

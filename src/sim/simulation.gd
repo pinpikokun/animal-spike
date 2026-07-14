@@ -38,6 +38,9 @@ const CAP_HAND_UP_PX := 6  # 投げ元の手の高さ(頭より低い=手から�
 const CAP_HAND_FWD_PX := 9 # 投げ元の手の前方オフセット(向いてる方向へ)
 const CAP_BOUNCE_PX := 4   # 反発の最低速度
 const THROW_TICKS := 30    # 帽子投げの溜め(windup)時間。この間は硬直し空中でも浮く
+const HAT_GUARD_COST := 25 # 帽子投げ1回の耐久(スタミナ)消費=25%。足りずに投げるとスタン
+const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
+const KNOCKBACK_PX := 4    # しりもちで後ろへ滑る初速(px/tick)
 const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時間
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
@@ -178,8 +181,15 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		var inp: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_HAT_THROW) \
-				and p.stun == 0 and state.cap_phase == 0:
-			p.throw = THROW_TICKS
+				and p.stun == 0 and p.flinch == 0 and state.cap_phase == 0:
+			if p.guard >= HAT_GUARD_COST:
+				p.guard -= HAT_GUARD_COST  # 帽子はスタミナを消費
+				p.throw = THROW_TICKS
+			else:
+				# スタミナ切れで無理に投げるとスタン→全快で復帰(帽子は出ない)
+				p.stun = cfg.stun_ticks
+				p.guard = p.guard_max
+				state.hit_freeze = maxi(state.hit_freeze, 6)
 		if p.throw > 0:
 			p.throw -= 1
 			if p.throw == 0 and p.has_hat == 1 and state.cap_phase == 0:
@@ -198,8 +208,17 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		return
 	if state.cap_phase == 1:  # 飛行(前方へ)
 		state.cap_x += state.cap_vx
+		# ネットは越えられない: ネット面に達したら即帰還(自陣ネット際での妨害になる)
+		var owner_team: int = team_of(state.cap_owner)
+		var hit_net: bool = false
+		if owner_team == 0 and state.cap_x >= cfg.net_x - cfg.net_half_w:
+			state.cap_x = cfg.net_x - cfg.net_half_w
+			hit_net = true
+		elif owner_team == 1 and state.cap_x <= cfg.net_x + cfg.net_half_w:
+			state.cap_x = cfg.net_x + cfg.net_half_w
+			hit_net = true
 		state.cap_timer -= 1
-		if state.cap_timer <= 0:
+		if hit_net or state.cap_timer <= 0:
 			state.cap_phase = 2
 			state.cap_timer = CAP_HOVER_TICKS
 			state.cap_vx = 0
@@ -258,6 +277,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.brake = 0
 		p.run = 0
 		p.throw = 0
+		p.flinch = 0
 		p.hip = 0
 		p.cling = 0
 		p.has_hat = 1  # 投げっぱなしの帽子はラリー再開で戻す
@@ -429,12 +449,16 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
 			# 耐久力まで尽きたら本スタン(長い方が優先)
 			p.guard -= cfg.guard_dmg_power
+			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
+			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
+			var back: int = -1 if team == 0 else 1
+			p.vx = back * FP.from_int(KNOCKBACK_PX)
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
 				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
 			else:
-				p.stun = maxi(p.stun, cfg.stagger_ticks)
+				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
@@ -543,6 +567,30 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.vx = 0
 		if p.on_ground == 0:
 			p.vy = 0
+		return
+	# しりもち(butt-drop)中: 入力無効。ノックバックのvxを摩擦で減衰させ後ろへ滑る。
+	# 空中なら落下し着地する。スタンより短い被弾リアクション
+	if p.flinch > 0:
+		p.flinch -= 1
+		p.vx = p.vx * 3 / 4
+		if p.on_ground == 0:
+			if p.vy < 0:
+				p.vy = p.vy / 2
+			p.vy += cfg.gravity
+		var fmin: int = 0
+		var fmax: int = cfg.court_width
+		if team == 0:
+			fmax = cfg.net_x - cfg.net_half_w
+		else:
+			fmin = cfg.net_x + cfg.net_half_w
+		p.x = clampi(p.x + p.vx, fmin, fmax)
+		p.y += p.vy
+		if p.y >= cfg.floor_y:
+			p.y = cfg.floor_y
+			p.vy = 0
+			p.on_ground = 1
+		if p.hit_cooldown > 0:
+			p.hit_cooldown -= 1
 		return
 	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
 	if p.stun > 0:

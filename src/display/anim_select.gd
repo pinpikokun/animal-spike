@@ -6,6 +6,8 @@ extends RefCounted
 #         > 移動=run > 静止=idle
 static func anim_for(p) -> String:
 	if p.stun > 0:
+		return "stun"
+	if p.flinch > 0:
 		return "hurt"
 	if p.hip != 0:
 		return "hipdrop"

@@ -56,3 +56,17 @@ func test_cap_deflects_ball() -> void:
 
 func FP_from(v: int) -> int:
 	return v << 16
+
+func test_hat_costs_guard() -> void:
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	var g0 = s.players[0].guard
+	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
+	check(s.players[0].guard < g0, "帽子投げで耐久を消費 guard=%d" % s.players[0].guard)
+
+func test_hat_without_stamina_stuns() -> void:
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	s.players[0].guard = 5  # スタミナ不足
+	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
+	check(s.players[0].stun > 0, "スタミナ切れで投げるとスタン stun=%d" % s.players[0].stun)
+	check_eq(s.cap_phase, 0, "帽子は出ない")
+	check_eq(s.players[0].guard, s.players[0].guard_max, "スタン時に全快")
