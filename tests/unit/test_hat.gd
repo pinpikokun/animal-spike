@@ -10,33 +10,35 @@ func _rally():
 	Sim.reset_match(s, cfg, 0)
 	s.phase = St.PHASE_RALLY
 	s.serve_tossed = 1
+	# 帽子持ちはマリオ(slot1)のみ。人間入力がslot1へ届くよう操作スロットを切り替える
+	s.controlled_l = 1
 	return [s, cfg]
 
 func test_throw_and_return_cycle() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	s.players[0].face = 1
+	s.players[1].face = 1
 	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
-	check(s.players[0].throw > 0, "投げ溜め開始 throw=%d" % s.players[0].throw)
-	check_eq(s.players[0].has_hat, 1, "溜め中はまだ帽子あり")
+	check(s.players[1].throw > 0, "投げ溜め開始 throw=%d" % s.players[1].throw)
+	check_eq(s.players[1].has_hat, 1, "溜め中はまだ帽子あり")
 	# 溜めが終わると発射される
 	for t in 40:
 		Sim.tick(s, [0, 0], cfg)
 		if s.cap_phase != 0:
 			break
-	check_eq(s.players[0].has_hat, 0, "発射で帽子を外す")
+	check_eq(s.players[1].has_hat, 0, "発射で帽子を外す")
 	check(s.cap_phase != 0, "帽子が飛行中 phase=%d" % s.cap_phase)
 	# 十分な時間まわすと戻ってキャッチ(has_hat=1)する
 	var caught := false
 	for t in 400:
 		Sim.tick(s, [0, 0], cfg)
-		if s.players[0].has_hat == 1 and s.cap_phase == 0:
+		if s.players[1].has_hat == 1 and s.cap_phase == 0:
 			caught = true
 			break
 	check(caught, "最終的に帽子が戻ってキャッチされる")
 
 func test_no_throw_without_hat() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	s.players[0].has_hat = 0
+	s.players[1].has_hat = 0
 	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
 	check_eq(s.cap_phase, 0, "帽子が無ければ投げられない")
 
@@ -59,14 +61,14 @@ func FP_from(v: int) -> int:
 
 func test_hat_costs_guard() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	var g0 = s.players[0].guard
+	var g0 = s.players[1].guard
 	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
-	check(s.players[0].guard < g0, "帽子投げで耐久を消費 guard=%d" % s.players[0].guard)
+	check(s.players[1].guard < g0, "帽子投げで耐久を消費 guard=%d" % s.players[1].guard)
 
 func test_hat_without_stamina_stuns() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	s.players[0].guard = 5  # スタミナ不足
+	s.players[1].guard = 5  # スタミナ不足
 	Sim.tick(s, [SimInput.IN_HAT_THROW, 0], cfg)
-	check(s.players[0].stun > 0, "スタミナ切れで投げるとスタン stun=%d" % s.players[0].stun)
+	check(s.players[1].stun > 0, "スタミナ切れで投げるとスタン stun=%d" % s.players[1].stun)
 	check_eq(s.cap_phase, 0, "帽子は出ない")
-	check_eq(s.players[0].guard, s.players[0].guard_max, "スタン時に全快")
+	check_eq(s.players[1].guard, s.players[1].guard_max, "スタン時に全快")

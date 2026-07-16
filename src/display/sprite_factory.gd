@@ -5,6 +5,7 @@ extends RefCounted
 const FOX := "res://assets/third_party/sunny_land/PNG/sprites/player"
 const FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog"
 const MARIO := "res://assets/characters/mario"
+const PANDA := "res://assets/characters/panda"
 
 # マリオのセル寸法(全アクション共通の枠)
 const M_CW := 22
@@ -94,6 +95,30 @@ static func build_mario() -> SpriteFrames:
 	_add_sheet(sf, "victory", MARIO + "/star/star.png",
 		[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
 		[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 10, 18], false)
+	return sf
+
+# パンダ(自作キャラ第1号)。セル寸法はマリオと同じ22x29。
+# 現状walk 2コマしか無いので、全アクションをwalkの2ポーズで代用する
+# (専用モーションが出来たら順次差し替える)。
+static func build_panda() -> SpriteFrames:
+	var W := PANDA + "/walk/walk.png"
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	_add_sheet(sf, "idle", W, [1], [1], true)
+	_add_sheet(sf, "run", W, [0, 1], [5, 5], true)
+	_add_sheet(sf, "jump", W, [0], [1], false)
+	_add_sheet(sf, "attack", W, [0, 1], [4, 4], false)
+	_add_sheet(sf, "toss", W, [1], [1], false)
+	_add_sheet(sf, "toss_fwd", W, [1], [1], false)
+	_add_sheet(sf, "crouch", W, [1], [1], false)
+	_add_sheet(sf, "stun", W, [0, 1], [8, 8], true)
+	_add_sheet(sf, "hurt", W, [0, 1], [4, 4], false)
+	_add_sheet(sf, "brake", W, [1], [1], false)
+	_add_sheet(sf, "hat-throw", W, [0, 1], [5, 5], false)
+	_add_sheet(sf, "hat-catch", W, [1], [1], false)
+	_add_sheet(sf, "hipdrop", W, [0], [1], false)
+	_add_sheet(sf, "wallcling", W, [1], [1], true)
+	_add_sheet(sf, "victory", W, [0, 1], [6, 6], false)
 	return sf
 
 # 帽子を投げてる間のマリオ(茶髪)。帽子中の状態表示に使う。hatlessフォルダに無い

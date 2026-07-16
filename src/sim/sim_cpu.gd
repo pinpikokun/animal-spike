@@ -21,6 +21,17 @@ const AB_ATTACK := 4     # 味方が上げた球へジャンプ会合してア�
 const AB_SWEET := 8      # アタックはジャストミート(スイートスポット)を狙う
 const AB_SERVE_VAR := 16 # サーブの角度・威力を決定論的に散らす
 const AB_BLOCK := 32     # 相手のネット際アタックに対しネットへ詰めて跳ぶ(ブロック)
+const AB_HAT := 64       # 帽子投げ: 敵球がネット際へ落ちる軌道を読み、滞在窓に合わせて投げる
+
+# 帽子ギミックの定数(simulation.gdの鏡)。simulation.gdはsim_cpuをpreloadするため
+# こちらから参照できない(循環)。ずれはtest_cpu_hat.gdの番人テストが検出する
+const HAT_WINDUP := 30       # = THROW_TICKS
+const HAT_FLY_PX := 3        # = CAP_THROW_PX
+const HAT_OUT_TICKS := 24    # = CAP_OUT_TICKS
+const HAT_HOVER_TICKS := 90  # = CAP_HOVER_TICKS
+const HAT_RADIUS_PX := 12    # = CAP_RADIUS_PX
+const HAT_HAND_UP_PX := 6    # = CAP_HAND_UP_PX
+const HAT_GUARD_COST := 25   # = HAT_GUARD_COST
 
 # プロファイルの欄(8bitずつ)
 const P_AB := 0      # 能力フラグ
@@ -45,9 +56,9 @@ const SALT_SWEET := 3
 const PRESET_WEAK := (24 << P_DELAY) | (40 << P_AIM) | (64 << P_MISS) | (26 << P_SWEET)
 const PRESET_NORMAL := AB_PREDICT | (16 << P_DELAY) | (25 << P_AIM) | (26 << P_MISS) \
 	| (102 << P_SWEET) | (1 << P_TIQ)
-const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK) | (13 << P_DELAY) \
+const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
-const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK) \
+const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
 	| (12 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
 const PRESETS: Array[int] = [PRESET_WEAK, PRESET_NORMAL, PRESET_STRONG, PRESET_MAX]
 
@@ -296,6 +307,12 @@ static func decide(s, idx: int, cfg) -> int:
 	var on_own_side: bool = (s.ball_x < cfg.net_x) == (team == 0)
 	var input: int = 0
 	if not frozen:
+		# 帽子投げ: 敵球がネット際(帽子の滞在位置)へ落ちてくる軌道なら、
+		# 溜め+飛行の後に滞在窓へボールが入るタイミングで投げる(妨害ギミックの活用)
+		if (ab & AB_HAT) and p.stun == 0:
+			var hat_in: int = _decide_hat(s, p, cfg, team)
+			if hat_in != 0:
+				return hat_in
 		if not on_own_side:
 			# 相手コートにボール=守備局面。ブロック能力があれば相手アタッカーの
 			# ネット際ジャンプに反応してネットへ詰めて跳ぶ。それ以外は構え位置へ
@@ -487,6 +504,42 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 			return SimInput.IN_JUMP if p.on_ground == 1 else 0
 		return _walk_to(p, post, deadzone / 2)
 	return 0
+
+# 帽子投げの判断: 敵が敵陣で攻撃を組み立てている間にネット面へ帽子を先置きし、
+# ネット際の通り道(速攻・フェイント・低い弾道)を滞在90tickで塞ぐ。
+# 投げると溜め30tick硬直するため、「ボールがすぐ自陣へ来ない」局面だけ投げる。
+# 0を返したら投げない
+static func _decide_hat(s, p, cfg, team: int) -> int:
+	if p.has_hat != 1 or p.throw != 0 or s.cap_phase != 0 or p.on_ground != 1:
+		return 0
+	# 投げた後にもう1回ぶんのスタミナが残らないなら温存(切れて投げるとスタン=自滅)
+	if p.guard < HAT_GUARD_COST * 2:
+		return 0
+	# サーブ打球の飛行中は場が動く前=無駄撃ちになるので投げない
+	if s.serve_flight != 0:
+		return 0
+	# 敵がタッチした球でなければ「組み立て中」ではない
+	if s.last_touch_team != 1 - team:
+		return 0
+	# ボールが敵陣にあり、かつそのまま敵陣に落ちる(=敵がもう1タッチしてから
+	# 攻撃が来る)ことを確認。自陣へ向かう球へ投げると溜め硬直30tickで受けが崩れる
+	var on_enemy_side: bool = (s.ball_x > cfg.net_x) == (team == 0)
+	if not on_enemy_side:
+		return 0
+	var land_x: int = _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
+		cfg.floor_y - cfg.ball_radius, 1)
+	var lands_enemy: bool = (land_x > cfg.net_x) == (team == 0)
+	if not lands_enemy:
+		return 0
+	# 帽子は手から最大72px(3px/tick x 24tick)しか飛ばない。ネット面に届かない
+	# 位置から投げても妨害にならないので、届く時だけ投げる
+	var net_face: int = cfg.net_x - cfg.net_half_w if team == 0 \
+		else cfg.net_x + cfg.net_half_w
+	if absi(p.x - net_face) > FP.from_int(HAT_FLY_PX * HAT_OUT_TICKS):
+		return 0
+	# ネット方向キーを添えて投げ=帽子が確実に前(ネット)へ飛ぶ
+	var fwd: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+	return SimInput.IN_HAT_THROW | fwd
 
 static func _sweet_ok(s, idx: int, prof: int) -> bool:
 	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)

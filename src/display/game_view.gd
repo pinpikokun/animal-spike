@@ -104,14 +104,16 @@ func _ready() -> void:
 	_setup_sfx()
 	_mario_hat = SpriteFactory.build_mario()
 	_mario_hatless = SpriteFactory.build_mario_hatless()
+	var panda := SpriteFactory.build_panda()
 	var fox := SpriteFactory.build_fox()
 	var frog := SpriteFactory.build_frog()
 	for i in 4:
 		var s := AnimatedSprite2D.new()
-		# チーム0(左, index0,1)=マリオ。敵チーム1は index2=キツネ, index3=カエル
+		# チーム0(左): 手前(index0)=パンダ(自作キャラ検証)、奥(index1)=マリオ。
+		# 敵チーム1は index2=キツネ, index3=カエル
 		var is_mario := Simulation.team_of(i) == 0
 		if is_mario:
-			s.sprite_frames = _mario_hat
+			s.sprite_frames = panda if i == 0 else _mario_hat
 		elif i == 2:
 			s.sprite_frames = fox
 		else:
@@ -369,8 +371,9 @@ func _sync_sprites() -> void:
 				_catch[i] = 12
 			_prev_hat[i] = p.has_hat
 			# 溜め中(p.throw>0)は帽子ありのまま投げモーション。発射後は茶髪(帽子なし)へ
+			# slot0=パンダは帽子なし版が無いのでスプライト差し替えはしない
 			var frames: SpriteFrames = _mario_hat if p.has_hat == 1 else _mario_hatless
-			if spr.sprite_frames != frames:
+			if i != 0 and spr.sprite_frames != frames:
 				spr.sprite_frames = frames
 			if p.throw > 0:
 				anim = "hat-throw"
@@ -380,7 +383,7 @@ func _sync_sprites() -> void:
 			# 勝利: ゲームセット後、ボールが止まってから勝者のマリオが演出開始(一度立てば継続)
 			if _victory_on and Simulation.team_of(i) == state.winner:
 				anim = "victory"
-				if spr.sprite_frames != _mario_hat:
+				if i != 0 and spr.sprite_frames != _mario_hat:
 					spr.sprite_frames = _mario_hat
 		# 向き: 移動中はvxの符号で更新、静止中は保持。
 		# ただしアタック(空中打撃)だけはネット(相手)側を向く

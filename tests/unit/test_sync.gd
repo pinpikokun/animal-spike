@@ -16,7 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-const GOLDEN_COMBINED_HASH := -4853731659881197650
+# 2026-07-17: 帽子ロスター(マリオのみ所持)+CPU帽子先置きAIの意図的変更で更新
+const GOLDEN_COMBINED_HASH := -2032706702925644102
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

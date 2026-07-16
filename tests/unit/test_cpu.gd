@@ -131,8 +131,8 @@ func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, t
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(53, 13, 15, 13, 153, 2, 2)
-	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 53, "能力")
+	var prof: int = SimCpu.make_profile(117, 13, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 117, "能力")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 13, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
