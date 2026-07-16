@@ -57,7 +57,7 @@ func test_throws_hat_while_enemy_builds_attack() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_HAT_THROW, "敵の組み立て中にネットへ帽子を先置きする")
+	check(input & Simulation.IN_ABILITY1, "敵の組み立て中にネットへ帽子を先置きする")
 
 func test_no_throw_without_ability_flag() -> void:
 	var w := _hat_scene()
@@ -65,7 +65,7 @@ func test_no_throw_without_ability_flag() -> void:
 	var cfg = w[1]
 	s.players[1].cpu = SimCpu.PRESET_NORMAL  # AB_HATなし
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "能力なしは投げない")
+	check(not (input & Simulation.IN_ABILITY1), "能力なしは投げない")
 
 func test_no_throw_on_low_guard() -> void:
 	# 投げた後にもう1回ぶんの余力が残らないなら投げない(自滅スタンの構造的回避)
@@ -74,7 +74,7 @@ func test_no_throw_on_low_guard() -> void:
 	var cfg = w[1]
 	s.players[1].guard = SimCpu.HAT_GUARD_COST * 2 - 1
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "スタミナ余力なしは投げない")
+	check(not (input & Simulation.IN_ABILITY1), "スタミナ余力なしは投げない")
 
 func test_no_throw_at_own_team_ball() -> void:
 	# 味方が触った球の間に投げても敵の妨害にならない(自陣の組み立て時間を潰すだけ)
@@ -83,7 +83,7 @@ func test_no_throw_at_own_team_ball() -> void:
 	var cfg = w[1]
 	s.last_touch_team = 0
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "自チームの球では投げない")
+	check(not (input & Simulation.IN_ABILITY1), "自チームの球では投げない")
 
 func test_no_throw_at_incoming_ball() -> void:
 	# 自陣へ向かう球へ投げると溜め30tickの硬直で受けが崩れる=投げない
@@ -92,7 +92,7 @@ func test_no_throw_at_incoming_ball() -> void:
 	var cfg = w[1]
 	s.ball_vx = -FP.from_int(4)  # 自陣へ飛んで来る
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "自陣へ来る球には投げない")
+	check(not (input & Simulation.IN_ABILITY1), "自陣へ来る球には投げない")
 
 func test_no_throw_when_far_from_net() -> void:
 	# 帽子は72pxしか飛ばない。ネット面に届かない位置からは投げない(無駄撃ち温存)
@@ -101,7 +101,7 @@ func test_no_throw_when_far_from_net() -> void:
 	var cfg = w[1]
 	s.players[1].x = FP.from_int(30)  # 自陣の奥深く
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "ネットに届かない位置からは投げない")
+	check(not (input & Simulation.IN_ABILITY1), "ネットに届かない位置からは投げない")
 
 func test_no_throw_while_cap_in_flight() -> void:
 	var w := _hat_scene()
@@ -109,7 +109,7 @@ func test_no_throw_while_cap_in_flight() -> void:
 	var cfg = w[1]
 	s.cap_phase = 2
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_HAT_THROW), "帽子が出ている間は投げない")
+	check(not (input & Simulation.IN_ABILITY1), "帽子が出ている間は投げない")
 
 func test_thrown_cap_reaches_net_face() -> void:
 	# 統合検証: decideの判断どおりtickを回すと、帽子がネット面に到達して滞在する

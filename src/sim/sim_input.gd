@@ -8,4 +8,10 @@ const IN_ACTION := 8
 const IN_SWITCH := 16
 const IN_UP := 32    # 上方向の照準(上キー。ジャンプと同じキーから立つ)
 const IN_DOWN := 64  # 下方向の照準(空中で下+アクション=アタック)
-const IN_HAT_THROW := 128  # 帽子投げ(Dキー)。地上/空中どちらでも
+# 固有技スロット(ネットプロトコルで予約済み。押されたら何が起きるかはキャラ定義が決める。
+# 技1=Dキー既定(マリオ=帽子投げ)。2-4は将来の技用で、後からのビット追加は
+# ネット互換を壊すため今のうちに確保しておく)
+const IN_ABILITY1 := 128
+const IN_ABILITY2 := 256
+const IN_ABILITY3 := 512
+const IN_ABILITY4 := 1024

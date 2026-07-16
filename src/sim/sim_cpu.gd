@@ -543,7 +543,7 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 		return 0
 	# ネット方向キーを添えて投げ=帽子が確実に前(ネット)へ飛ぶ
 	var fwd: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-	return SimInput.IN_HAT_THROW | fwd
+	return SimInput.IN_ABILITY1 | fwd
 
 static func _sweet_ok(s, idx: int, prof: int) -> bool:
 	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)

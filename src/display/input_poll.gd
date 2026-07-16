@@ -20,5 +20,5 @@ static func poll() -> int:
 	if Input.is_key_pressed(KEY_C):
 		input |= SimInput.IN_SWITCH
 	if Input.is_key_pressed(KEY_D):
-		input |= SimInput.IN_HAT_THROW
+		input |= SimInput.IN_ABILITY1
 	return input

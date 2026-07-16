@@ -15,7 +15,7 @@ const IN_ACTION := SimInput.IN_ACTION
 const IN_SWITCH := SimInput.IN_SWITCH
 const IN_UP := SimInput.IN_UP
 const IN_DOWN := SimInput.IN_DOWN
-const IN_HAT_THROW := SimInput.IN_HAT_THROW
+const IN_ABILITY1 := SimInput.IN_ABILITY1
 
 # サーブトス照準。左右キー=着弾距離(0..AIM_MAXの目盛りをserve_toss_rangeへ線形対応)、
 # 上下キー=トスの高さ%(POW_MIN..POW_MAX)。距離と高さは完全に独立
@@ -181,7 +181,7 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var inp: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
-		if p.throw == 0 and p.has_hat == 1 and (inp & IN_HAT_THROW) \
+		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
 				and p.stun == 0 and p.flinch == 0 and state.cap_phase == 0:
 			if p.guard >= HAT_GUARD_COST:
