@@ -10,6 +10,7 @@ const PHASE_POINT_PAUSE := 2
 const PHASE_GAME_OVER := 3
 
 class Player:
+	var char_id: int = 0  # キャラ識別子(chars.gdのCHAR_*)。slot番号との暗黙対応を排除
 	var x: int = 0
 	var y: int = 0
 	var vx: int = 0
@@ -85,6 +86,7 @@ func _init() -> void:
 func to_int_array() -> Array[int]:
 	var out: Array[int] = [tick]
 	for p in players:
+		out.append(p.char_id)
 		out.append(p.x)
 		out.append(p.y)
 		out.append(p.vx)
@@ -144,6 +146,7 @@ func load_int_array(arr: Array) -> void:
 	var k := 0
 	tick = arr[k]; k += 1
 	for p in players:
+		p.char_id = arr[k]; k += 1
 		p.x = arr[k]; k += 1
 		p.y = arr[k]; k += 1
 		p.vx = arr[k]; k += 1

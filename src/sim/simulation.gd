@@ -6,6 +6,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -282,7 +283,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.hip = 0
 		p.cling = 0
 		# 投げっぱなしの帽子はラリー再開で戻す(帽子を持たないキャラは持たないまま)
-		p.has_hat = HAS_HAT_START[i]
+		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
 	# 飛んでる帽子も消す
 	s.cap_phase = 0
 	s.cap_vx = 0
@@ -297,11 +298,6 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	srv.hit_cooldown = 0
 	_hold_ball_on_server(s, cfg)
 
-# 帽子の初期所持(キャラ固有の技)。帽子投げ/ヒップアタック(帽子前提)はマリオ専用。
-# slot割当は表示層と同じ: 0=パンダ, 1=マリオ, 2=キツネ, 3=カエル。
-# キャラ実装(M4)でロスターデータ駆動にする(設計検討中、実装は保留)
-const HAS_HAT_START: Array[int] = [0, 1, 0, 0]
-
 static func reset_match(s, cfg, serving_team: int) -> void:
 	# 試合開始時のみキャラを初期配置に置く
 	var back: int = FP.from_int(cfg.spawn_back_px)
@@ -309,13 +305,14 @@ static func reset_match(s, cfg, serving_team: int) -> void:
 	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
 	for i in s.players.size():
 		var p = s.players[i]
+		p.char_id = Chars.ROSTER[i]  # slotとキャラを結ぶのはここだけ
 		p.x = positions[i]
 		p.y = cfg.floor_y
 		p.vx = 0
 		p.vy = 0
 		p.on_ground = 1
 		p.hit_cooldown = 0
-		p.has_hat = HAS_HAT_START[i]
+		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
 	reset_rally(s, cfg, serving_team)
 
 static func _server_index(s) -> int:

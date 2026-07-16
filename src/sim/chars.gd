@@ -1,0 +1,45 @@
+# キャラ定義の正本(4層構造の第2層=性能シート+第3層=固有技ビット)。
+# 葉ファイル: 何もpreloadしない(simulation/sim_cpu双方から安全に参照できる)。
+# キャラ追加=DEFSに1エントリ追加。当面GDScript定数、MOD開放段階でJSONローダ化
+extends RefCounted
+
+# キャラID(sim状態のchar_idに入る値。slot番号との暗黙対応を排除する)
+const CHAR_PANDA := 0
+const CHAR_MARIO := 1
+const CHAR_FOX := 2
+const CHAR_FROG := 3
+const CHAR_DEBUG := 15  # テスト専用: 全能力持ち+個性値
+
+# 固有技ビット(第3層。付け外し自由。CPUのAB_*は「やりたがるか」、こちらは「できるか」)
+const CA_HAT := 1    # 帽子投げ
+const CA_HIP := 2    # ヒップアタック
+const CA_CLING := 4  # 壁張り付き
+const CA_DASH := 8   # ダブルタップダッシュ
+
+# 性能シート(第2層)。キーが無ければ100(=標準)、ばらつき系(sc_*)は0。
+# speed=移動速度% / jump=ジャンプ力% / weight=重さ%(落下加速) / guard_max=耐久値%
+# slide=急ブレーキ滑走距離% / atk=アタック威力% / just_reward=ジャスト報酬%
+# just_window=ジャスト窓の広さ%(0=ジャスト不可) / absorb=トス反動受け流し%
+# sc_toss/sc_recv/sc_atk/sc_blk=アクション別ばらつき%(0=散らばり無し)
+const DEFS := {
+	CHAR_PANDA: {"abilities": 0, "stats": {}},
+	CHAR_MARIO: {"abilities": CA_HAT | CA_HIP | CA_CLING, "stats": {}},
+	CHAR_FOX: {"abilities": 0, "stats": {}},
+	CHAR_FROG: {"abilities": 0, "stats": {}},
+	CHAR_DEBUG: {"abilities": CA_HAT | CA_HIP | CA_CLING | CA_DASH,
+		"stats": {"speed": 130, "jump": 120, "atk": 140, "sc_atk": 40}},
+}
+
+# 対戦ロスター: slot(0..3)→char_id。ここだけがslotとキャラを結ぶ
+const ROSTER: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
+
+static func has_ability(char_id: int, bit: int) -> bool:
+	var def: Dictionary = DEFS.get(char_id, {})
+	return (int(def.get("abilities", 0)) & bit) != 0
+
+static func stat(char_id: int, key: String) -> int:
+	var def: Dictionary = DEFS.get(char_id, {})
+	var stats: Dictionary = def.get("stats", {})
+	# ばらつき系(sc_*)の既定は0=散らばり無し、他は100=標準
+	var fallback: int = 0 if key.begins_with("sc_") else 100
+	return int(stats.get(key, fallback))
