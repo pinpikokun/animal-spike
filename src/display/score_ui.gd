@@ -3,17 +3,24 @@
 extends CanvasLayer
 
 const SimState := preload("res://src/sim/sim_state.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
-# 顔アイコン(仮): 既存スプライトのidle1フレームから頭部を切り出して使う。
-# 本番キャラ(トラックB)が入ったら専用の顔アイコンに差し替える
-const FACE_MARIO := "res://assets/characters/mario/walk/walk.png"
-const FACE_PANDA := "res://assets/characters/panda/walk/walk.png"
-const FACE_FOX := "res://assets/third_party/sunny_land/PNG/sprites/player/idle/player-idle-1.png"
-const FACE_FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog/idle/frog-idle-1.png"
-const FACE_REGION_MARIO := Rect2(4, 9, 15, 13)  # 22x29 walk先頭の帽子+顔(実測y9〜21)
-const FACE_REGION_PANDA := Rect2(4, 7, 16, 13)  # 22x29 walk先頭の耳+顔(実測y7〜19)
-const FACE_REGION_FOX := Rect2(9, 10, 18, 13)  # 33x32 idleの耳+顔(実測y10〜22)
-const FACE_REGION_FROG := Rect2(6, 4, 22, 22)  # 35x32素材の顔(目玉が主役)
+# 顔アイコン(仮): 既存スプライトの1フレームから頭部を切り出して使う。
+# char_idキーの辞書(slot=キャラのハードコード禁止)。本番キャラで専用顔に差し替える
+const FACES := {
+	Chars.CHAR_PANDA: {
+		"tex": "res://assets/characters/panda/walk/walk.png",
+		"region": Rect2(4, 7, 16, 13)},  # 22x29 walk先頭の耳+顔(実測y7〜19)
+	Chars.CHAR_MARIO: {
+		"tex": "res://assets/characters/mario/walk/walk.png",
+		"region": Rect2(4, 9, 15, 13)},  # 22x29 walk先頭の帽子+顔(実測y9〜21)
+	Chars.CHAR_FOX: {
+		"tex": "res://assets/third_party/sunny_land/PNG/sprites/player/idle/player-idle-1.png",
+		"region": Rect2(9, 10, 18, 13)},  # 33x32 idleの耳+顔(実測y10〜22)
+	Chars.CHAR_FROG: {
+		"tex": "res://assets/third_party/sunny_land/PNG/sprites/frog/idle/frog-idle-1.png",
+		"region": Rect2(6, 4, 22, 22)},  # 35x32素材の顔(目玉が主役)
+}
 
 # HUD帯レイアウト(内部解像度640x360の最下段)。格ゲー定石: 自チーム左・敵チーム右
 const PANEL_XS: Array[float] = [10.0, 104.0, 458.0, 552.0]
@@ -26,7 +33,7 @@ var _msg: Label
 var _hud: Control
 var _cfg
 var _state
-var _face_tex: Array = []  # [キツネ, カエル]
+var _face_cache: Dictionary = {}  # char_id → Texture2D(遅延ロード)
 
 func _ready() -> void:
 	_score = Label.new()
@@ -41,9 +48,6 @@ func _ready() -> void:
 	_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_msg.add_theme_font_size_override("font_size", 16)
 	add_child(_msg)
-	# index別: 0,1=マリオ, 2=キツネ, 3=カエル
-	# チーム0: 手前(slot0)=パンダ、奥(slot1)=マリオ(game_viewの割り当てと一致させる)
-	_face_tex = [load(FACE_PANDA), load(FACE_MARIO), load(FACE_FOX), load(FACE_FROG)]
 	_hud = HudLayer.new()
 	_hud.ui = self
 	_hud.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -89,15 +93,14 @@ func draw_hud(c: Control) -> void:
 		var controlled: int = _state.controlled_l if team == 0 else 2 + _state.controlled_r
 		var border := Color(1.0, 0.90, 0.20) if i == controlled else Color(0.30, 0.40, 0.85)
 		c.draw_rect(Rect2(x, PANEL_Y, PANEL_W, PANEL_H), border, false, 1.0)
-		# 顔アイコン(スタン中は点滅させて状態を顔でも伝える)
-		var tex: Texture2D = _face_tex[i]
-		var region: Rect2 = FACE_REGION_MARIO
-		if i == 0:
-			region = FACE_REGION_PANDA
-		elif i == 2:
-			region = FACE_REGION_FOX
-		elif i == 3:
-			region = FACE_REGION_FROG
+		# 顔アイコン(スタン中は点滅させて状態を顔でも伝える)。char_idから辞書で引く。
+		# 未定義キャラはマリオの顔で代用(仮素材の安全側)
+		var cid: int = p.char_id
+		var face: Dictionary = FACES.get(cid, FACES[Chars.CHAR_MARIO])
+		if not _face_cache.has(cid):
+			_face_cache[cid] = load(face["tex"])
+		var tex: Texture2D = _face_cache[cid]
+		var region: Rect2 = face["region"]
 		var face_mod := Color.WHITE
 		if p.stun > 0 and (_state.tick / 4) % 2 == 0:
 			face_mod = Color(1.0, 0.5, 0.5)

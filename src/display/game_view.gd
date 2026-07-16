@@ -9,6 +9,7 @@ const ViewTransform := preload("res://src/display/view_transform.gd")
 const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 const SPRITE_HALF_H := 16.0  # キャラ素材32px高の半分(足元をノード原点に合わせる)
 const RECEIVE_HOP_PX := 4.0  # レシーブ時の小ホップ量(接地ヒットの手続き演出)
@@ -102,26 +103,18 @@ func _ready() -> void:
 	$Court.setup(cfg)
 	$ScoreUI.setup(cfg)
 	_setup_sfx()
-	_mario_hat = SpriteFactory.build_mario()
+	_mario_hat = SpriteFactory.build_for(Chars.CHAR_MARIO)
 	_mario_hatless = SpriteFactory.build_mario_hatless()
-	var panda := SpriteFactory.build_panda()
-	var fox := SpriteFactory.build_fox()
-	var frog := SpriteFactory.build_frog()
+	SpriteFactory.ensure_fallbacks(_mario_hatless)
 	for i in 4:
 		var s := AnimatedSprite2D.new()
-		# チーム0(左): 手前(index0)=パンダ(自作キャラ検証)、奥(index1)=マリオ。
-		# 敵チーム1は index2=キツネ, index3=カエル
-		var is_mario := Simulation.team_of(i) == 0
-		if is_mario:
-			s.sprite_frames = panda if i == 0 else _mario_hat
-		elif i == 2:
-			s.sprite_frames = fox
-		else:
-			s.sprite_frames = frog
-		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする。
-		# マリオはセル22x29(足元中央原点)、カエル/キツネは32x32相当
+		# キャラの見た目はsim状態のchar_idから引く(slot=キャラのハードコード禁止)
+		var cid: int = state.players[i].char_id
+		s.sprite_frames = _mario_hat if cid == Chars.CHAR_MARIO \
+			else SpriteFactory.build_for(cid)
+		# 非センター+整数オフセットで足元原点・整数ピクセル描画にする
 		s.centered = false
-		s.offset = Vector2(-11, -29) if is_mario else Vector2(-16, -32)
+		s.offset = SpriteFactory.foot_offset(cid)
 		# 手前レーン(偶数slot)を前面に描く(奥のキャラと重なった時に自然な前後関係)
 		s.z_index = 1 if i % 2 == 0 else 0
 		s.play("idle")
@@ -364,27 +357,29 @@ func _sync_sprites() -> void:
 			var t := float(p.hit_cooldown) / float(cfg.hit_cooldown_ticks)
 			pos.y -= RECEIVE_HOP_PX * t
 		var anim := AnimSelect.anim_for(p)
-		var is_mario := Simulation.team_of(i) == 0
-		# 帽子投げ中(has_hat=0)は茶髪スプライトに差し替え。戻った瞬間はキャッチ演出。
-		if is_mario:
+		var cid: int = p.char_id
+		# 帽子投げ中(has_hat=0)は帽子なしスプライトに差し替え(帽子なし版を持つキャラのみ)。
+		# 戻った瞬間はキャッチ演出。form(姿)の対応表はキャラ拡張の本実装で正式化する
+		if Chars.has_ability(cid, Chars.CA_HAT):
 			if _prev_hat[i] == 0 and p.has_hat == 1:
 				_catch[i] = 12
 			_prev_hat[i] = p.has_hat
-			# 溜め中(p.throw>0)は帽子ありのまま投げモーション。発射後は茶髪(帽子なし)へ
-			# slot0=パンダは帽子なし版が無いのでスプライト差し替えはしない
-			var frames: SpriteFrames = _mario_hat if p.has_hat == 1 else _mario_hatless
-			if i != 0 and spr.sprite_frames != frames:
-				spr.sprite_frames = frames
+			if cid == Chars.CHAR_MARIO:
+				# 溜め中(p.throw>0)は帽子ありのまま投げモーション。発射後は茶髪へ
+				var frames: SpriteFrames = _mario_hat if p.has_hat == 1 else _mario_hatless
+				if spr.sprite_frames != frames:
+					spr.sprite_frames = frames
 			if p.throw > 0:
 				anim = "hat-throw"
 			elif _catch[i] > 0:
 				anim = "hat-catch"
 				_catch[i] -= 1
-			# 勝利: ゲームセット後、ボールが止まってから勝者のマリオが演出開始(一度立てば継続)
-			if _victory_on and Simulation.team_of(i) == state.winner:
-				anim = "victory"
-				if i != 0 and spr.sprite_frames != _mario_hat:
-					spr.sprite_frames = _mario_hat
+		# 勝利: ゲームセット後、ボールが止まってから勝者チームが演出開始(全キャラ、
+		# 専用スプライトが無いキャラは代役ルールのvictoryが出る)
+		if _victory_on and Simulation.team_of(i) == state.winner:
+			anim = "victory"
+			if cid == Chars.CHAR_MARIO and spr.sprite_frames != _mario_hat:
+				spr.sprite_frames = _mario_hat
 		# 向き: 移動中はvxの符号で更新、静止中は保持。
 		# ただしアタック(空中打撃)だけはネット(相手)側を向く
 		if p.vx > 0:
@@ -430,8 +425,9 @@ func _sync_sprites() -> void:
 				spr.animation = "jump"
 			spr.pause()
 			spr.frame = 0 if p.vy < 0 else 1
-		elif is_mario and _land[i] > 0 and (anim == "idle" or anim == "run"):
-			# 着地ポーズ=マリオのjump3枚目(frogは2コマなので対象外)
+		elif spr.sprite_frames.get_frame_count("jump") >= 3 and _land[i] > 0 \
+				and (anim == "idle" or anim == "run"):
+			# 着地ポーズ=jumpの3枚目(3コマ以上のジャンプ素材を持つキャラのみ)
 			if spr.animation != "jump":
 				spr.animation = "jump"
 			spr.pause()
@@ -442,9 +438,9 @@ func _sync_sprites() -> void:
 				_land[i] -= 1
 			if spr.animation != anim:
 				spr.play(anim)
-		# カエル素材(index3)はidle系の足元に5pxの透明余白があり浮いて見える補正。
+		# カエル素材はidle系の足元に5pxの透明余白があり浮いて見える補正。
 		# キツネ・マリオは補正不要
-		if i == 3 and anim != "jump":
+		if cid == Chars.CHAR_FROG and anim != "jump":
 			pos.y += 5.0
 		# ジャンピングトス(リーチ縁の救済)は体を倒して飛びつく。sim状態の
 		# dive(符号=方向、絶対値=残tick)から毎フレーム導出(ロールバック安全)。

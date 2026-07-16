@@ -2,6 +2,8 @@
 # ヘッドレス自動テストの対象外(実描画はゲーム起動時のユーザー官能チェックで検証)。
 extends RefCounted
 
+const Chars := preload("res://src/sim/chars.gd")
+
 const FOX := "res://assets/third_party/sunny_land/PNG/sprites/player"
 const FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog"
 const MARIO := "res://assets/characters/mario"
@@ -10,6 +12,69 @@ const PANDA := "res://assets/characters/panda"
 # マリオのセル寸法(全アクション共通の枠)
 const M_CW := 22
 const M_CH := 29
+
+# 代役ルール: スプライトが無いアクションは連鎖の先頭から順に探して流用する
+# (歩きか立ち1枚あればキャラが成立する=パンダ方式の公式化)。最後の砦はidle
+const FALLBACK := {
+	"run": ["idle"],
+	"jump": ["run", "idle"],
+	"attack": ["jump", "run", "idle"],
+	"crouch": ["idle"],
+	"toss": ["crouch", "idle"],
+	"toss_fwd": ["toss", "crouch", "idle"],
+	"brake": ["crouch", "idle"],
+	"hurt": ["crouch", "idle"],
+	"stun": ["hurt", "idle"],
+	"victory": ["jump", "idle"],
+	"hat-throw": ["toss_fwd", "idle"],
+	"hat-catch": ["idle"],
+	"hipdrop": ["crouch", "jump", "idle"],
+	"wallcling": ["crouch", "idle"],
+}
+
+# char_id→SpriteFrames。キャラ追加時はここに1分岐足す(将来はキャラ定義から自動構築)
+static func build_for(char_id: int) -> SpriteFrames:
+	var sf: SpriteFrames
+	match char_id:
+		Chars.CHAR_PANDA:
+			sf = build_panda()
+		Chars.CHAR_MARIO:
+			sf = build_mario()
+		Chars.CHAR_FROG:
+			sf = build_frog()
+		_:
+			sf = build_fox()
+	ensure_fallbacks(sf)
+	return sf
+
+# 不足アクションを代役連鎖で埋める。埋めた場合は開発ログに警告を出す
+static func ensure_fallbacks(sf: SpriteFrames) -> void:
+	for anim: String in FALLBACK.keys():
+		if sf.has_animation(anim):
+			continue
+		var chain: Array = FALLBACK[anim]
+		var src := ""
+		for cand: String in chain:
+			if sf.has_animation(cand):
+				src = cand
+				break
+		if src == "":
+			push_warning("代役ルール: %s の代役が見つからない(idleすら無い)" % anim)
+			continue
+		sf.add_animation(anim)
+		sf.set_animation_speed(anim, sf.get_animation_speed(src))
+		sf.set_animation_loop(anim, sf.get_animation_loop(src))
+		for f in sf.get_frame_count(src):
+			sf.add_frame(anim, sf.get_frame_texture(src, f), sf.get_frame_duration(src, f))
+		print("代役ルール: %s ← %s で代用" % [anim, src])
+
+# 足元原点オフセット(セル寸法のキャラ差。表示層のみ)
+static func foot_offset(char_id: int) -> Vector2:
+	match char_id:
+		Chars.CHAR_PANDA, Chars.CHAR_MARIO:
+			return Vector2(-11, -29)  # セル22x29(足元中央原点)
+		_:
+			return Vector2(-16, -32)  # 32x32相当の仮素材
 
 static func _add(sf: SpriteFrames, anim: String, tmpl: String, count: int, fps: float, loop: bool) -> void:
 	sf.add_animation(anim)
