@@ -182,6 +182,7 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		var inp: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_HAT_THROW) \
+				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
 				and p.stun == 0 and p.flinch == 0 and state.cap_phase == 0:
 			if p.guard >= HAT_GUARD_COST:
 				p.guard -= HAT_GUARD_COST  # 帽子はスタミナを消費
@@ -668,10 +669,11 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		max_x = cfg.net_x - cfg.net_half_w
 	else:
 		min_x = cfg.net_x + cfg.net_half_w
-	# ヒップアタック(帽子ありのみ): 空中+下(スペース無し)で発動。空中で静止して回転し、
-	# その後まっすぐ急降下。専用アニメが帽子ありのみなのでhas_hatを要求する
+	# ヒップアタック(固有技CA_HIP): 空中+下(スペース無し)で発動。空中で静止して回転し、
+	# その後まっすぐ急降下。帽子所持への相乗りは廃止(技として独立)
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \
-			and not (input & IN_ACTION) and p.has_hat == 1
+			and not (input & IN_ACTION) \
+			and Chars.has_ability(p.char_id, Chars.CA_HIP)
 	if p.hip == 0 and want_hip:
 		p.hip = HIP_HOVER_TICKS
 	if p.hip > 0:
@@ -683,9 +685,10 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	elif p.hip == -1:
 		p.vx = 0
 		p.vy = FP.from_int(HIP_DROP_PX)
-	# 壁張り付き: 空中で外壁側へ押し付けると、壁を背にずるずる低速降下する
+	# 壁張り付き(固有技CA_CLING): 空中で外壁側へ押し付けると、壁を背にずるずる低速降下
 	p.cling = 0
-	if p.hip == 0 and p.on_ground == 0:
+	if p.hip == 0 and p.on_ground == 0 \
+			and Chars.has_ability(p.char_id, Chars.CA_CLING):
 		var at_left: bool = team == 0 and (input & IN_LEFT) != 0 and p.x <= min_x
 		var at_right: bool = team == 1 and (input & IN_RIGHT) != 0 and p.x >= max_x
 		if at_left or at_right:

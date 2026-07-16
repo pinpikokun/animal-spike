@@ -35,14 +35,25 @@ func test_hip_attack_hover_then_drop() -> void:
 	check(landed, "急降下して着地しhipが解ける")
 	check_eq(s.players[1].hip, 0, "着地でhip解除")
 
-func test_hip_needs_hat() -> void:
+func test_hip_works_without_hat() -> void:
+	# 固有技として独立: 帽子を投げてる最中(has_hat=0)でもヒップは出せる
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	s.players[1].has_hat = 0
 	Sim.tick(s, [SimInput.IN_JUMP, 0], cfg)
 	for t in 3:
 		Sim.tick(s, [0, 0], cfg)
 	Sim.tick(s, [SimInput.IN_DOWN, 0], cfg)
-	check_eq(s.players[1].hip, 0, "帽子が無ければヒップアタック不可")
+	check(s.players[1].hip > 0, "帽子なしでもヒップ可(CA_HIPが条件)")
+
+func test_hip_needs_ability() -> void:
+	# CA_HIPを持たないキャラ(パンダ=slot0)はヒップ不可
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	s.controlled_l = 0
+	Sim.tick(s, [SimInput.IN_JUMP, 0], cfg)
+	for t in 3:
+		Sim.tick(s, [0, 0], cfg)
+	Sim.tick(s, [SimInput.IN_DOWN, 0], cfg)
+	check_eq(s.players[0].hip, 0, "CA_HIP無しはヒップ不可")
 
 func test_wall_cling_slides() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
@@ -55,3 +66,15 @@ func test_wall_cling_slides() -> void:
 	Sim.tick(s, [SimInput.IN_LEFT, 0], cfg)
 	check(s.players[1].cling == 1, "左壁に張り付く cling=%d" % s.players[1].cling)
 	check(s.players[1].vy > 0, "ずるずる降下 vy=%d" % s.players[1].vy)
+
+func test_cling_needs_ability() -> void:
+	# CA_CLINGを持たないキャラ(パンダ=slot0)は壁貼り不可(従来の全キャラ可はバグ)
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	s.controlled_l = 0
+	var p = s.players[0]
+	p.x = 0
+	p.y = cfg.floor_y - (20 << 16)
+	p.on_ground = 0
+	p.vy = 0
+	Sim.tick(s, [SimInput.IN_LEFT, 0], cfg)
+	check_eq(s.players[0].cling, 0, "CA_CLING無しは張り付かない")

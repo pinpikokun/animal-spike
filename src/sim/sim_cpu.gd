@@ -13,6 +13,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -510,6 +511,9 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 # 投げると溜め30tick硬直するため、「ボールがすぐ自陣へ来ない」局面だけ投げる。
 # 0を返したら投げない
 static func _decide_hat(s, p, cfg, team: int) -> int:
+	# can(キャラ定義) AND wants(プロファイルAB_HAT)の二段ゲート。canはここで見る
+	if not Chars.has_ability(p.char_id, Chars.CA_HAT):
+		return 0
 	if p.has_hat != 1 or p.throw != 0 or s.cap_phase != 0 or p.on_ground != 1:
 		return 0
 	# 投げた後にもう1回ぶんのスタミナが残らないなら温存(切れて投げるとスタン=自滅)
