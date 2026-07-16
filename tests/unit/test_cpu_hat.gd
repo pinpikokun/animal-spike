@@ -35,6 +35,7 @@ func _hat_scene() -> Array:
 
 func test_hat_constants_match_simulation() -> void:
 	# sim_cpuは循環preload禁止のため帽子定数を鏡写しで持つ。ずれの番人
+	check_eq(SimCpu.HAT_KIND, Simulation.KIND_CAP, "エンティティ種別")
 	check_eq(SimCpu.HAT_WINDUP, Simulation.THROW_TICKS, "溜め時間")
 	check_eq(SimCpu.HAT_FLY_PX, Simulation.CAP_THROW_PX, "飛行速度")
 	check_eq(SimCpu.HAT_OUT_TICKS, Simulation.CAP_OUT_TICKS, "飛行時間")
@@ -107,7 +108,8 @@ func test_no_throw_while_cap_in_flight() -> void:
 	var w := _hat_scene()
 	var s = w[0]
 	var cfg = w[1]
-	s.cap_phase = 2
+	var slot: int = Simulation.ent_spawn(s, Simulation.KIND_CAP)
+	s.entities[slot].phase = 2
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_ABILITY1), "帽子が出ている間は投げない")
 
@@ -121,7 +123,9 @@ func test_thrown_cap_reaches_net_face() -> void:
 	for t in 200:
 		Simulation.tick(s, [0, 0], cfg)
 		# ボールが敵陣床に落ちてポーズに入っても帽子は飛び続けるので回し切る
-		if s.cap_phase == 2 and s.cap_x == cfg.net_x - cfg.net_half_w:
+		var ci: int = Simulation.ent_find(s, Simulation.KIND_CAP)
+		if ci >= 0 and s.entities[ci].phase == 2 \
+				and s.entities[ci].x == cfg.net_x - cfg.net_half_w:
 			posted = true
 			break
 	check(posted, "投げた帽子がネット面に置かれて滞在する")

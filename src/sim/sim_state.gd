@@ -69,19 +69,28 @@ var controlled_r: int = 0
 var switch_latch_l: int = 0
 var switch_latch_r: int = 0
 var winner: int = -1
-# 帽子投げ(お邪魔ギミック)。cap_phase: 0=無し, 1=飛行, 2=滞在, 3=帰還。
-# ボールと当たり判定を持ち、触れると弾く。一度に1個だけ存在する
-var cap_phase: int = 0
-var cap_x: int = 0
-var cap_y: int = 0
-var cap_vx: int = 0
-var cap_vy: int = 0
-var cap_owner: int = 0  # 投げた選手のindex(帰還先)
-var cap_timer: int = 0  # 現フェーズの残りtick
+# エンティティ枠(固定スロット): 帽子・飛び道具・設置物を同じ器で持つ。
+# kind=0が空きスロット。全欄を常時直列化する(ハッシュ・ロールバック安全)。
+# 種別ごとの意味付け(phaseの解釈等)はsimulation.gdのKIND_*とent系関数が持つ
+const ENT_SLOTS := 8
+
+class Ent:
+	var kind: int = 0   # 0=空き。1=帽子(KIND_CAP)。以後アイテム/設置物を追加
+	var phase: int = 0  # 種別ごとの段階(帽子: 1=飛行,2=滞在,3=帰還)
+	var x: int = 0
+	var y: int = 0
+	var vx: int = 0
+	var vy: int = 0
+	var owner: int = 0  # 出した選手のindex(帰還先・作用チームの導出元)
+	var timer: int = 0  # 現フェーズの残りtick
+
+var entities: Array[Ent] = []
 
 func _init() -> void:
 	for i in PLAYER_COUNT:
 		players.append(Player.new())
+	for i in ENT_SLOTS:
+		entities.append(Ent.new())
 
 func to_int_array() -> Array[int]:
 	var out: Array[int] = [tick]
@@ -132,13 +141,15 @@ func to_int_array() -> Array[int]:
 	out.append(switch_latch_l)
 	out.append(switch_latch_r)
 	out.append(winner)
-	out.append(cap_phase)
-	out.append(cap_x)
-	out.append(cap_y)
-	out.append(cap_vx)
-	out.append(cap_vy)
-	out.append(cap_owner)
-	out.append(cap_timer)
+	for e in entities:
+		out.append(e.kind)
+		out.append(e.phase)
+		out.append(e.x)
+		out.append(e.y)
+		out.append(e.vx)
+		out.append(e.vy)
+		out.append(e.owner)
+		out.append(e.timer)
 	return out
 
 func load_int_array(arr: Array) -> void:
@@ -192,13 +203,15 @@ func load_int_array(arr: Array) -> void:
 	switch_latch_l = arr[k]; k += 1
 	switch_latch_r = arr[k]; k += 1
 	winner = arr[k]; k += 1
-	cap_phase = arr[k]; k += 1
-	cap_x = arr[k]; k += 1
-	cap_y = arr[k]; k += 1
-	cap_vx = arr[k]; k += 1
-	cap_vy = arr[k]; k += 1
-	cap_owner = arr[k]; k += 1
-	cap_timer = arr[k]; k += 1
+	for e in entities:
+		e.kind = arr[k]; k += 1
+		e.phase = arr[k]; k += 1
+		e.x = arr[k]; k += 1
+		e.y = arr[k]; k += 1
+		e.vx = arr[k]; k += 1
+		e.vy = arr[k]; k += 1
+		e.owner = arr[k]; k += 1
+		e.timer = arr[k]; k += 1
 
 func state_hash() -> int:
 	# FNV-1a 64bit。オフセット値はint64符号付き表現

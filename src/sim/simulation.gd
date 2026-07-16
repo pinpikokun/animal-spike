@@ -46,6 +46,43 @@ const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時�
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
 
+# エンティティ種別(sim_state.entitiesのkind)。0=空きスロット
+const KIND_CAP := 1  # 帽子(お邪魔ギミック)
+
+# 指定kindの最初のエンティティslotを返す(無ければ-1)。線形走査で決定論
+static func ent_find(s, kind: int) -> int:
+	for j in s.entities.size():
+		if s.entities[j].kind == kind:
+			return j
+	return -1
+
+# 先頭の空きスロットに生成して番号を返す。満杯なら-1(生成失敗=安全側)
+static func ent_spawn(s, kind: int) -> int:
+	for j in s.entities.size():
+		var e = s.entities[j]
+		if e.kind == 0:
+			e.kind = kind
+			e.phase = 0
+			e.x = 0
+			e.y = 0
+			e.vx = 0
+			e.vy = 0
+			e.owner = 0
+			e.timer = 0
+			return j
+	return -1
+
+# スロットを解放(全欄ゼロ=ハッシュが空きスロットと完全一致するように)
+static func ent_free(e) -> void:
+	e.kind = 0
+	e.phase = 0
+	e.x = 0
+	e.y = 0
+	e.vx = 0
+	e.vy = 0
+	e.owner = 0
+	e.timer = 0
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -177,13 +214,14 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 # 飛んでる間ボールと当たり判定を持ち、触れると弾く。一度に1個だけ
 static func _update_hat(state, inputs: Array[int], cfg) -> void:
 	# 溜め(windup)管理: D入力で溜め開始→溜め終了フレームで発射(帽子はそれまで頭上)。
-	# _step_playerが溜め中の入力を封じる(投げは強いがリスク=硬直)
+	# _step_playerが溜め中の入力を封じる(投げは強いがリスク=硬直)。
+	# 帽子は同時に1個だけ(ent_findで存在確認)
 	for i in state.players.size():
 		var inp: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
-				and p.stun == 0 and p.flinch == 0 and state.cap_phase == 0:
+				and p.stun == 0 and p.flinch == 0 and ent_find(state, KIND_CAP) < 0:
 			if p.guard >= HAT_GUARD_COST:
 				p.guard -= HAT_GUARD_COST  # 帽子はスタミナを消費
 				p.throw = THROW_TICKS
@@ -194,56 +232,61 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 				state.hit_freeze = maxi(state.hit_freeze, 6)
 		if p.throw > 0:
 			p.throw -= 1
-			if p.throw == 0 and p.has_hat == 1 and state.cap_phase == 0:
-				var net_dir: int = 1 if team_of(i) == 0 else -1
-				var dir: int = p.face if p.face != 0 else net_dir
-				state.cap_phase = 1
-				state.cap_owner = i
-				# 頭ではなく手から放つ: 向いてる方向へ少し前、高さは手のあたり
-				state.cap_x = p.x + dir * FP.from_int(CAP_HAND_FWD_PX)
-				state.cap_y = p.y - FP.from_int(CAP_HAND_UP_PX)
-				state.cap_vx = dir * FP.from_int(CAP_THROW_PX)
-				state.cap_vy = 0
-				state.cap_timer = CAP_OUT_TICKS
-				p.has_hat = 0
-	if state.cap_phase == 0:
+			if p.throw == 0 and p.has_hat == 1 and ent_find(state, KIND_CAP) < 0:
+				var slot: int = ent_spawn(state, KIND_CAP)
+				if slot >= 0:  # 満杯なら発射失敗(帽子は頭に残る=安全側)
+					var e = state.entities[slot]
+					var net_dir: int = 1 if team_of(i) == 0 else -1
+					var dir: int = p.face if p.face != 0 else net_dir
+					e.phase = 1
+					e.owner = i
+					# 頭ではなく手から放つ: 向いてる方向へ少し前、高さは手のあたり
+					e.x = p.x + dir * FP.from_int(CAP_HAND_FWD_PX)
+					e.y = p.y - FP.from_int(CAP_HAND_UP_PX)
+					e.vx = dir * FP.from_int(CAP_THROW_PX)
+					e.vy = 0
+					e.timer = CAP_OUT_TICKS
+					p.has_hat = 0
+	var idx: int = ent_find(state, KIND_CAP)
+	if idx < 0:
 		return
-	if state.cap_phase == 1:  # 飛行(前方へ)
-		state.cap_x += state.cap_vx
-		# ネットは越えられない: ネット面に達したら即帰還(自陣ネット際での妨害になる)
-		var owner_team: int = team_of(state.cap_owner)
+	var cap = state.entities[idx]
+	if cap.phase == 1:  # 飛行(前方へ)
+		cap.x += cap.vx
+		# ネットは越えられない: ネット面に達したら即滞在(自陣ネット際での妨害になる)
+		var owner_team: int = team_of(cap.owner)
 		var hit_net: bool = false
-		if owner_team == 0 and state.cap_x >= cfg.net_x - cfg.net_half_w:
-			state.cap_x = cfg.net_x - cfg.net_half_w
+		if owner_team == 0 and cap.x >= cfg.net_x - cfg.net_half_w:
+			cap.x = cfg.net_x - cfg.net_half_w
 			hit_net = true
-		elif owner_team == 1 and state.cap_x <= cfg.net_x + cfg.net_half_w:
-			state.cap_x = cfg.net_x + cfg.net_half_w
+		elif owner_team == 1 and cap.x <= cfg.net_x + cfg.net_half_w:
+			cap.x = cfg.net_x + cfg.net_half_w
 			hit_net = true
-		state.cap_timer -= 1
-		if hit_net or state.cap_timer <= 0:
-			state.cap_phase = 2
-			state.cap_timer = CAP_HOVER_TICKS
-			state.cap_vx = 0
-	elif state.cap_phase == 2:  # 滞在(その場で回転)
-		state.cap_timer -= 1
-		if state.cap_timer <= 0:
-			state.cap_phase = 3
-	elif state.cap_phase == 3:  # 帰還(所有者の頭へ高速)
-		var owner = state.players[state.cap_owner]
+		cap.timer -= 1
+		if hit_net or cap.timer <= 0:
+			cap.phase = 2
+			cap.timer = CAP_HOVER_TICKS
+			cap.vx = 0
+	elif cap.phase == 2:  # 滞在(その場で回転)
+		cap.timer -= 1
+		if cap.timer <= 0:
+			cap.phase = 3
+	elif cap.phase == 3:  # 帰還(所有者の頭へ高速)
+		var owner = state.players[cap.owner]
 		var tx: int = owner.x
 		var ty: int = owner.y - FP.from_int(CAP_HEAD_UP_PX)
 		var rv: int = FP.from_int(CAP_RETURN_PX)
-		state.cap_x += clampi(tx - state.cap_x, -rv, rv)
-		state.cap_y += clampi(ty - state.cap_y, -rv, rv)
-		if absi(tx - state.cap_x) <= FP.from_int(CAP_CATCH_PX) \
-				and absi(ty - state.cap_y) <= FP.from_int(CAP_CATCH_PX):
-			state.cap_phase = 0  # キャッチ
+		cap.x += clampi(tx - cap.x, -rv, rv)
+		cap.y += clampi(ty - cap.y, -rv, rv)
+		if absi(tx - cap.x) <= FP.from_int(CAP_CATCH_PX) \
+				and absi(ty - cap.y) <= FP.from_int(CAP_CATCH_PX):
 			owner.has_hat = 1
+			ent_free(cap)  # キャッチ=スロット解放
 			return
 	# ボール当たり判定(飛行/滞在/帰還いずれも): 触れたら弾く
 	var r: int = FP.from_int(CAP_RADIUS_PX) + cfg.ball_radius
-	var dx: int = state.ball_x - state.cap_x
-	var dy: int = state.ball_y - state.cap_y
+	var dx: int = state.ball_x - cap.x
+	var dy: int = state.ball_y - cap.y
 	if absi(dx) < r and absi(dy) < r:
 		var bounce: int = FP.from_int(CAP_BOUNCE_PX)
 		if absi(dx) >= absi(dy):
@@ -285,11 +328,9 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.cling = 0
 		# 投げっぱなしの帽子はラリー再開で戻す(帽子を持たないキャラは持たないまま)
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
-	# 飛んでる帽子も消す
-	s.cap_phase = 0
-	s.cap_vx = 0
-	s.cap_vy = 0
-	s.cap_timer = 0
+	# 飛んでるエンティティ(帽子等)は全て消す(ラリーをまたぐ置き物は今後kind別に判断)
+	for e in s.entities:
+		ent_free(e)
 	var srv = s.players[serving_team * 2]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y

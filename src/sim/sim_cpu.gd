@@ -26,6 +26,7 @@ const AB_HAT := 64       # 帽子投げ: 敵球がネット際へ落ちる軌道
 
 # 帽子ギミックの定数(simulation.gdの鏡)。simulation.gdはsim_cpuをpreloadするため
 # こちらから参照できない(循環)。ずれはtest_cpu_hat.gdの番人テストが検出する
+const HAT_KIND := 1          # = KIND_CAP(エンティティ種別)
 const HAT_WINDUP := 30       # = THROW_TICKS
 const HAT_FLY_PX := 3        # = CAP_THROW_PX
 const HAT_OUT_TICKS := 24    # = CAP_OUT_TICKS
@@ -510,11 +511,18 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 # ネット際の通り道(速攻・フェイント・低い弾道)を滞在90tickで塞ぐ。
 # 投げると溜め30tick硬直するため、「ボールがすぐ自陣へ来ない」局面だけ投げる。
 # 0を返したら投げない
+# 帽子エンティティが場に出ているか(エンティティ枠の線形走査、決定論)
+static func _cap_exists(s) -> bool:
+	for e in s.entities:
+		if e.kind == HAT_KIND:
+			return true
+	return false
+
 static func _decide_hat(s, p, cfg, team: int) -> int:
 	# can(キャラ定義) AND wants(プロファイルAB_HAT)の二段ゲート。canはここで見る
 	if not Chars.has_ability(p.char_id, Chars.CA_HAT):
 		return 0
-	if p.has_hat != 1 or p.throw != 0 or s.cap_phase != 0 or p.on_ground != 1:
+	if p.has_hat != 1 or p.throw != 0 or _cap_exists(s) or p.on_ground != 1:
 		return 0
 	# 投げた後にもう1回ぶんのスタミナが残らないなら温存(切れて投げるとスタン=自滅)
 	if p.guard < HAT_GUARD_COST * 2:

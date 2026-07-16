@@ -474,10 +474,12 @@ func _sync_sprites() -> void:
 		ball_pos += _depth_offset(state.serving_team * 2)
 	_ball.position = ball_pos.round()
 	if _cap != null:
-		if state.cap_phase != 0:
+		var cap_i := Simulation.ent_find(state, Simulation.KIND_CAP)
+		if cap_i >= 0:
+			var cap = state.entities[cap_i]
 			_cap.visible = true
 			_cap.position = Vector2(
-				ViewTransform.to_px(state.cap_x), ViewTransform.to_px(state.cap_y)).round()
+				ViewTransform.to_px(cap.x), ViewTransform.to_px(cap.y)).round()
 		else:
 			_cap.visible = false
 	# へしゃげ: 速度がスパイク級のとき進行方向に伸び垂直に潰れる。

@@ -31,6 +31,14 @@ func test_every_int_field_affects_hash() -> void:
 			p.set(prop, orig + 1)
 			check(s.state_hash() != base, "players[%d].%s がハッシュに反映されていない" % [i, prop])
 			p.set(prop, orig)
+	for i in s.entities.size():
+		var e = s.entities[i]
+		for prop in _int_props(e):
+			field_count += 1
+			var orig: int = e.get(prop)
+			e.set(prop, orig + 1)
+			check(s.state_hash() != base, "entities[%d].%s がハッシュに反映されていない" % [i, prop])
+			e.set(prop, orig)
 	check_eq(field_count, s.to_int_array().size(), "int項目数とシリアライズ長の一致(足し忘れ検出)")
 	check_eq(s.state_hash(), base, "摂動の復元漏れなし")
 
@@ -39,9 +47,14 @@ func test_all_state_fields_are_int() -> void:
 	# フィールドを足すと直列化漏れが素通りする。型そのものをintに強制して塞ぐ
 	var s = SimState.new()
 	for p in s.get_property_list():
-		if (p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0 and p["name"] != "players":
+		if (p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0 \
+				and p["name"] != "players" and p["name"] != "entities":
 			check_eq(p["type"], TYPE_INT, "state." + str(p["name"]) + " はintで宣言する(直列化規約)")
 	for pl in s.players:
 		for p in pl.get_property_list():
 			if (p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0:
 				check_eq(p["type"], TYPE_INT, "player." + str(p["name"]) + " はintで宣言する(直列化規約)")
+	for e in s.entities:
+		for p in e.get_property_list():
+			if (p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0:
+				check_eq(p["type"], TYPE_INT, "ent." + str(p["name"]) + " はintで宣言する(直列化規約)")
