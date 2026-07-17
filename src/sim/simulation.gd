@@ -27,6 +27,9 @@ const BRAKE_TICKS := 8  # 急ブレーキ(スキッド)で旧方向へ滑る長�
 const SKID_MIN_RUN := 12  # この連続走行tick以上でのみ反転スキッドが出る(細かい追尾は滑らない)
 const RUN_CAP := 40       # 走行継続カウンタの上限
 const RUN_DECAY := 3      # ニュートラル時の走行カウンタ減衰/tick(離して押し直す反転の猶予)
+const DASH_TAP_WINDOW := 12  # ダブルタップ受付窓(tick)。1回目の押し始めからこの間に2回目
+const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
+const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
@@ -702,8 +705,26 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.run = 0
 	else:
 		p.run = in_dir  # 走り始め
+	# ダブルタップダッシュ(固有技CA_DASH): 同方向の押し始めを窓内に2回で発動。
+	# tap_dir=前tickの方向(エッジ検出)、tap_tick=窓の残り(符号=1回目の方向)。
+	# ダッシュ中にジャンプすれば空中もダッシュ速度が乗る(ダッシュジャンプ)
+	if p.dash > 0:
+		p.dash -= 1
+	var tap_edge: bool = in_dir != 0 and p.tap_dir == 0
+	if tap_edge:
+		if signi(p.tap_tick) == in_dir and Chars.has_ability(p.char_id, Chars.CA_DASH) \
+				and p.on_ground == 1:
+			p.dash = DASH_TICKS
+			p.tap_tick = 0
+		else:
+			p.tap_tick = in_dir * DASH_TAP_WINDOW
+	elif p.tap_tick != 0:
+		p.tap_tick -= signi(p.tap_tick)
+	p.tap_dir = in_dir
 	# キャラ性能シート(全員100=標準なら従来と完全一致)
 	var spd: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
+	if p.dash > 0:
+		spd = spd * DASH_SPD_PCT / 100
 	if p.brake != 0 and p.on_ground == 1:
 		var sdir: int = signi(p.brake)
 		var rem: int = absi(p.brake)

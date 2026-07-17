@@ -28,6 +28,10 @@ class Player:
 	var cling: int = 0  # 壁張り付き(0=無し, 1=左壁, -1=右壁)。表示層が読む
 	var throw: int = 0  # 帽子投げの溜め(windup)残りtick。>0の間は入力を受け付けず空中でも浮く
 	var flinch: int = 0  # ジャストアタック被弾のしりもち(butt-drop)残りtick。後ろへ滑る
+	# 入力履歴(ダブルタップ検知の最小形。コマンド技もこの方式を拡張して作る)
+	var tap_dir: int = 0   # 前tickの方向入力(-1/0/1)。押し始めエッジ検出用
+	var tap_tick: int = 0  # ダブルタップ受付窓の残り(符号=1回目の方向)
+	var dash: int = 0      # ダッシュ残りtick(CA_DASH持ちのみ立つ)。表示層も読む
 	# 耐久力(ガード): アタックをしのぐたびに減り、尽きるとスタン(満タンへ復帰)。
 	# ジャストトスで回復。guard_maxはキャラ別ステータスの器(M4で個体差を接続)
 	var guard: int = 100
@@ -113,6 +117,9 @@ func to_int_array() -> Array[int]:
 		out.append(p.cling)
 		out.append(p.throw)
 		out.append(p.flinch)
+		out.append(p.tap_dir)
+		out.append(p.tap_tick)
+		out.append(p.dash)
 		out.append(p.guard)
 		out.append(p.guard_max)
 		out.append(p.cpu)
@@ -175,6 +182,9 @@ func load_int_array(arr: Array) -> void:
 		p.cling = arr[k]; k += 1
 		p.throw = arr[k]; k += 1
 		p.flinch = arr[k]; k += 1
+		p.tap_dir = arr[k]; k += 1
+		p.tap_tick = arr[k]; k += 1
+		p.dash = arr[k]; k += 1
 		p.guard = arr[k]; k += 1
 		p.guard_max = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1

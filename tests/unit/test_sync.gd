@@ -16,8 +16,9 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-17: エンティティ枠導入(帽子移植=直列化形式変更、物理不変)で更新
-const GOLDEN_COMBINED_HASH := -8973122494012878623
+# 2026-07-18: 入力履歴フィールド追加(tap_dir/tap_tick/dash=直列化形式変更、
+# 既定ロスターはCA_DASH未所持のため物理不変)で更新
+const GOLDEN_COMBINED_HASH := 5477018628421997209
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
