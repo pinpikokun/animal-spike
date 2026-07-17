@@ -355,6 +355,9 @@ static func reset_match(s, cfg, serving_team: int) -> void:
 		p.on_ground = 1
 		p.hit_cooldown = 0
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
+		# 耐久値%: 基準100にキャラ%を掛ける(ゴリラ=高耐久などの器)
+		p.guard_max = 100 * Chars.stat(p.char_id, "guard_max") / 100
+		p.guard = p.guard_max
 	reset_rally(s, cfg, serving_team)
 
 static func _server_index(s) -> int:
@@ -486,9 +489,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# 判定はball_powerを消費する前に読む
 	# スイート判定(芯)は全用途共通: 耐久力の回復/削り、スパイクのパワー化、
 	# そして「芯で捉えたボールは慣性に流されない」(慣性が30%→10%に落ちる)
-	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+	# ジャスト窓の広さ%: 0でそのキャラはジャスト不可(数値で個性を表現)
+	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
+		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
+	# 反動受け流し%(トス技術・物理面): 高いほど入射の勢いを殺す(200で完全に殺す)。
+	# 100=標準(現行の慣性反射のまま)。ジャストの慣性カットは別枠で全キャラ共通
+	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
 	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
 		if sweet:
 			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
@@ -564,7 +572,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
 		var pct: int = 100
 		if sweet:
-			pct = cfg.spike_power_pct
+			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
+			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
 			s.ball_power = 1
 			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
 			# スローモーション12tick(1/3速)でボールが撃ち出される様をスロー再生する。
@@ -574,6 +583,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		else:
 			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
 			s.hit_freeze = maxi(s.hit_freeze, 4)
+		pct = pct * Chars.stat(p.char_id, "atk") / 100  # アタック威力%
 		var svx: int
 		var svy: int
 		if hdir != 0:
@@ -597,6 +607,18 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
 		s.ball_vy = -cfg.feint_vy
 		s.ball_vx = dir * cfg.feint_vx
+	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
+	# ジャスト成立時は打ち消す(全アクション共通の救済=腕前で常に精密になれる)
+	if not sweet:
+		var sc_key := "sc_toss"
+		if p.on_ground == 1 and p.hit_kind == 0:
+			sc_key = "sc_recv"
+		elif p.on_ground == 0 and (input & IN_DOWN):
+			sc_key = "sc_atk"
+		var sc: int = Chars.stat(p.char_id, sc_key)
+		if sc != 0:
+			s.ball_vx += s.ball_vx * sc * _scatter(s, i, 11) / (100 * 100)
+			s.ball_vy += s.ball_vy * sc * _scatter(s, i, 13) / (100 * 100)
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if s.last_touch_team == team:
@@ -606,6 +628,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	s.last_touch_team = team
 	if s.touches > cfg.max_touches:
 		_award_point(s, 1 - team, cfg)
+
+# ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
+# キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
+static func _scatter(s, actor: int, salt: int) -> int:
+	var z: int = s.tick + salt * 1000003 + (actor + 1) * 998244353
+	z = (z ^ (z >> 16)) * 2246822519
+	z = (z ^ (z >> 13)) * 3266489917
+	z = z ^ (z >> 16)
+	return (z & 0x7FFFFFFFFFFFFFFF) % 201 - 100
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
 	# 帽子投げの溜め中: 入力を一切受け付けず、その場で凍結(空中なら浮いたまま)。
@@ -671,32 +702,37 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.run = 0
 	else:
 		p.run = in_dir  # 走り始め
+	# キャラ性能シート(全員100=標準なら従来と完全一致)
+	var spd: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
 	if p.brake != 0 and p.on_ground == 1:
 		var sdir: int = signi(p.brake)
 		var rem: int = absi(p.brake)
-		p.vx = sdir * cfg.move_speed * rem / BRAKE_TICKS  # 線形減速で滑る
+		# 滑走距離%: 滑り速度に掛かる(距離=速度の積分なので距離も%で伸縮する)
+		p.vx = sdir * spd * rem * Chars.stat(p.char_id, "slide") / (BRAKE_TICKS * 100)
 		rem -= 1
 		p.brake = sdir * rem  # 残りゼロで自動的にbrake=0=反転解禁
 	else:
 		p.brake = 0  # 空中やニュートラルではスキッド解除
-		p.vx = in_dir * cfg.move_speed
+		p.vx = in_dir * spd
 	# 向き(face)をvxから更新。動いていない間は直前の向きを保持
 	if p.vx > 0:
 		p.face = 1
 	elif p.vx < 0:
 		p.face = -1
 	if (input & IN_JUMP) and p.on_ground == 1:
+		var jmp: int = Chars.stat(p.char_id, "jump")
 		if toss_stance:
-			p.vy = -cfg.hop_speed
+			p.vy = -cfg.hop_speed * jmp / 100
 		else:
-			p.vy = -cfg.jump_speed
+			p.vy = -cfg.jump_speed * jmp / 100
 		p.on_ground = 0
 	if p.on_ground == 0:
 		# 可変ジャンプ: 上昇中に上キーを離すとその場で失速して落下に転じる
 		# (毎tick半減の減衰。intの/2はゼロ方向切り捨てで決定論)
 		if p.vy < 0 and not (input & IN_JUMP):
 			p.vy = p.vy / 2
-		p.vy += cfg.gravity
+		# 重さ%: 重いキャラほど速く落ちる(着地演出の強さも表示層がここから導く)
+		p.vy += cfg.gravity * Chars.stat(p.char_id, "weight") / 100
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1
 	# ジャンピングトス演出の残時間(符号=方向)。ゼロへ向かって減る
@@ -805,6 +841,11 @@ static func _ball_vs_block(s, cfg) -> void:
 			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
 		else:
 			s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
+		# ブロックばらつき%: 弾き返す角度の散らばり(荒いキャラの個性)
+		var sc_b: int = Chars.stat(p.char_id, "sc_blk")
+		if sc_b != 0:
+			s.ball_vx += s.ball_vx * sc_b * _scatter(s, i, 17) / (100 * 100)
+			s.ball_vy += s.ball_vy * sc_b * _scatter(s, i, 19) / (100 * 100)
 		s.last_touch_team = team
 		s.touches = 0  # ブロックはタッチ数に数えない(バレー準拠)
 		s.last_hit_tick = s.tick
