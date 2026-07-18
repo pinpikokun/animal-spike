@@ -9,7 +9,7 @@
 	"hop_speed_px_s": 170,
 	"ball_radius_px": 14,
 	"ball_bounce_pct": 78,
-	"points_to_win": 15,
+	"points_to_win": 11,
 	"deuce": 1,
 	"net_x_px": 224,
 	"net_top_y_px": 275,

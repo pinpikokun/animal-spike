@@ -8,7 +8,7 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.tick_rate, 60, "tick_rate")
 	check_eq(cfg.court_width, FP.from_int(448), "court_width")
 	check_eq(cfg.floor_y, FP.from_int(320), "floor_y")
-	check_eq(cfg.points_to_win, 15, "15点先取")
+	check_eq(cfg.points_to_win, 11, "11点先取(原作準拠)")
 	check_eq(cfg.deuce, true, "デュース有")
 
 func test_default_rules_valid() -> void:

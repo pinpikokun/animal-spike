@@ -456,7 +456,7 @@ func test_hit_disabled_after_game_over() -> void:
 	check_eq(s.touches, 0, "勝敗確定後はタッチが増えない")
 	check_eq(s.ball_vx, 0, "勝敗確定後のヒット入力でボールが加速しない")
 
-func test_win_at_15() -> void:
+func test_win_at_points_to_win() -> void:
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
@@ -467,7 +467,7 @@ func test_win_at_15() -> void:
 	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(10)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check_eq(s.winner, 1, "15点で右チームの勝ち")
+	check_eq(s.winner, 1, "勝利点到達で右チームの勝ち")
 	check_eq(s.phase, SimState.PHASE_GAME_OVER, "ゲーム終了フェーズ")
 
 func test_deuce_requires_two_point_lead() -> void:
@@ -481,6 +481,6 @@ func test_deuce_requires_two_point_lead() -> void:
 	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(10)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check_eq(s.score_l, cfg.points_to_win, "左が15点")
-	check_eq(s.winner, -1, "14-15はデュースで未決着")
+	check_eq(s.score_l, cfg.points_to_win, "左が勝利点に到達")
+	check_eq(s.winner, -1, "1点差はデュースで未決着")
 	check_eq(s.phase, SimState.PHASE_POINT_PAUSE, "続行")
