@@ -56,6 +56,7 @@ const THROW_TICKS := 30    # 帽子投げの溜め(windup)時間。この間は�
 const HAT_GUARD_COST := 25 # 帽子投げ1回の耐久(スタミナ)消費=25%。足りずに投げるとスタン
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
+const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
 const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時間
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
@@ -533,6 +534,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			var back: int = -1 if team == 0 else 1
 			# 重さ%で伸縮: 重量級はどっしり、軽量級は大きく飛ばされる
 			p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 / Chars.stat(p.char_id, "weight")
+			# 空中被弾は「打ち上げられて吹っ飛ぶ」: 軽い浮きを与え滞空を延ばす
+			# (滞空中はしりもち減衰が緩いので後方への飛距離も伸びる)
+			if p.on_ground == 0:
+				p.vy = mini(p.vy, -FP.from_int(KNOCK_AIR_UP_PX_S) / cfg.tick_rate)
 			if p.guard <= 0:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
@@ -701,7 +706,8 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	# 空中なら落下し着地する。スタンより短い被弾リアクション
 	if p.flinch > 0:
 		p.flinch -= 1
-		p.vx = p.vx * 3 / 4
+		# 減衰: 地上は摩擦で早く止まる(3/4)、空中は抵抗が薄く吹っ飛び続ける(15/16)
+		p.vx = p.vx * 3 / 4 if p.on_ground == 1 else p.vx * 15 / 16
 		if p.on_ground == 0:
 			if p.vy < 0:
 				p.vy = p.vy / 2
