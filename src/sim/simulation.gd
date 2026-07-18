@@ -611,19 +611,26 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			svx = dir * cfg.spike_steep_vx * pct / 100
 		s.ball_vx = svx - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = svy - s.ball_vy * inertia / cfg.hit_inertia_den
-	elif up:
-		# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
-		s.ball_vy = -cfg.bump_up_speed
-		s.ball_vx = hdir * cfg.toss_mid_vx
-	elif hdir != 0:
-		# 空中+横: きつめの角度の山なりで遠くへトス
-		s.ball_vy = -cfg.toss_fwd_vy
-		s.ball_vx = hdir * cfg.toss_fwd_vx
 	else:
-		# 空中ニュートラル: 軟攻(フェイント)。ふわっとネット越しにポトリと落とす
-		# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
-		s.ball_vy = -cfg.feint_vy
-		s.ball_vx = dir * cfg.feint_vx
+		# 空中トス3種(上/横/フェイント)。地上・スパイクと同じ慣性反射で統一する
+		# (以前は直接代入で慣性が乗らない不整合があった)
+		var avx: int
+		var avy: int
+		if up:
+			# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
+			avy = -cfg.bump_up_speed
+			avx = hdir * cfg.toss_mid_vx
+		elif hdir != 0:
+			# 空中+横: きつめの角度の山なりで遠くへトス
+			avy = -cfg.toss_fwd_vy
+			avx = hdir * cfg.toss_fwd_vx
+		else:
+			# 空中ニュートラル: 軟攻(フェイント)。ふわっとネット越しにポトリと落とす
+			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
+			avy = -cfg.feint_vy
+			avx = dir * cfg.feint_vx
+		s.ball_vx = avx - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = avy - s.ball_vy * inertia / cfg.hit_inertia_den
 	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
 	# ジャスト成立時は打ち消す(全アクション共通の救済=腕前で常に精密になれる)
 	if not sweet:

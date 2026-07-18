@@ -121,6 +121,30 @@ func test_player_stops_before_net_face() -> void:
 	var face_r: int = cfg.net_x + cfg.net_half_w + FP.from_int(8)
 	check_eq(s.players[2].x, face_r, "右チームも対称に停止")
 
+func _air_up_toss_vy(vin_px: int) -> int:
+	# 空中上トスを1回行い、直後のボール縦速度を返す(入射速度を変えて比較する用)
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(40)
+	# スイート判定(24px)の外、リーチ(40px)の内に置く=通常ヒットで慣性30%が乗る
+	s.ball_x = p.x + FP.from_int(30)
+	s.ball_y = p.y
+	s.ball_vy = FP.from_int(vin_px) / cfg.tick_rate
+	s.ball_vx = 0
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	return s.ball_vy
+
+func test_air_toss_reflects_inertia() -> void:
+	# 空中トスにも地上と同じ慣性反射が乗る(不整合の解消)。
+	# 強く落ちてくる球を空中上トスするほど高く上がる(=入射の反発が乗る)
+	var soft: int = _air_up_toss_vy(100)
+	var hard: int = _air_up_toss_vy(700)
+	check(soft < 0 and hard < 0, "どちらも上向きに打ち上がる")
+	check(hard < soft, "強い落下球を受けた方が高く上がる(慣性反射)")
+
 func test_loose_floor_bounce_is_half() -> void:
 	# ポーズ中の床バウンドは勢い半分(設定なしの固定仕様)
 	var w := _rally_world()
