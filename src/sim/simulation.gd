@@ -35,7 +35,8 @@ const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙�
 const PLAYER_HALF_W_PX := 8    # 体の半幅。ネット面へは体表面で止まる(めり込み防止)
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
-const PUSH_UNIT_PX := 2      # 反動速度の基準(残りtick最大時に約2.5px/tick)
+const PUSH_UNIT_PX := 4      # 反動速度の基準(ジャスト反動で計28px級の後退)
+const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
 const PUSH_DECAY := 8        # 速度換算の分母
 const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
 const PUSH_BLK_TICKS := 6    # パワーボールをブロックした時の押し込み(約5px)
@@ -54,7 +55,7 @@ const CAP_BOUNCE_PX := 4   # 反発の最低速度
 const THROW_TICKS := 30    # 帽子投げの溜め(windup)時間。この間は硬直し空中でも浮く
 const HAT_GUARD_COST := 25 # 帽子投げ1回の耐久(スタミナ)消費=25%。足りずに投げるとスタン
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
-const KNOCKBACK_PX := 4    # しりもちで後ろへ滑る初速(px/tick)
+const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時間
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
@@ -516,10 +517,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# 反動受け流し%(トス技術・物理面): 高いほど入射の勢いを殺す(200で完全に殺す)。
 	# 100=標準(現行の慣性反射のまま)。ジャストの慣性カットは別枠で全キャラ共通
 	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
+	# パワーボールを芯を外して触ると返球の制御を失う(狙い30%+全反射)。
+	# 「アタックはまともに返せない」原作精神: 対処はジャスト受けかブロックのみ
+	var mangled := false
 	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
 		if sweet:
 			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 		else:
+			mangled = true
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
 			# 耐久力まで尽きたら本スタン(長い方が優先)
 			p.guard -= cfg.guard_dmg_power
@@ -536,6 +541,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
+	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
+	var aim_pct: int = 100
+	if mangled:
+		aim_pct = MANGLE_AIM_PCT
+		inertia = cfg.hit_inertia_den
 	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
 	var hdir: int = 0
 	if input & IN_LEFT:
@@ -589,8 +599,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
-		s.ball_vx = desired_vx - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = desired_vy - s.ball_vy * inertia / cfg.hit_inertia_den
+		s.ball_vx = desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	elif input & IN_DOWN:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
@@ -626,8 +636,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		else:
 			svy = cfg.spike_steep_vy * pct / 100
 			svx = dir * cfg.spike_steep_vx * pct / 100
-		s.ball_vx = svx - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = svy - s.ball_vy * inertia / cfg.hit_inertia_den
+		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	else:
 		# 空中トス3種(上/横/フェイント)。地上・スパイクと同じ慣性反射で統一する
 		# (以前は直接代入で慣性が乗らない不整合があった)
@@ -646,8 +656,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
 			avy = -cfg.feint_vy
 			avx = dir * cfg.feint_vx
-		s.ball_vx = avx - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = avy - s.ball_vy * inertia / cfg.hit_inertia_den
+		s.ball_vx = avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
 	# ジャスト成立時は打ち消す(全アクション共通の救済=腕前で常に精密になれる)
 	if not sweet:
