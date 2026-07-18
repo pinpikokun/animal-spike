@@ -145,6 +145,32 @@ func test_air_toss_reflects_inertia() -> void:
 	check(soft < 0 and hard < 0, "どちらも上向きに打ち上がる")
 	check(hard < soft, "強い落下球を受けた方が高く上がる(慣性反射)")
 
+func test_soft_ball_gives_full_control() -> void:
+	# 支配権切替: 閾値未満の緩い球は慣性ゼロ=狙いの速度そのままで打てる
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外=通常ヒット
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = FP.from_int(100) / cfg.tick_rate  # 緩い球(閾値400未満)
+	s.ball_vy = FP.from_int(200) / cfg.tick_rate
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.ball_vx, 0, "緩い球の真上トスは横成分ゼロ(流されない)")
+	check(absi(s.ball_vy - (-cfg.bump_up_speed + cfg.gravity)) <= 1,
+		"緩い球のトスは狙いの高さそのまま")
+
+func test_fast_ball_still_pushes_through() -> void:
+	# 閾値以上の強い球は従来通り慣性30%で流される
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = 0
+	s.ball_vy = FP.from_int(700) / cfg.tick_rate  # 強い落下球
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check(s.ball_vy < -cfg.bump_up_speed, "強い球は反発が上乗せされ高く上がる")
+
 func test_loose_floor_bounce_is_half() -> void:
 	# ポーズ中の床バウンドは勢い半分(設定なしの固定仕様)
 	var w := _rally_world()

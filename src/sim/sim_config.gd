@@ -41,6 +41,9 @@ var toss_mid_vx: int
 var hit_inertia_num: int
 var hit_inertia_den: int
 var hit_inertia_just_num: int  # ジャストミート時の慣性(芯で捉えると流されない)
+# 支配権切替: この速さ未満の緩い球は慣性ゼロ=完全に狙い通り打てる
+# (リアルバレー準拠: 強打はぎりぎり捕球で流されるが、緩球は自分の支配下)
+var inertia_min_speed: int
 var spike_vx: int        # 緩角スパイク(下+横): 遠くへ低く=後面狙い
 var spike_vy: int
 var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面狙い
@@ -117,6 +120,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if hit_inertia_just_num < 0 or hit_inertia_just_num > hit_inertia_num:
 		_fail("hit_inertia_just_pctは0..hit_inertia_pctであること")
 		return
+	inertia_min_speed = FP.from_int(_int_of(raw, "inertia_min_speed_px_s")) / tick_rate
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
 	spike_steep_vx = FP.from_int(_int_of(raw, "spike_steep_vx_px_s")) / tick_rate

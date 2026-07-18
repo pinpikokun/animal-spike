@@ -16,8 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-19: 空中トス3種にも慣性反射を統一適用(不整合の解消)で更新
-const GOLDEN_COMBINED_HASH := -1690349548329899781
+# 2026-07-19: 支配権切替(緩い球=慣性ゼロで狙い通り、閾値400px/s)の導入で更新
+const GOLDEN_COMBINED_HASH := -7868086288711087571
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

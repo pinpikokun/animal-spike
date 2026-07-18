@@ -501,6 +501,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
+	# 支配権切替: 緩い球(閾値未満)は慣性ゼロ=完全に狙い通り打てる。
+	# 強い球だけが「ぎりぎり捕球」で勢いに流される(リアルバレー準拠)
+	var in_sp2: int = s.ball_vx * s.ball_vx + s.ball_vy * s.ball_vy
+	if in_sp2 < cfg.inertia_min_speed * cfg.inertia_min_speed:
+		inertia = 0
 	# 反動受け流し%(トス技術・物理面): 高いほど入射の勢いを殺す(200で完全に殺す)。
 	# 100=標準(現行の慣性反射のまま)。ジャストの慣性カットは別枠で全キャラ共通
 	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
