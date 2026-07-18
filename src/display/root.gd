@@ -39,6 +39,9 @@ func _ready() -> void:
 	_menu = $OptionsMenu
 	_menu.setup(_settings)
 	_menu.settings_changed.connect(_apply_settings)
+	# メニュー表示中はローカル試合を完全停止(CPUもボールも止まる=ポーズ)。
+	# ネット対戦は止めるとデシンクするので対象外
+	_menu.visibility_changed.connect(_apply_pause)
 	get_viewport().size_changed.connect(_layout)
 	_apply_settings()
 
@@ -61,6 +64,7 @@ func _start_local_game(roster: Array) -> void:
 	_applied_physics = _physics_overrides()
 	_viewport.add_child(_game)
 	_apply_cpu_levels()
+	_apply_pause()
 
 func _restart_to_select() -> void:
 	# 物理プロファイル変更時: 進行中のローカル試合を破棄してキャラ選択からやり直す
@@ -74,6 +78,15 @@ func _restart_to_select() -> void:
 		_select = preload("res://src/display/char_select.gd").new()
 		_select.done.connect(_start_local_game)
 		_viewport.add_child(_select)
+
+func _apply_pause() -> void:
+	if _is_net:
+		return
+	var paused: bool = _menu.visible
+	for node in [_game, _debug]:
+		if node != null:
+			node.process_mode = Node.PROCESS_MODE_DISABLED if paused \
+				else Node.PROCESS_MODE_INHERIT
 
 func _apply_settings() -> void:
 	DisplayOptions.apply_window(get_window(), int(_settings.window_scale), bool(_settings.fullscreen))

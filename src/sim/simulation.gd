@@ -32,6 +32,7 @@ const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
 const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
+const PLAYER_HALF_W_PX := 8    # 体の半幅。ネット面へは体表面で止まる(めり込み防止)
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
@@ -674,9 +675,9 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		var fmin: int = 0
 		var fmax: int = cfg.court_width
 		if team == 0:
-			fmax = cfg.net_x - cfg.net_half_w
+			fmax = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
 		else:
-			fmin = cfg.net_x + cfg.net_half_w
+			fmin = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
 		p.x = clampi(p.x + p.vx, fmin, fmax)
 		p.y += p.vy
 		if p.y >= cfg.floor_y:
@@ -777,9 +778,9 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	var min_x: int = 0
 	var max_x: int = cfg.court_width
 	if team == 0:
-		max_x = cfg.net_x - cfg.net_half_w
+		max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
 	else:
-		min_x = cfg.net_x + cfg.net_half_w
+		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
 	# ヒップアタック(固有技CA_HIP): 空中+下(スペース無し)で発動。空中で静止して回転し、
 	# その後まっすぐ急降下。帽子所持への相乗りは廃止(技として独立)
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \

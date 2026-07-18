@@ -104,6 +104,23 @@ func test_toss_aim_off_keeps_legacy() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.ball_vx, cfg.bump_fwd_speed, "OFFなら従来の素レシーブ横速度")
 
+func test_player_stops_before_net_face() -> void:
+	# ネットめり込み防止: 体の半幅(8px)ぶん手前で止まる
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = FP.from_int(30)
+	s.ball_y = -FP.from_int(2000)  # ボールを遠ざけて干渉させない
+	s.ball_vy = -FP.from_int(500) / cfg.tick_rate
+	for i in 60:
+		Simulation.step(s, [Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	var face: int = cfg.net_x - cfg.net_half_w - FP.from_int(8)
+	check_eq(s.players[0].x, face, "左チームはネット面の8px手前で停止")
+	for i in 60:
+		Simulation.step(s, [0, 0, Simulation.IN_LEFT, 0], cfg)
+	var face_r: int = cfg.net_x + cfg.net_half_w + FP.from_int(8)
+	check_eq(s.players[2].x, face_r, "右チームも対称に停止")
+
 func test_loose_floor_bounce_is_half() -> void:
 	# ポーズ中の床バウンドは勢い半分(設定なしの固定仕様)
 	var w := _rally_world()
