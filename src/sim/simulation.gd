@@ -30,6 +30,8 @@ const RUN_DECAY := 3      # ニュートラル時の走行カウンタ減衰/tic
 const DASH_TAP_WINDOW := 12  # ダブルタップ受付窓(tick)。1回目の押し始めからこの間に2回目
 const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
 const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
+const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
+const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
@@ -560,6 +562,16 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = dir * cfg.bump_fwd_speed
 			p.hit_kind = 0  # レシーブ
+		# いいとこ取りトス(cfg.toss_aim=1): トス/レシーブの横速度を「味方の定位置に
+		# 落ちる値」から逆算する(原作方式)。前トス(hit_kind=2)は現行のまま。
+		# 慣性・ばらつきは外乱としてこの後に乗る=トス上手ほど狙い通り(性能シート接続)
+		if cfg.toss_aim == 1 and p.hit_kind != 2:
+			var target_x: int = FP.from_int(cfg.spawn_front_px) if team == 0 \
+				else cfg.court_width - FP.from_int(cfg.spawn_front_px)
+			target_x += hdir * FP.from_int(TOSS_AIM_SHIFT_PX)  # 上+横で狙いをずらす
+			var air_ticks: int = 2 * cfg.bump_up_speed / cfg.gravity
+			if air_ticks > 0:
+				desired_vx = (target_x - s.ball_x) / air_ticks
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
@@ -814,10 +826,10 @@ static func _step_ball(s, cfg) -> void:
 	var right: int = cfg.court_width - cfg.ball_radius
 	if s.ball_x < left:
 		s.ball_x = left + (left - s.ball_x)
-		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
 	elif s.ball_x > right:
 		s.ball_x = right - (s.ball_x - right)
-		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
 	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
@@ -882,7 +894,8 @@ static func _step_ball_loose(s, cfg) -> void:
 	if s.ball_y > floor_limit:
 		s.ball_y = floor_limit - (s.ball_y - floor_limit)
 		if s.ball_vy > 0:
-			s.ball_vy = -s.ball_vy * cfg.ball_bounce_num / cfg.ball_bounce_den
+			# 床バウンドは勢い半分(原作の「着地したら死ぬ球」の感触に寄せた減衰)
+			s.ball_vy = -s.ball_vy * LOOSE_BOUNCE_PCT / 100
 			# 乗算減衰だけだと閾値近傍で微小バウンドが長く続く速度帯がある(共振、
 			# レビュー指摘: 特定入射で数千tick跳ね続けた)。反発のたびに固定量も
 			# 減衰させ、有限バウンド回数で必ず閾値を割らせる
@@ -916,6 +929,19 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 				if s.ball_vx < 0:
 					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
+	elif cfg.net_top_original == 1 and s.ball_vy > 0 \
+			and s.ball_x >= net_left and s.ball_x <= net_right \
+			and s.ball_y >= cfg.net_top_y - cfg.ball_radius:
+		# 原作式ネットイン: 上端(白帯)に当たると縦の勢いが半減して跳ね、
+		# ネットから離れる向きへ押し出される=ポトリと落ちる緊張感
+		s.ball_y = cfg.net_top_y - cfg.ball_radius
+		s.ball_vy = -s.ball_vy / 2
+		var out_dir: int = -1 if is_left else 1
+		if s.ball_vx * out_dir < cfg.net_repel / 2:
+			s.ball_vx = out_dir * cfg.net_repel / 2
+		if was_left != is_left:
+			s.touches = 0
+			s.serve_flight = 0
 	elif was_left != is_left:
 		# ネット上空を越えた: 攻守交代なのでタッチ数リセット。サーブ打球も渡り切り
 		s.touches = 0

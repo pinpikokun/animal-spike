@@ -80,17 +80,33 @@ func _build() -> void:
 	enemy.item_selected.connect(_on_enemy_cpu)
 	v.add_child(enemy)
 
-	var rules := OptionButton.new()
-	rules.add_item("物理: 現行(Animal Spike)")
-	rules.add_item("物理: 原作風(VB2on2解析値)")
-	rules.selected = clampi(int(_settings.rules_profile), 0, 1)
-	rules.item_selected.connect(_on_rules)
-	v.add_child(rules)
+	var phys_lbl := Label.new()
+	phys_lbl.text = "物理トグル(次の試合から)"
+	v.add_child(phys_lbl)
 
-	var rules_note := Label.new()
-	rules_note.text = "※物理の切替は次の試合(キャラ選択に戻る)から"
-	rules_note.add_theme_font_size_override("font_size", 11)
-	v.add_child(rules_note)
+	var wall := CheckBox.new()
+	wall.text = "壁反射を原作式(勢い半減)"
+	wall.button_pressed = bool(_settings.wall_half)
+	wall.toggled.connect(func(on: bool) -> void:
+		_settings.wall_half = on
+		settings_changed.emit())
+	v.add_child(wall)
+
+	var net_top := CheckBox.new()
+	net_top.text = "ネット上端を原作式(当たって落ちる)"
+	net_top.button_pressed = bool(_settings.net_top_original)
+	net_top.toggled.connect(func(on: bool) -> void:
+		_settings.net_top_original = on
+		settings_changed.emit())
+	v.add_child(net_top)
+
+	var toss := CheckBox.new()
+	toss.text = "トス自動補正(定位置へ逆算=いいとこ取り)"
+	toss.button_pressed = bool(_settings.toss_assist)
+	toss.toggled.connect(func(on: bool) -> void:
+		_settings.toss_assist = on
+		settings_changed.emit())
+	v.add_child(toss)
 
 	var close := Button.new()
 	close.text = "閉じる (ESC)"
@@ -114,10 +130,6 @@ func _on_crt(on: bool) -> void:
 
 func _on_intensity(v: float) -> void:
 	_settings.crt_intensity = v
-	settings_changed.emit()
-
-func _on_rules(idx: int) -> void:
-	_settings.rules_profile = idx
 	settings_changed.emit()
 
 func _on_ally_cpu(idx: int) -> void:

@@ -18,7 +18,7 @@ var _showing_debug := false
 var _menu
 var _settings: Dictionary
 var _select: Node  # キャラ選択画面(試合開始で破棄)
-var _applied_rules_profile := 0  # 現在の試合に適用中の物理プロファイル
+var _applied_physics: Dictionary = {}  # 現在の試合に適用中の物理トグル
 var _is_net := false  # ネット対戦モード(プロファイル切替の再起動を抑制)
 
 func _ready() -> void:
@@ -42,7 +42,13 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout)
 	_apply_settings()
 
-const RULES_PATHS := ["res://data/rules.json", "res://data/rules_original.json"]
+func _physics_overrides() -> Dictionary:
+	# dev設定の物理トグル→cfgフィールド上書き値。既定は全OFF=現行挙動
+	return {
+		"wall_bounce_num": 50 if bool(_settings.wall_half) else 78,
+		"net_top_original": 1 if bool(_settings.net_top_original) else 0,
+		"toss_aim": 1 if bool(_settings.toss_assist) else 0,
+	}
 
 func _start_local_game(roster: Array) -> void:
 	if _select != null:
@@ -51,8 +57,8 @@ func _start_local_game(roster: Array) -> void:
 		_select = null
 	_game = preload("res://src/display/game_view.tscn").instantiate()
 	_game.roster = roster
-	_game.rules_path = RULES_PATHS[clampi(int(_settings.rules_profile), 0, 1)]
-	_applied_rules_profile = int(_settings.rules_profile)
+	_game.cfg_overrides = _physics_overrides()
+	_applied_physics = _physics_overrides()
 	_viewport.add_child(_game)
 	_apply_cpu_levels()
 
@@ -74,8 +80,8 @@ func _apply_settings() -> void:
 	DisplayOptions.save(_settings)
 	_apply_cpu_levels()
 	_layout()
-	# 物理プロファイルが変わったらローカル試合を作り直す(ネット対戦は触らない)
-	if not _is_net and _game != null and int(_settings.rules_profile) != _applied_rules_profile:
+	# 物理トグルが変わったらローカル試合を作り直す(ネット対戦は触らない)
+	if not _is_net and _game != null and _physics_overrides() != _applied_physics:
 		_restart_to_select()
 
 func _apply_cpu_levels() -> void:

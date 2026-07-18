@@ -14,14 +14,12 @@ func test_loads_default_rules() -> void:
 func test_default_rules_valid() -> void:
 	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")
 
-func test_original_profile_loads() -> void:
-	# 原作風物理プロファイル(dev設定で切替)。読み込み可能で骨格は現行と同一
-	var cfg = SimConfig.new("res://data/rules_original.json")
-	check_eq(cfg.valid, true, "原作風プロファイルはvalid")
-	check_eq(cfg.points_to_win, 11, "11点先取")
-	check_eq(cfg.court_width, FP.from_int(448), "コート寸法は現行と同じ")
-	var base = SimConfig.new()
-	check(cfg.gravity > base.gravity, "原作風は重力が強い(速いテンポ)")
+func test_physics_toggle_defaults() -> void:
+	# 物理トグル3種の既定は全OFF=現行挙動(dev設定が試合開始前に上書きする)
+	var cfg = SimConfig.new()
+	check_eq(cfg.wall_bounce_num, 78, "壁反射の既定は現行78%")
+	check_eq(cfg.net_top_original, 0, "ネット上端の既定は現行(素通し)")
+	check_eq(cfg.toss_aim, 0, "トスの既定は現行(打ち出し方式)")
 
 func test_invalid_rules_detected() -> void:
 	# 下のUSER ERROR出力はこのテストが意図的に出させているもの(異常系の検証)
