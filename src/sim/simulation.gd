@@ -754,12 +754,11 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.face = 1
 	elif p.vx < 0:
 		p.face = -1
-	if (input & IN_JUMP) and p.on_ground == 1:
-		var jmp: int = Chars.stat(p.char_id, "jump")
-		if toss_stance:
-			p.vy = -cfg.hop_speed * jmp / 100
-		else:
-			p.vy = -cfg.jump_speed * jmp / 100
+	if (input & IN_JUMP) and p.on_ground == 1 and not toss_stance:
+		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。
+		# simで跳ぶと上トスが「空中ヒット」扱いになり地上トス表(慣性込み)から
+		# 外れてしまうバグがあった(実ジャンプ化は意図しない実装だった)
+		p.vy = -cfg.jump_speed * Chars.stat(p.char_id, "jump") / 100
 		p.on_ground = 0
 	if p.on_ground == 0:
 		# 可変ジャンプ: 上昇中に上キーを離すとその場で失速して落下に転じる

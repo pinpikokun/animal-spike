@@ -446,8 +446,9 @@ func test_jump_toss_lifts_instead_of_spike() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check(s.ball_vy < 0, "ジャンプトスは上向き(スパイクの下向きと逆)")
 
-func test_hop_toss_on_up_action() -> void:
-	# ↑+アクション(横なし): フルジャンプせず小ホップして真上トス
+func test_up_toss_stays_grounded() -> void:
+	# ↑+アクション(横なし): 真上トス。simでは跳ばない(ホップは表示層の演出のみ)。
+	# 実ジャンプにすると空中ヒット扱いになり地上トス表(慣性込み)から外れるため
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -456,13 +457,12 @@ func test_hop_toss_on_up_action() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(p.on_ground, 0, "小ホップで浮く")
-	check(p.vy >= -cfg.hop_speed and p.vy < 0, "ホップはフルジャンプより軽い")
-	check(p.vy > -cfg.jump_speed, "フルジャンプにはならない")
+	check_eq(p.on_ground, 1, "トス構えでは跳ばない(地上ヒット扱い)")
+	check_eq(s.ball_vx, 0, "真上トスは横成分ゼロ")
 	check(s.ball_vy < 0, "ボールは上へトスされる")
 
-func test_toss_stance_hops_without_moving() -> void:
-	# ↑+横+アクション: 小ホップはするが移動はしない(横キーはトス方向指定専用)
+func test_toss_stance_locks_movement() -> void:
+	# ↑+横+アクション: 移動はしない(横キーはトス方向指定専用)。跳びもしない
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -473,7 +473,7 @@ func test_toss_stance_hops_without_moving() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_JUMP
 		| Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(p.x, x0, "トス構え中は横キーで移動しない")
-	check(p.vy >= -cfg.hop_speed and p.vy < 0, "小ホップになる(フルジャンプではない)")
+	check_eq(p.on_ground, 1, "トス構えでは跳ばない(地上ヒット扱い)")
 	check_eq(s.touches, 1, "トスが成立する")
 	check_eq(s.ball_vx, cfg.toss_mid_vx, "上+横=中間トス(緩やかな前目)")
 

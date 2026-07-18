@@ -16,8 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-19: ネットめり込み防止(体半幅8pxで停止)の意図的変更(ユーザー指摘)で更新
-const GOLDEN_COMBINED_HASH := 5654003367934012513
+# 2026-07-19: トス構えの実ジャンプ廃止(上トスを地上ヒット扱いに修正)で更新
+const GOLDEN_COMBINED_HASH := 7940978918304922845
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
