@@ -80,6 +80,18 @@ func _build() -> void:
 	enemy.item_selected.connect(_on_enemy_cpu)
 	v.add_child(enemy)
 
+	var rules := OptionButton.new()
+	rules.add_item("物理: 現行(Animal Spike)")
+	rules.add_item("物理: 原作風(VB2on2解析値)")
+	rules.selected = clampi(int(_settings.rules_profile), 0, 1)
+	rules.item_selected.connect(_on_rules)
+	v.add_child(rules)
+
+	var rules_note := Label.new()
+	rules_note.text = "※物理の切替は次の試合(キャラ選択に戻る)から"
+	rules_note.add_theme_font_size_override("font_size", 11)
+	v.add_child(rules_note)
+
 	var close := Button.new()
 	close.text = "閉じる (ESC)"
 	close.pressed.connect(func() -> void: visible = false)
@@ -102,6 +114,10 @@ func _on_crt(on: bool) -> void:
 
 func _on_intensity(v: float) -> void:
 	_settings.crt_intensity = v
+	settings_changed.emit()
+
+func _on_rules(idx: int) -> void:
+	_settings.rules_profile = idx
 	settings_changed.emit()
 
 func _on_ally_cpu(idx: int) -> void:

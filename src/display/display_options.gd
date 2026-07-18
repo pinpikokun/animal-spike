@@ -15,8 +15,10 @@ static func apply_window(win: Window, scale: int, fullscreen: bool) -> void:
 static func default_dict() -> Dictionary:
 	# ally/enemy_cpu_level: 0=弱 1=普通 2=強 3=最強(sim_cpu.gdのプリセットに対応)。
 	# 開発中の既定は敵=最強・味方=最強。リリース時はストーリーモードが敵を上書きする
+	# rules_profile: 0=現行物理(rules.json) 1=原作風物理(rules_original.json)。
+	# 変更は次の試合開始(キャラ選択へ戻る)から効く
 	return {"window_scale": 2, "fullscreen": false, "crt_on": false, "crt_intensity": 0.35,
-		"ally_cpu_level": 3, "enemy_cpu_level": 3}
+		"ally_cpu_level": 3, "enemy_cpu_level": 3, "rules_profile": 0}
 
 static func save(d: Dictionary) -> void:
 	var cf := ConfigFile.new()

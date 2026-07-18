@@ -18,6 +18,8 @@ var _showing_debug := false
 var _menu
 var _settings: Dictionary
 var _select: Node  # キャラ選択画面(試合開始で破棄)
+var _applied_rules_profile := 0  # 現在の試合に適用中の物理プロファイル
+var _is_net := false  # ネット対戦モード(プロファイル切替の再起動を抑制)
 
 func _ready() -> void:
 	_container = $Container
@@ -25,6 +27,7 @@ func _ready() -> void:
 	# 起動引数 -- 以降に host/join があればネット対戦シーンへ差し替える(M2検証)
 	var uargs := OS.get_cmdline_user_args()
 	if uargs.has("host") or uargs.has("join"):
+		_is_net = true
 		_game = preload("res://src/net/net_match.tscn").instantiate()
 		_viewport.add_child(_game)
 	else:
@@ -39,6 +42,8 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout)
 	_apply_settings()
 
+const RULES_PATHS := ["res://data/rules.json", "res://data/rules_original.json"]
+
 func _start_local_game(roster: Array) -> void:
 	if _select != null:
 		_viewport.remove_child(_select)
@@ -46,14 +51,32 @@ func _start_local_game(roster: Array) -> void:
 		_select = null
 	_game = preload("res://src/display/game_view.tscn").instantiate()
 	_game.roster = roster
+	_game.rules_path = RULES_PATHS[clampi(int(_settings.rules_profile), 0, 1)]
+	_applied_rules_profile = int(_settings.rules_profile)
 	_viewport.add_child(_game)
 	_apply_cpu_levels()
+
+func _restart_to_select() -> void:
+	# 物理プロファイル変更時: 進行中のローカル試合を破棄してキャラ選択からやり直す
+	if _showing_debug:
+		_toggle_debug()
+	if _game != null:
+		_viewport.remove_child(_game)
+		_game.queue_free()
+		_game = null
+	if _select == null:
+		_select = preload("res://src/display/char_select.gd").new()
+		_select.done.connect(_start_local_game)
+		_viewport.add_child(_select)
 
 func _apply_settings() -> void:
 	DisplayOptions.apply_window(get_window(), int(_settings.window_scale), bool(_settings.fullscreen))
 	DisplayOptions.save(_settings)
 	_apply_cpu_levels()
 	_layout()
+	# 物理プロファイルが変わったらローカル試合を作り直す(ネット対戦は触らない)
+	if not _is_net and _game != null and int(_settings.rules_profile) != _applied_rules_profile:
+		_restart_to_select()
 
 func _apply_cpu_levels() -> void:
 	# CPUの強さをsim状態へ反映(ローカルプレイのみ)。ネット対戦のstateは
