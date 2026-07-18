@@ -88,6 +88,25 @@ func test_just_receive_keeps_control() -> void:
 	check(absi(s.ball_vx) < vin_x / 2, "ジャスト受けは流されずほぼ狙い通り")
 	check_eq(p.flinch, 0, "ジャスト受けは被弾しない")
 
+func test_guard_break_flies_to_wall() -> void:
+	# ガードブレイク(気絶)の一撃は自陣の壁際まで吹っ飛ぶフィニッシュ
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.guard = cfg.guard_dmg_power  # 次の一発で0=気絶
+	s.last_touch_team = 1
+	s.ball_power = 1
+	s.ball_x = p.x + FP.from_int(30)  # スイート外
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = -FP.from_int(600) / cfg.tick_rate
+	s.ball_vy = FP.from_int(300) / cfg.tick_rate
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(p.stun > 0, "気絶の前提確認")
+	for i in 120:
+		Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(p.x < FP.from_int(30), "自陣の壁際(左端30px以内)まで吹っ飛ぶ")
+
 func test_power_ball_block_pushes_blocker() -> void:
 	# パワーボールをブロックすると小さく押し込まれる。通常球は無反動
 	var w := _rally_world()

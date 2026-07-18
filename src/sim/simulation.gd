@@ -41,6 +41,7 @@ const PUSH_DECAY := 8        # 速度換算の分母
 const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
 const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押し込み(約22px)
 const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
+const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=自陣の壁際まで届く大出力
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
@@ -542,6 +543,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				p.stun = cfg.stun_ticks
 				p.guard = p.guard_max
 				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
+				# 決着の一撃: 自陣の壁際まで吹っ飛ばされて気絶する(壁クランプで止まる)。
+				# 重さ%は掛けない=誰でも壁まで飛ぶフィニッシュ演出(浮きは共通処理が担う)
+				p.push = back * PUSH_STUN_TICKS
 			else:
 				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
