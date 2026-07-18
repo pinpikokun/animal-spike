@@ -39,8 +39,8 @@ const PUSH_UNIT_PX := 4      # 反動速度の基準(ジャスト反動で計28p
 const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
 const PUSH_DECAY := 8        # 速度換算の分母
 const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
-const PUSH_BLK_TICKS := 6    # パワーボールをブロックした時の押し込み(約5px)
-const PUSH_MAX_TICKS := 14   # 軽量キャラでも吹っ飛びすぎない上限
+const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押し込み(約22px)
+const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
