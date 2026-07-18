@@ -35,10 +35,11 @@ const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙�
 const PLAYER_HALF_W_PX := 8    # 体の半幅。ネット面へは体表面で止まる(めり込み防止)
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
-const PUSH_DECAY := 8        # 速度換算の分母(残り8tickで約1px/tick)
-const PUSH_ATK_TICKS := 8    # ジャストアタックの反動(重さ100で約4.5px後退)
-const PUSH_BLK_TICKS := 5    # パワーボールをブロックした時の押し込み(約2px)
-const PUSH_MAX_TICKS := 12   # 軽量キャラでも吹っ飛びすぎない上限
+const PUSH_UNIT_PX := 2      # 反動速度の基準(残りtick最大時に約2.5px/tick)
+const PUSH_DECAY := 8        # 速度換算の分母
+const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
+const PUSH_BLK_TICKS := 6    # パワーボールをブロックした時の押し込み(約5px)
+const PUSH_MAX_TICKS := 14   # 軽量キャラでも吹っ飛びすぎない上限
 # 帽子投げ(お邪魔ギミック)。距離・速度はpx/tick、時間はtick
 const CAP_THROW_PX := 3    # 前方への飛行速度(px/tick)
 const CAP_OUT_TICKS := 24  # 前方へ飛ぶ時間(=飛距離)
@@ -781,7 +782,7 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	# 地上でも空中でも効く(空中のジャスト反動もここで滑る)。
 	# faceの後に足すので、押されても向きは変わらない(反動でのけぞる見た目は表示層)
 	if p.push != 0:
-		p.vx += signi(p.push) * FP.from_int(1) * absi(p.push) / PUSH_DECAY
+		p.vx += signi(p.push) * FP.from_int(PUSH_UNIT_PX) * absi(p.push) / PUSH_DECAY
 		p.push -= signi(p.push)
 	if (input & IN_JUMP) and p.on_ground == 1 and not toss_stance:
 		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。

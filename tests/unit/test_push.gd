@@ -35,7 +35,7 @@ func test_just_attack_recoils_attacker() -> void:
 	for i in 60:
 		Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(p.x < x0, "反動で後退している")
-	check(x0 - p.x < FP.from_int(10), "後退はわずか(吹っ飛びすぎない)")
+	check(x0 - p.x < FP.from_int(25), "後退は控えめ(吹っ飛びすぎない)")
 	check_eq(p.push, 0, "反動は減衰して消える")
 
 func test_normal_attack_no_recoil() -> void:
