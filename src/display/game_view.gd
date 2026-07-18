@@ -79,6 +79,9 @@ const KIRAN_MIN_H_FP := 120 << 16  # 頂点キランを出す最低高度(床か
 # 表示する(相手のサーブ予測軌跡が見えると駆け引きが死ぬ)。ネット対戦では
 # net_match.gdがホスト=0/クライアント=1を設定する
 var local_team := 0
+# キャラ選択画面が渡すロスター(slot0..3のchar_id)。空なら既定Chars.ROSTER。
+# add_child前に設定すること(_readyのreset_matchで使う)
+var roster: Array = []
 
 func attach_external(cfg_in, state_ref) -> void:
 	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
@@ -93,7 +96,8 @@ func _ready() -> void:
 			push_error("rules.jsonの読み込みに失敗したため起動を中止する")
 			return
 		state = SimState.new()
-		Simulation.reset_match(state, cfg, 0)
+		var r: Array = roster if not roster.is_empty() else Chars.ROSTER
+		Simulation.reset_match(state, cfg, 0, r)
 	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
 	# コートが画面より狭いぶん中央寄せ。縦は上へ寄せて下端の顔HUD帯(y=332..356)と
 	# コート床(floor_y=320)・キャラの足元が重ならないようにする

@@ -17,6 +17,7 @@ var _debug: Node
 var _showing_debug := false
 var _menu
 var _settings: Dictionary
+var _select: Node  # キャラ選択画面(試合開始で破棄)
 
 func _ready() -> void:
 	_container = $Container
@@ -25,15 +26,28 @@ func _ready() -> void:
 	var uargs := OS.get_cmdline_user_args()
 	if uargs.has("host") or uargs.has("join"):
 		_game = preload("res://src/net/net_match.tscn").instantiate()
+		_viewport.add_child(_game)
 	else:
-		_game = preload("res://src/display/game_view.tscn").instantiate()
-	_viewport.add_child(_game)
+		# ローカルプレイはキャラ選択画面から(Escスキップで既定編成)
+		_select = preload("res://src/display/char_select.gd").new()
+		_select.done.connect(_start_local_game)
+		_viewport.add_child(_select)
 	_settings = DisplayOptions.load_or_default()
 	_menu = $OptionsMenu
 	_menu.setup(_settings)
 	_menu.settings_changed.connect(_apply_settings)
 	get_viewport().size_changed.connect(_layout)
 	_apply_settings()
+
+func _start_local_game(roster: Array) -> void:
+	if _select != null:
+		_viewport.remove_child(_select)
+		_select.queue_free()
+		_select = null
+	_game = preload("res://src/display/game_view.tscn").instantiate()
+	_game.roster = roster
+	_viewport.add_child(_game)
+	_apply_cpu_levels()
 
 func _apply_settings() -> void:
 	DisplayOptions.apply_window(get_window(), int(_settings.window_scale), bool(_settings.fullscreen))
@@ -68,9 +82,10 @@ func _layout() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_F1:
+		if event.keycode == KEY_F1 and _select == null:
 			_toggle_debug()
-		elif event.keycode == KEY_ESCAPE:
+		elif event.keycode == KEY_ESCAPE and _select == null:
+			# キャラ選択中のEscは選択画面のスキップ操作に譲る
 			_menu.toggle()
 
 func _toggle_debug() -> void:

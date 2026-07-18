@@ -53,6 +53,21 @@ func test_all_hundred_matches_legacy_values() -> void:
 	Sim.tick(s, [SimInput.IN_RIGHT, 0], cfg)
 	check_eq(s.players[0].vx, cfg.move_speed, "speed100=cfg.move_speedそのまま")
 
+func test_reset_match_custom_roster() -> void:
+	# キャラ選択画面が渡すロスターがsimへ通る。省略時は既定ROSTER(挙動不変)
+	var cfg = Cfg.new()
+	var s = St.new()
+	var roster: Array = [Chars.CHAR_MARIO, Chars.CHAR_MARIO, Chars.CHAR_PANDA, Chars.CHAR_FROG]
+	Sim.reset_match(s, cfg, 0, roster)
+	for i in 4:
+		check_eq(s.players[i].char_id, roster[i], "slot%dのchar_id" % i)
+	check_eq(s.players[0].has_hat, 1, "マリオ編成は帽子持ち")
+	check_eq(s.players[2].has_hat, 0, "パンダは帽子無し")
+	var s2 = St.new()
+	Sim.reset_match(s2, cfg, 0)
+	for i in 4:
+		check_eq(s2.players[i].char_id, Chars.ROSTER[i], "省略時は既定ロスター")
+
 func test_scatter_is_deterministic() -> void:
 	# 同じtick/actor/saltなら同じ値(両ピア同値・ロールバック再現の土台)
 	var s = St.new()

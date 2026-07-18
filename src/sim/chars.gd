@@ -30,8 +30,20 @@ const DEFS := {
 		"stats": {"speed": 130, "jump": 120, "atk": 140, "sc_atk": 40}},
 }
 
-# 対戦ロスター: slot(0..3)→char_id。ここだけがslotとキャラを結ぶ
+# 既定ロスター: slot(0..3)→char_id。キャラ選択画面を通らない場合に使う
 const ROSTER: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
+
+# キャラ選択画面に並ぶ顔ぶれ(CHAR_DEBUGは載せない)
+const SELECTABLE: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
+
+# 表示名(選択画面用。simは参照しない)
+const NAMES := {
+	CHAR_PANDA: "PANDA",
+	CHAR_MARIO: "MARIO",
+	CHAR_FOX: "FOX",
+	CHAR_FROG: "FROG",
+	CHAR_DEBUG: "DEBUG",
+}
 
 static func has_ability(char_id: int, bit: int) -> bool:
 	var def: Dictionary = DEFS.get(char_id, {})

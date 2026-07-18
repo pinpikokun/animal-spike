@@ -343,14 +343,15 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	srv.hit_cooldown = 0
 	_hold_ball_on_server(s, cfg)
 
-static func reset_match(s, cfg, serving_team: int) -> void:
-	# 試合開始時のみキャラを初期配置に置く
+static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER) -> void:
+	# 試合開始時のみキャラを初期配置に置く。rosterは試合セットアップの一部
+	# (ネット対戦では開始時に両者で同じ配列を渡すこと=決定論安全)
 	var back: int = FP.from_int(cfg.spawn_back_px)
 	var front: int = FP.from_int(cfg.spawn_front_px)
 	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
 	for i in s.players.size():
 		var p = s.players[i]
-		p.char_id = Chars.ROSTER[i]  # slotとキャラを結ぶのはここだけ
+		p.char_id = roster[i]  # slotとキャラを結ぶのはここだけ
 		p.x = positions[i]
 		p.y = cfg.floor_y
 		p.vx = 0
