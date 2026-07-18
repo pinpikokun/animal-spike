@@ -3,6 +3,7 @@
 extends CanvasLayer
 
 signal settings_changed
+signal restart_requested  # キャラ選択(タイトル)からやり直す(ローカルのみ)
 
 const SCALES := [2, 3, 4]
 const CPU_LEVELS := ["弱", "普通", "強", "最強"]
@@ -107,6 +108,13 @@ func _build() -> void:
 		_settings.toss_assist = on
 		settings_changed.emit())
 	v.add_child(toss)
+
+	var restart := Button.new()
+	restart.text = "キャラ選択からやり直す"
+	restart.pressed.connect(func() -> void:
+		visible = false
+		restart_requested.emit())
+	v.add_child(restart)
 
 	var close := Button.new()
 	close.text = "閉じる (ESC)"

@@ -42,6 +42,9 @@ func _ready() -> void:
 	# メニュー表示中はローカル試合を完全停止(CPUもボールも止まる=ポーズ)。
 	# ネット対戦は止めるとデシンクするので対象外
 	_menu.visibility_changed.connect(_apply_pause)
+	_menu.restart_requested.connect(func() -> void:
+		if not _is_net:  # ネット対戦の途中離脱は切断=敗北フローで扱う(M2)
+			_restart_to_select())
 	get_viewport().size_changed.connect(_layout)
 	_apply_settings()
 
