@@ -29,9 +29,6 @@ const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばさ
 static func team_of(i: int) -> int:
 	return SimStateScript.team_of(i)
 
-static func _server_index(s) -> int:
-	return s.serving_team * 2
-
 static func _toss_height_pct(s, actor: int, char_id: int) -> int:
 	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
 	var roll := _scatter(s, actor, 17) + 100
@@ -56,7 +53,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 	var best_i: int = -1
 	var best_d2: int = 0
 	for i in s.players.size():
-		if serve_strike and i != _server_index(s):
+		if serve_strike and i != SimStateScript._server_index(s):
 			continue
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not (input & IN_ACTION):

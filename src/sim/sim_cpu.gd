@@ -200,7 +200,7 @@ static func _serve_target(s, idx: int) -> Array[int]:
 
 static func _decide_serve(s, idx: int, cfg, ab: int) -> int:
 	# サーブ遅延タイマーはsimulation.gdのstep()が減算する(ここは読むだけ)
-	if idx != s.serving_team * 2:
+	if idx != SimStateScript._server_index(s):
 		return 0
 	if s.serve_tossed == 1:
 		# 2段階サーブの2段目: トスの落下点へ歩き、落ち際に前トス打ちで

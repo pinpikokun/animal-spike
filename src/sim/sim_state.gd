@@ -15,6 +15,9 @@ static func team_of(i: int) -> int:
 static func _dir_of_team(team: int) -> int:
 	return 1 if team == 0 else -1
 
+static func _server_index(s) -> int:
+	return s.serving_team * 2
+
 class Player:
 	var char_id: int = 0  # キャラ識別子(chars.gdのCHAR_*)。slot番号との暗黙対応を排除
 	var x: int = 0

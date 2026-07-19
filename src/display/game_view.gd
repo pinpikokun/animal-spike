@@ -479,7 +479,7 @@ func _sync_sprites() -> void:
 	var ball_pos := Vector2(ViewTransform.to_px(state.ball_x), ViewTransform.to_px(state.ball_y))
 	if state.phase == SimState.PHASE_SERVE and state.serve_tossed == 0:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
-		ball_pos += _depth_offset(state.serving_team * 2)
+		ball_pos += _depth_offset(SimState._server_index(state))
 	_ball.position = ball_pos.round()
 	if _cap != null:
 		var cap_i := Simulation.ent_find(state, Simulation.KIND_CAP)

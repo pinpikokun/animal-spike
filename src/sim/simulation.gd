@@ -131,7 +131,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# 2段階サーブの1段目=照準(バブルボブル式): 横キーで角度、上下キーで
 			# トスの高さ(60..130%)。各1刻み/tickでスイープ。
 			# サーバーはトスまで移動もジャンプもしない(照準に専念)
-			var srv_idx: int = _server_index(state)
+			var srv_idx: int = SimStateScript._server_index(state)
 			var serve_inputs: Array[int] = inputs.duplicate()
 			if srv_idx < serve_inputs.size():
 				var raw: int = serve_inputs[srv_idx]
@@ -150,7 +150,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# サーバーは外線(サービスライン)を越えられない(トスまで)。線の後ろでは動ける。
 			# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
 			# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
-			var srv = state.players[_server_index(state)]
+			var srv = state.players[SimStateScript._server_index(state)]
 			var line: int = _serve_x(state, cfg)
 			if state.serving_team == 0:
 				srv.x = clampi(srv.x, cfg.ball_radius, line)
@@ -173,7 +173,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 				state.ball_vx = 0
 				state.ball_vy = 0
 				state.timer = cfg.serve_delay_ticks
-				var srv2 = state.players[_server_index(state)]
+				var srv2 = state.players[SimStateScript._server_index(state)]
 				srv2.x = _serve_x(state, cfg)
 				srv2.y = cfg.floor_y
 				srv2.vy = 0
@@ -333,7 +333,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	# 飛んでるエンティティ(帽子等)は全て消す(ラリーをまたぐ置き物は今後kind別に判断)
 	for e in s.entities:
 		ent_free(e)
-	var srv = s.players[serving_team * 2]
+	var srv = s.players[SimStateScript._server_index(s)]
 	srv.x = _serve_x(s, cfg)
 	srv.y = cfg.floor_y
 	srv.vx = 0
@@ -363,9 +363,6 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.guard = p.guard_max
 	reset_rally(s, cfg, serving_team)
 
-static func _server_index(s) -> int:
-	return s.serving_team * 2
-
 static func _serve_x(s, cfg) -> int:
 	# サービスライン(コート端寄りの白線)。サーバーはこの位置からサーブする
 	if s.serving_team == 0:
@@ -373,12 +370,12 @@ static func _serve_x(s, cfg) -> int:
 	return cfg.court_width - cfg.serve_line
 
 static func _hold_ball_on_server(s, cfg) -> void:
-	var server = s.players[_server_index(s)]
+	var server = s.players[SimStateScript._server_index(s)]
 	s.ball_x = server.x
 	s.ball_y = server.y - cfg.serve_hold_height
 
 static func _try_serve(s, inputs: Array[int], cfg) -> void:
-	var idx: int = _server_index(s)
+	var idx: int = SimStateScript._server_index(s)
 	var input: int = inputs[idx] if idx < inputs.size() else 0
 	if not (input & IN_ACTION):
 		return

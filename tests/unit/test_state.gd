@@ -2,6 +2,13 @@ extends "res://tests/test_case.gd"
 
 const SimState := preload("res://src/sim/sim_state.gd")
 
+func test_server_index_is_derived_from_serving_team() -> void:
+	var s = SimState.new()
+	s.serving_team = 0
+	check_eq(SimState._server_index(s), 0, "左チームのサーバー")
+	s.serving_team = 1
+	check_eq(SimState._server_index(s), 2, "右チームのサーバー")
+
 func test_equal_states_equal_hash() -> void:
 	var a = SimState.new()
 	var b = SimState.new()
