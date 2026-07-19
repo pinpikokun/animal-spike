@@ -64,7 +64,8 @@ static func _classify_intent(on_ground: int, input: int, d2: int,
 	return [INTENT_AIR_FEINT, hdir, up, 0]
 
 static func _toss_height_pct(s, actor: int, char_id: int) -> int:
-	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
+	# バッチAでは旧Lv5相当の標準値へ統一。付与能力による判定はバッチBで接続する。
+	var low_chance_pct := 25
 	var roll := _scatter(s, actor, 17) + 100
 	return 84 if roll < low_chance_pct * 2 else 100
 

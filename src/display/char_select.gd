@@ -69,7 +69,7 @@ func _ready() -> void:
 		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(name_l)
 
-	# カーソル中キャラの能力表示(10段階レベル+固有技)
+# カーソル中キャラの能力表示(A-E基礎能力+付与能力+固有技)
 	_stats_label = Label.new()
 	_stats_label.position = Vector2(0, 210)
 	_stats_label.size = Vector2(BASE_W, 88)
@@ -100,23 +100,17 @@ const ABILITY_NAMES := {
 	1: "帽子投げ", 2: "ヒップアタック", 4: "壁張り付き", 8: "ダッシュ",
 }
 
-func _bar(lv: int) -> String:
-	return "■".repeat(lv) + "□".repeat(10 - lv)
-
 static func stats_text(cid: int) -> String:
 	var lines: Array[String] = []
-	lines.append("トス %d   アタック %d   ジャンプ %d   ウェイト %d" % [
-		Chars.level(cid, "toss"), Chars.level(cid, "atk"),
-		Chars.level(cid, "jump"), Chars.level(cid, "weight")])
-	lines.append("移動 %d   ブレーキ %d   ガード %d" % [
-		Chars.level(cid, "speed"), Chars.level(cid, "slide"), Chars.level(cid, "guard")])
-	lines.append("ジャスト判定 %d   ジャスト威力 %d   勢い吸収 %d" % [
-		Chars.level(cid, "just_window"), Chars.level(cid, "just_reward"),
-		Chars.level(cid, "absorb")])
-	lines.append("トス安定 %d   レシーブ安定 %d" % [
-		Chars.level(cid, "toss_stability"), Chars.level(cid, "recv_stability")])
-	lines.append("アタック安定 %d   ブロック安定 %d" % [
-		Chars.level(cid, "atk_stability"), Chars.level(cid, "block_stability")])
+	lines.append("パワー %s   ジャンプ %s   スピード %s" % [
+		Chars.Profile.rank_name(Chars.rank(cid, Chars.Profile.ABILITY_POWER)),
+		Chars.Profile.rank_name(Chars.rank(cid, Chars.Profile.ABILITY_JUMP)),
+		Chars.Profile.rank_name(Chars.rank(cid, Chars.Profile.ABILITY_SPEED))])
+	lines.append("ブレーキ %s   ガード %s   ウェイト 標準" % [
+		Chars.Profile.rank_name(Chars.rank(cid, Chars.Profile.ABILITY_BRAKE)),
+		Chars.Profile.rank_name(Chars.rank(cid, Chars.Profile.ABILITY_GUARD))])
+	var trait_names := Chars.Profile.trait_names(cid)
+	lines.append("付与能力: " + (" / ".join(trait_names) if trait_names.size() > 0 else "なし"))
 	var moves: Array[String] = []
 	for bit in ABILITY_NAMES:
 		if Chars.has_ability(cid, bit):

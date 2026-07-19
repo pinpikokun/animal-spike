@@ -29,21 +29,12 @@ const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時�
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
 
-static func _jump_height_px(level: int) -> int:
-	var lv := clampi(level, 1, 10)
-	return 102 + lv * 6
+static func _jump_height_px(rank: int) -> int:
+	return Chars.Profile.jump_height_px(rank)
 
-static func _weight_time_pct(level: int, rising: bool) -> int:
-	var lv := clampi(level, 1, 10)
-	var light := 115 if rising else 125
-	var heavy := 85 if rising else 80
-	if lv <= 5:
-		return light + (lv - 1) * (100 - light) / 4
-	return 100 + (lv - 5) * (heavy - 100) / 5
-
-static func _jump_ticks(weight_level: int, rising: bool) -> int:
+static func _jump_ticks(rising: bool) -> int:
 	var base := JUMP_RISE_TICKS if rising else JUMP_FALL_TICKS
-	return maxi(4, base * _weight_time_pct(weight_level, rising) / 100)
+	return base
 
 static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 	var den := ticks * (ticks - 1) if rising else ticks * (ticks + 1)
@@ -159,8 +150,8 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。
 		# simで跳ぶと上トスが「空中ヒット」扱いになり地上トス表(慣性込み)から
 		# 外れてしまうバグがあった(実ジャンプ化は意図しない実装だった)
-		var height_px := _jump_height_px(Chars.level(p.char_id, "jump"))
-		var rise_ticks := _jump_ticks(Chars.level(p.char_id, "weight"), true)
+		var height_px := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
+		var rise_ticks := _jump_ticks(true)
 		p.vy = -_jump_gravity(height_px, rise_ticks, true) * rise_ticks
 		p.on_ground = 0
 	if p.on_ground == 0:
@@ -168,13 +159,12 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		# (毎tick半減の減衰。intの/2はゼロ方向切り捨てで決定論)
 		if p.vy < 0 and not (input & IN_JUMP):
 			p.vy = p.vy / 2
-		var jump_height := _jump_height_px(Chars.level(p.char_id, "jump"))
-		var weight_level := Chars.level(p.char_id, "weight")
+		var jump_height := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
 		if p.vy < 0:
-			var up_ticks := _jump_ticks(weight_level, true)
+			var up_ticks := _jump_ticks(true)
 			p.vy += _jump_gravity(jump_height, up_ticks, true)
 		else:
-			var down_ticks := _jump_ticks(weight_level, false)
+			var down_ticks := _jump_ticks(false)
 			p.vy += _jump_gravity(jump_height, down_ticks, false)
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1

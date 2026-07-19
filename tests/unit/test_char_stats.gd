@@ -31,8 +31,9 @@ func test_speed_stat_scales_movement() -> void:
 	check_eq(fast, base * 130 / 100, "speed130で移動が1.3倍")
 
 func test_jump_level_scales_height() -> void:
-	check(PlayerMovement._jump_height_px(8) > PlayerMovement._jump_height_px(3),
-		"ジャンプレベルが高いほど最高高度が高い")
+	check(PlayerMovement._jump_height_px(Chars.Profile.RANK_A)
+		> PlayerMovement._jump_height_px(Chars.Profile.RANK_E),
+		"ジャンプランクが高いほど最高高度が高い")
 
 func test_guard_max_stat_applies_on_reset() -> void:
 	var w = _rally(); var cfg = w[1]
@@ -91,24 +92,22 @@ func test_jump_level_targets_foot_height() -> void:
 	var panda := _measure_full_jump(Chars.CHAR_PANDA)
 	var mario := _measure_full_jump(Chars.CHAR_MARIO)
 	var frog := _measure_full_jump(Chars.CHAR_FROG)
-	check(absi(panda[0] - 120) <= 2, "ジャンプLv3は足元120px: actual=%d" % panda[0])
-	check(absi(mario[0] - 132) <= 2, "ジャンプLv5は足元132px: actual=%d" % mario[0])
-	check(absi(frog[0] - 150) <= 2, "ジャンプLv8は足元150px: actual=%d" % frog[0])
+	check(absi(panda[0] - 135) <= 2, "パンダのジャンプCは135px: actual=%d" % panda[0])
+	check(absi(mario[0] - 135) <= 2, "マリオのジャンプCは135px: actual=%d" % mario[0])
+	check(absi(frog[0] - 135) <= 2, "カエルのジャンプCは135px: actual=%d" % frog[0])
 
 func test_jump_level_height_table() -> void:
-	var expected := [108, 114, 120, 126, 132, 138, 144, 150, 156, 162]
+	var expected := [155, 145, 135, 120, 100]
 	for i in expected.size():
-		check_eq(PlayerMovement._jump_height_px(i + 1), expected[i],
-			"ジャンプLv%dの指定高度" % (i + 1))
+		check_eq(PlayerMovement._jump_height_px(i), expected[i],
+			"ジャンプ%sの指定高度" % Chars.Profile.rank_name(i))
 
-func test_weight_changes_airtime_without_changing_height() -> void:
-	var heavy := _measure_full_jump(Chars.CHAR_PANDA)
-	var middle := _measure_full_jump(Chars.CHAR_MARIO)
-	var light := _measure_full_jump(Chars.CHAR_FROG)
-	check(light[1] > middle[1] and middle[1] > heavy[1],
-		"軽いキャラほど上昇が長い: %s/%s/%s" % [light[1], middle[1], heavy[1]])
-	check(light[2] > middle[2] and middle[2] > heavy[2],
-		"軽いキャラほど下降が長い: %s/%s/%s" % [light[2], middle[2], heavy[2]])
+func test_standard_weight_gives_same_airtime() -> void:
+	var panda := _measure_full_jump(Chars.CHAR_PANDA)
+	var mario := _measure_full_jump(Chars.CHAR_MARIO)
+	var frog := _measure_full_jump(Chars.CHAR_FROG)
+	check_eq(panda.slice(1), mario.slice(1), "パンダとマリオの滞空時間は同じ")
+	check_eq(mario.slice(1), frog.slice(1), "マリオとカエルの滞空時間は同じ")
 
 func test_scatter_is_deterministic() -> void:
 	# 同じtick/actor/saltなら同じ値(両ピア同値・ロールバック再現の土台)

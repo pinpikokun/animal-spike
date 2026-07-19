@@ -16,8 +16,9 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-19: ジャンプ物理、トス分離、サーブ専用速度の復旧で更新
-const GOLDEN_COMBINED_HASH := -8492816175657377943
+# 2026-07-20: 全選択キャラのA-E基礎能力を全C、重量を標準へ統一した
+# 意図的な物理変更に合わせて更新。
+const GOLDEN_COMBINED_HASH := 437203446188963675
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
