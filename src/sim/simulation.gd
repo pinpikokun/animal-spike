@@ -1020,7 +1020,6 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 static func _step_ball_loose(s, cfg) -> void:
 	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる
 	_step_ball(s, cfg)
-	_ball_vs_block(s, cfg, [])
 	var floor_limit: int = cfg.floor_y - cfg.ball_radius
 	if s.ball_y > floor_limit:
 		s.ball_y = floor_limit - (s.ball_y - floor_limit)
