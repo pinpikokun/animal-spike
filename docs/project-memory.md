@@ -10,6 +10,13 @@
   the relevant specification before editing.
 - Decisions made in conversation must be written to a specification before a
   large implementation or refactor begins.
+- For this refactor, Codex must write a technical response to every Claude Code
+  design proposal. Claude Code and Codex must resolve their disagreements in
+  documents before implementation.
+- Agreement between the two agents is not permission to start. Present the final
+  agreement to the user and wait for the user's explicit refactoring-start
+  approval. Before that approval, do not delete files, extract modules, or move
+  production code.
 - Keep behavior changes and behavior-preserving refactors in separate steps so
   the next agent can identify the source of a regression.
 - Run the complete Godot test suite and `git diff --check` before handing work

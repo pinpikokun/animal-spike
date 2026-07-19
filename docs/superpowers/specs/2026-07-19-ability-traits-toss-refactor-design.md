@@ -201,6 +201,11 @@ physics constants.
 
 Use a staged refactor before implementing the accepted behavior. Do not perform
 a full rewrite and do not add the new rules directly to the current monolith.
+Codex must answer Claude Code's refactoring proposals in writing, and both agents
+must resolve technical disagreements before work begins. Their agreement is not
+authorization to start: the final agreement must be shown to the user, and no
+file deletion, module extraction, or production-code movement may begin until the
+user explicitly approves the refactoring start.
 
 1. Audit and remove unused repository files before moving code. The audit covers
    the repository root and the full tree, including generated previews, videos,
