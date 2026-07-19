@@ -202,14 +202,23 @@ physics constants.
 Use a staged refactor before implementing the accepted behavior. Do not perform
 a full rewrite and do not add the new rules directly to the current monolith.
 
-1. Add characterization tests for current hit intents, output velocities,
+1. Audit and remove unused repository files before moving code. The audit covers
+   the repository root and the full tree, including generated previews, videos,
+   extracted frames, temporary scripts, stale Godot import metadata, and other
+   experimental artifacts. Classify every candidate as remove, confirm, or keep
+   by checking references, purpose, provenance, and reproducibility. Present the
+   removal list to the user and obtain explicit approval before deleting. Commit
+   approved removals separately, update ignore/location rules to prevent the same
+   clutter from returning, and prove that runtime behavior and synchronization are
+   unchanged.
+2. Add characterization tests for current hit intents, output velocities,
    collision ordering, CPU decisions, serialization, and settings propagation.
-2. Extract modules without changing behavior. The full test suite and combined
+3. Extract modules without changing behavior. The full test suite and combined
    deterministic hash must remain unchanged during this step.
-3. Introduce the A-to-E profile and trait data model.
-4. Implement the accepted behavior one feature at a time, updating tests and the
+4. Introduce the A-to-E profile and trait data model.
+5. Implement the accepted behavior one feature at a time, updating tests and the
    deterministic hash only for intentional behavior changes.
-5. Remove obsolete stat, scatter, toggle, and migration code after replacements
+6. Remove obsolete stat, scatter, toggle, and migration code after replacements
    are verified.
 
 Target responsibilities:
@@ -231,11 +240,13 @@ extraction can follow after those are stable.
 
 The agreed project order is mandatory:
 
-1. Complete the narrow behavior-preserving refactor first.
-2. Implement all accepted gameplay decisions in this specification on the new
+1. Complete the repository-wide unused-file audit and approved cleanup as the
+   first, independently verified stage of the refactor.
+2. Complete the narrow behavior-preserving code extraction.
+3. Implement all accepted gameplay decisions in this specification on the new
    module boundaries.
-3. Run the complete verification below and stabilize any regressions.
-4. After the refactor and this specification are complete, begin the previously
+4. Run the complete verification below and stabilize any regressions.
+5. After the refactor and this specification are complete, begin the previously
    planned work to add characters from the source game.
 
 The source-game character task remains in the backlog deliberately. It must not
@@ -244,6 +255,12 @@ into the refactor or ability-system implementation.
 
 ## Verification
 
+- Repository cleanup candidates are documented with keep/remove reasoning and
+  explicit user approval before deletion.
+- Approved cleanup is isolated in its own commit; no required runtime asset,
+  source reference, test fixture, or source-game research authority is lost.
+- Repository-root placement and ignore rules prevent regenerated artifacts from
+  returning to the root unintentionally.
 - Every rank mapping and initial all-C roster is tested.
 - Every active trait has positive, neutral, and negative control cases.
 - Mura distribution is deterministic and covers normal, just, and attack serve.

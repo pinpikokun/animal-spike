@@ -29,12 +29,19 @@ the two conflict. Signature techniques are intentionally outside its scope.
 
 Work must proceed in this order:
 
-1. Perform the narrow, behavior-preserving refactor described in the current
+1. Audit the entire repository for unused files as the first refactoring stage.
+   Include root-level experiments, generated previews and videos, extracted
+   frames, temporary scripts, stale import metadata, and similar artifacts.
+   Check references, purpose, provenance, and reproducibility; classify candidates
+   as remove, confirm, or keep; show the list to the user; and delete only after
+   explicit approval. Keep cleanup in an independent commit, verify behavior and
+   synchronization, and add ignore/location rules that prevent recurrence.
+2. Perform the narrow, behavior-preserving code refactor described in the current
    design specification.
-2. Implement the accepted A-to-E abilities, traits, toss behavior, original
+3. Implement the accepted A-to-E abilities, traits, toss behavior, original
    rules, CPU behavior, and settings removal on top of the extracted modules.
-3. Verify and stabilize the completed gameplay changes with the full test suite.
-4. Resume the originally planned addition of characters from the source game.
+4. Verify and stabilize the completed gameplay changes with the full test suite.
+5. Resume the originally planned addition of characters from the source game.
 
 Do not start adding source-game characters before the refactor and accepted
 gameplay specification are implemented and stable. Character addition is a
