@@ -7,6 +7,7 @@ const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -30,7 +31,6 @@ const RUN_DECAY := 3      # ニュートラル時の走行カウンタ減衰/tic
 const DASH_TAP_WINDOW := 12  # ダブルタップ受付窓(tick)。1回目の押し始めからこの間に2回目
 const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
 const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
-const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
 const JUMP_RISE_TICKS := 25
 const JUMP_FALL_TICKS := 27
@@ -215,7 +215,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# ヒットルールで打つ(地上前トス=安全サーブ/走り込みジャンプ+下=アタック)。
 			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
 			_step_players_and_hits(state, inputs, cfg)
-			_step_ball(state, cfg, inputs)
+			BallPhysics._step_ball(state, cfg, inputs)
 			_ball_vs_block(state, cfg, inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
 					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
@@ -233,20 +233,20 @@ static func step(state, inputs: Array[int], cfg) -> void:
 				_hold_ball_on_server(state, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		_step_players_and_hits(state, inputs, cfg)
-		_step_ball(state, cfg, inputs)
+		BallPhysics._step_ball(state, cfg, inputs)
 		_ball_vs_block(state, cfg, inputs)
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
 		# ポーズ中も操作は生かす(ヒットは_try_hitのフェーズ判定で無効)
 		_step_players_and_hits(state, inputs, cfg)
-		_step_ball_loose(state, cfg)
+		BallPhysics._step_ball_loose(state, cfg)
 		if state.timer <= 0:
 			reset_rally(state, cfg, state.serving_team)
 	elif state.phase == SimStateScript.PHASE_GAME_OVER:
 		# 勝敗確定後もキャラの移動・ジャンプは生かす
 		_step_players_and_hits(state, inputs, cfg)
-		_step_ball_loose(state, cfg)
+		BallPhysics._step_ball_loose(state, cfg)
 
 static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
@@ -931,32 +931,6 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.hip = 0
 		p.cling = 0
 
-static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
-	var prev_x: int = s.ball_x
-	s.ball_vy += cfg.gravity
-	s.ball_x += s.ball_vx
-	s.ball_y += s.ball_vy
-	# 回転は横の勢いに比例して累積する(真上のトスはほぼ無回転、前へ飛ぶほど回る)
-	s.ball_spin += s.ball_vx
-	var left: int = cfg.ball_radius
-	var right: int = cfg.court_width - cfg.ball_radius
-	var hit_wall := false
-	if s.ball_x < left:
-		s.ball_x = left + (left - s.ball_x)
-		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
-		hit_wall = true
-	elif s.ball_x > right:
-		s.ball_x = right - (s.ball_x - right)
-		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
-		hit_wall = true
-	if hit_wall and s.ball_power == 1:
-		s.ball_vy = s.ball_vy * cfg.wall_bounce_num / cfg.ball_bounce_den
-		s.ball_power = 0
-	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
-	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
-	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
-	_ball_vs_net(s, cfg, prev_x)
-
 # ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
 # 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
 # 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
@@ -1016,63 +990,3 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		p.hit_cooldown = cfg.hit_cooldown_ticks
 		s.hit_freeze = maxi(s.hit_freeze, 2)
 		return
-
-static func _step_ball_loose(s, cfg) -> void:
-	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる
-	_step_ball(s, cfg)
-	var floor_limit: int = cfg.floor_y - cfg.ball_radius
-	if s.ball_y > floor_limit:
-		s.ball_y = floor_limit - (s.ball_y - floor_limit)
-		if s.ball_vy > 0:
-			# 床バウンドは勢い半分(原作の「着地したら死ぬ球」の感触に寄せた減衰)
-			s.ball_vy = -s.ball_vy * LOOSE_BOUNCE_PCT / 100
-			# 乗算減衰だけだと閾値近傍で微小バウンドが長く続く速度帯がある(共振、
-			# レビュー指摘: 特定入射で数千tick跳ね続けた)。反発のたびに固定量も
-			# 減衰させ、有限バウンド回数で必ず閾値を割らせる
-			s.ball_vy = mini(s.ball_vy + cfg.ball_rest_speed / 4, 0)
-		# 床接触のたびに横速度も減衰(転がって自然に止まる)
-		s.ball_vx = s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-		# 微小な跳ね/転がりは静止させ床にスナップ(小刻みな跳ねの継続を断つ)
-		if absi(s.ball_vy) < cfg.ball_rest_speed:
-			s.ball_vy = 0
-			s.ball_y = floor_limit
-		if absi(s.ball_vx) < cfg.ball_rest_speed:
-			s.ball_vx = 0
-
-static func _ball_vs_net(s, cfg, prev_x: int) -> void:
-	var net_left: int = cfg.net_x - cfg.net_half_w - cfg.ball_radius
-	var net_right: int = cfg.net_x + cfg.net_half_w + cfg.ball_radius
-	var below_top: bool = s.ball_y > cfg.net_top_y
-	var was_left: bool = prev_x < cfg.net_x
-	var is_left: bool = s.ball_x < cfg.net_x
-	if below_top:
-		# ネット下部は壁。来た側へ押し返す
-		if s.ball_x >= net_left and s.ball_x <= net_right:
-			# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
-			if was_left:
-				s.ball_x = net_left - (s.ball_x - net_left)
-				if s.ball_vx > 0:
-					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-				s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
-			else:
-				s.ball_x = net_right + (net_right - s.ball_x)
-				if s.ball_vx < 0:
-					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
-	elif cfg.net_top_original == 1 and s.ball_vy > 0 \
-			and s.ball_x >= net_left and s.ball_x <= net_right \
-			and s.ball_y >= cfg.net_top_y - cfg.ball_radius:
-		# 原作式ネットイン: 上端(白帯)に当たると縦の勢いが半減して跳ね、
-		# ネットから離れる向きへ押し出される=ポトリと落ちる緊張感
-		s.ball_y = cfg.net_top_y - cfg.ball_radius
-		s.ball_vy = -s.ball_vy / 2
-		var out_dir: int = -1 if is_left else 1
-		if s.ball_vx * out_dir < cfg.net_repel / 2:
-			s.ball_vx = out_dir * cfg.net_repel / 2
-		if was_left != is_left:
-			s.touches = 0
-			s.serve_flight = 0
-	elif was_left != is_left:
-		# ネット上空を越えた: 攻守交代なのでタッチ数リセット。サーブ打球も渡り切り
-		s.touches = 0
-		s.serve_flight = 0
