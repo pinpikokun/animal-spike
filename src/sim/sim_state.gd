@@ -9,6 +9,12 @@ const PHASE_RALLY := 1
 const PHASE_POINT_PAUSE := 2
 const PHASE_GAME_OVER := 3
 
+static func team_of(i: int) -> int:
+	return i / 2
+
+static func _dir_of_team(team: int) -> int:
+	return 1 if team == 0 else -1
+
 class Player:
 	var char_id: int = 0  # キャラ識別子(chars.gdのCHAR_*)。slot番号との暗黙対応を排除
 	var x: int = 0

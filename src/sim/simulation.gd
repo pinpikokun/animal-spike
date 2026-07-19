@@ -2,6 +2,9 @@
 # int演算のみ。ここにfloatを書いたらSyncTest以前にレビューで即アウト
 extends RefCounted
 
+const NO_HIT := -2
+const HIT_NO_POINT := -1
+
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
@@ -88,15 +91,12 @@ static func ent_free(e) -> void:
 	e.timer = 0
 
 static func team_of(i: int) -> int:
-	return i / 2
+	return SimStateScript.team_of(i)
 
 static func _toss_height_pct(s, actor: int, char_id: int) -> int:
 	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
 	var roll := _scatter(s, actor, 17) + 100
 	return 84 if roll < low_chance_pct * 2 else 100
-
-static func _dir_of_team(team: int) -> int:
-	return 1 if team == 0 else -1
 
 # 公開API: チーム単位入力(人間2系統)から各プレイヤー入力を組み立てて1tick進める
 # CPU相方の入力はsim_cpu.gdが決定論的に生成する
@@ -218,7 +218,16 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		PlayerMovement._step_player(state.players[i], input, cfg, team_of(i))
-	_resolve_hit(state, inputs, cfg)
+	var was_serve_strike: bool = state.phase == SimStateScript.PHASE_SERVE \
+		and state.serve_tossed == 1
+	var hit_result: int = _resolve_hit(state, inputs, cfg)
+	if hit_result == 0 or hit_result == 1:
+		_award_point(state, hit_result, cfg)
+	if was_serve_strike and hit_result != NO_HIT:
+		# 得点授与より後に遷移する現行順序をmax_touches=0でも維持する。
+		state.phase = SimStateScript.PHASE_RALLY
+		state.serve_tossed = 0
+		state.serve_flight = 1
 	_update_hat(state, inputs, cfg)
 
 # 帽子投げ(お邪魔ギミック): Dキーで前方へ投げ、飛行→滞在→高速帰還→キャッチ。
@@ -398,7 +407,7 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	#     滞空時間から逆算するので、どんな高さ・距離でも着弾は自陣内=
 	#     トス単体では絶対にネットを越えない。山なりを前面へ、も自由。
 	#     トスはタッチ数に数えない
-	var net_dir: int = _dir_of_team(s.serving_team)
+	var net_dir: int = SimStateScript._dir_of_team(s.serving_team)
 	var aim: int = clampi(s.serve_aim, 0, AIM_MAX)
 	var pow_pct: int = clampi(s.serve_pow, POW_MIN, POW_MAX)
 	var vy_mag: int = cfg.serve_toss_up * pow_pct / 100
@@ -442,16 +451,16 @@ static func _award_point(s, team: int, cfg) -> void:
 # 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
 # 負けた側も硬直だけ食らう不公平があった。
 # 同距離ならボールがある側のチームを優先、それも同点ならインデックス小。全て整数比較で決定論
-static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
+static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 	# サーブの2段目(トス済み)はサーバー本人のみ打てる。それ以外のSERVE中は不可
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	if s.phase != SimStateScript.PHASE_RALLY and not serve_strike:
-		return
+		return NO_HIT
 	# サーブは一発で相手コートへ入れる(本物のバレー準拠)。打たれたサーブが
 	# ネットを越えるまでは誰も触れない(味方の中継も、サーバー自身の2度打ちも不可)。
 	# 越えずに自陣へ落ちればサーブミス=床判定で相手の得点になる
 	if s.serve_flight == 1:
-		return
+		return NO_HIT
 	var reach: int = cfg.player_reach
 	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
 	var best_i: int = -1
@@ -485,12 +494,8 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 	if best_i >= 0:
 		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
 		_apply_hit(s, best_i, cfg, winner_input, best_d2)
-		if serve_strike:
-			# サーブの打撃が成立した瞬間にラリー開始。ネットを越えるまでは
-			# serve_flightを立て、味方CPUのジャンプアタック誤反応を抑える
-			s.phase = SimStateScript.PHASE_RALLY
-			s.serve_tossed = 0
-			s.serve_flight = 1
+		return 1 - team_of(best_i) if s.touches > cfg.max_touches else HIT_NO_POINT
+	return NO_HIT
 
 static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
@@ -509,7 +514,7 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
-	var dir: int = _dir_of_team(team)
+	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
 	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
@@ -710,8 +715,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	else:
 		s.touches = 1
 	s.last_touch_team = team
-	if s.touches > cfg.max_touches:
-		_award_point(s, 1 - team, cfg)
 
 # ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
 # キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
