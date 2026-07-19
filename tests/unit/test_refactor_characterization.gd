@@ -61,6 +61,29 @@ func test_intent_classification_table() -> void:
 		check_eq(out[0], row[3], "意図分類 hit_kind: %s" % [row])
 		check_eq(1 if out[1] != 0 else 0, row[4], "意図分類 dive: %s" % [row])
 
+func test_intent_classifier_is_pure_and_complete() -> void:
+	var cfg = SimConfig.new()
+	var near_d2 := FP.from_int(5) * FP.from_int(5)
+	var edge: int = cfg.player_reach * 4 / 5
+	var edge_d2: int = edge * edge
+	var rows := [
+		[1, 0, near_d2, false, [0, 0, 0, 0]],
+		[1, Simulation.IN_UP, near_d2, false, [1, 0, 1, 0]],
+		[1, Simulation.IN_RIGHT, near_d2, false, [2, 1, 0, 0]],
+		[1, Simulation.IN_RIGHT, edge_d2, false, [2, 1, 0, 1]],
+		[1, Simulation.IN_RIGHT, edge_d2, true, [2, 1, 0, 0]],
+		[1, Simulation.IN_LEFT | Simulation.IN_UP, near_d2, false, [1, -1, 1, 0]],
+		[0, Simulation.IN_DOWN, near_d2, false, [3, 0, 0, 0]],
+		[0, Simulation.IN_DOWN | Simulation.IN_RIGHT, near_d2, false, [3, 1, 0, 0]],
+		[0, Simulation.IN_UP, near_d2, false, [4, 0, 1, 0]],
+		[0, Simulation.IN_RIGHT, near_d2, false, [5, 1, 0, 0]],
+		[0, 0, near_d2, false, [6, 0, 0, 0]],
+	]
+	for row in rows:
+		var actual: Array[int] = HitResolver._classify_intent(
+			row[0], row[1], row[2], cfg.player_reach, row[3])
+		check_eq(actual, row[4], "純粋意図分類: %s" % [row])
+
 func test_output_velocity_snapshot() -> void:
 	var w: Array = _world()
 	var cfg = w[1]

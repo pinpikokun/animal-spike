@@ -26,8 +26,42 @@ const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
 
+const INTENT_GROUND_RECEIVE := 0
+const INTENT_GROUND_TOSS := 1
+const INTENT_GROUND_FORWARD := 2
+const INTENT_AIR_SPIKE := 3
+const INTENT_AIR_TOSS_UP := 4
+const INTENT_AIR_TOSS_SIDE := 5
+const INTENT_AIR_FEINT := 6
+
 static func team_of(i: int) -> int:
 	return SimStateScript.team_of(i)
+
+static func _classify_intent(on_ground: int, input: int, d2: int,
+		player_reach: int, serve_strike: bool) -> Array[int]:
+	var hdir: int = 0
+	if input & IN_LEFT:
+		hdir -= 1
+	if input & IN_RIGHT:
+		hdir += 1
+	var up: int = 1 if input & IN_UP else 0
+	if on_ground == 1:
+		if hdir != 0 and up == 0:
+			var dive_dir: int = 0
+			var edge: int = player_reach * 3 / 4
+			if not serve_strike and d2 >= 0 and d2 > edge * edge:
+				dive_dir = hdir
+			return [INTENT_GROUND_FORWARD, hdir, up, dive_dir]
+		if up == 1:
+			return [INTENT_GROUND_TOSS, hdir, up, 0]
+		return [INTENT_GROUND_RECEIVE, hdir, up, 0]
+	if input & IN_DOWN:
+		return [INTENT_AIR_SPIKE, hdir, up, 0]
+	if up == 1:
+		return [INTENT_AIR_TOSS_UP, hdir, up, 0]
+	if hdir != 0:
+		return [INTENT_AIR_TOSS_SIDE, hdir, up, 0]
+	return [INTENT_AIR_FEINT, hdir, up, 0]
 
 static func _toss_height_pct(s, actor: int, char_id: int) -> int:
 	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
@@ -162,24 +196,22 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	if mangled:
 		aim_pct = MANGLE_AIM_PCT
 		inertia = cfg.hit_inertia_den
-	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
-	var hdir: int = 0
-	if input & IN_LEFT:
-		hdir -= 1
-	if input & IN_RIGHT:
-		hdir += 1
-	var up: bool = (input & IN_UP) != 0
+	# 押している方向と地上/空中の意図を、速度計算から独立した純関数で分類する。
+	var intent: Array[int] = _classify_intent(
+		p.on_ground, input, d2, cfg.player_reach, serve_strike)
+	var intent_kind: int = intent[0]
+	var hdir: int = intent[1]
+	var up: bool = intent[2] == 1
 	if p.on_ground == 1:
 		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
 		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
 		var desired_vx: int = 0
 		var desired_vy: int = 0
-		if hdir != 0 and not up:
+		if intent_kind == INTENT_GROUND_FORWARD:
 			# 横のみ: 前へ低く遠く。ただしボールがリーチの縁ギリギリなら
 			# ジャンピングトス(飛びついて片手で拾う救済)になり、緩めの軌道に化ける。
 			# 入力は同じで状況が挙動を変える(演出は表示層がヒット距離から導出する)
-			var edge: int = cfg.player_reach * 3 / 4
-			if not serve_strike and d2 >= 0 and d2 > edge * edge:
+			if intent[3] != 0:
 				desired_vy = -cfg.bump_up_speed
 				desired_vx = hdir * cfg.toss_mid_vx
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
@@ -187,12 +219,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				desired_vy = -cfg.serve_vy if serve_strike else -cfg.toss_fwd_vy
 				desired_vx = hdir * (cfg.serve_vx if serve_strike else cfg.toss_fwd_vx)
 			p.hit_kind = 2  # 前トス(横のみ)
-		elif hdir != 0 and up:
+		elif intent_kind == INTENT_GROUND_TOSS and hdir != 0:
 			# 上+横: 中間(高く+そこそこ前)
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = hdir * cfg.toss_mid_vx
 			p.hit_kind = 1  # トス
-		elif up:
+		elif intent_kind == INTENT_GROUND_TOSS:
 			# 上のみ: 真上へ高く
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = 0
@@ -223,7 +255,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		else:
 			s.ball_vy = desired_vy * aim_pct / 100
-	elif input & IN_DOWN:
+	elif intent_kind == INTENT_AIR_SPIKE:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
 		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
@@ -265,11 +297,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# (以前は直接代入で慣性が乗らない不整合があった)
 		var avx: int
 		var avy: int
-		if up:
+		if intent_kind == INTENT_AIR_TOSS_UP:
 			# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
 			avy = -cfg.bump_up_speed
 			avx = hdir * cfg.toss_mid_vx
-		elif hdir != 0:
+		elif intent_kind == INTENT_AIR_TOSS_SIDE:
 			# 空中+横: きつめの角度の山なりで遠くへトス
 			avy = -cfg.toss_fwd_vy
 			avx = hdir * cfg.toss_fwd_vx
