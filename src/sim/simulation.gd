@@ -216,6 +216,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
 			_step_players_and_hits(state, inputs, cfg)
 			_step_ball(state, cfg, inputs)
+			_ball_vs_block(state, cfg, inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
 					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
 				# 打ち損ねてトスが床に落ちた: 失点にせず構えからやり直す(再トス)。
@@ -233,6 +234,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		_step_players_and_hits(state, inputs, cfg)
 		_step_ball(state, cfg, inputs)
+		_ball_vs_block(state, cfg, inputs)
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
@@ -954,7 +956,6 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
 	_ball_vs_net(s, cfg, prev_x)
-	_ball_vs_block(s, cfg, inputs)
 
 # ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
 # 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
@@ -1019,6 +1020,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 static func _step_ball_loose(s, cfg) -> void:
 	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる
 	_step_ball(s, cfg)
+	_ball_vs_block(s, cfg, [])
 	var floor_limit: int = cfg.floor_y - cfg.ball_radius
 	if s.ball_y > floor_limit:
 		s.ball_y = floor_limit - (s.ball_y - floor_limit)
