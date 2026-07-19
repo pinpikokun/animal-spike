@@ -6,6 +6,7 @@ const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const PlayerMovement := preload("res://src/sim/player_movement.gd")
 
 func _rally():
 	var cfg = Cfg.new()
@@ -29,7 +30,7 @@ func test_speed_stat_scales_movement() -> void:
 	check_eq(fast, base * 130 / 100, "speed130で移動が1.3倍")
 
 func test_jump_level_scales_height() -> void:
-	check(Sim._jump_height_px(8) > Sim._jump_height_px(3),
+	check(PlayerMovement._jump_height_px(8) > PlayerMovement._jump_height_px(3),
 		"ジャンプレベルが高いほど最高高度が高い")
 
 func test_guard_max_stat_applies_on_reset() -> void:
@@ -96,7 +97,7 @@ func test_jump_level_targets_foot_height() -> void:
 func test_jump_level_height_table() -> void:
 	var expected := [108, 114, 120, 126, 132, 138, 144, 150, 156, 162]
 	for i in expected.size():
-		check_eq(Sim._jump_height_px(i + 1), expected[i],
+		check_eq(PlayerMovement._jump_height_px(i + 1), expected[i],
 			"ジャンプLv%dの指定高度" % (i + 1))
 
 func test_weight_changes_airtime_without_changing_height() -> void:
