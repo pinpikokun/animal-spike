@@ -34,6 +34,8 @@ func test_m1a_keys_loaded() -> void:
 	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
 	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
 	check_eq(cfg.spawn_back_px, 56, "spawn_back_px")
+	check_eq(cfg.toss_zone_back_px, 56, "トス上手の自陣後方ゾーン")
+	check_eq(cfg.toss_zone_front_px, 157, "トス上手の自陣前方ゾーン")
 
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()

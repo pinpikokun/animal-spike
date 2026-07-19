@@ -16,6 +16,7 @@ func test_panda_has_no_abilities() -> void:
 func test_stat_defaults() -> void:
 	check_eq(Chars.stat(Chars.CHAR_PANDA, "speed"), 100, "ランクCの速度は100")
 	check_eq(Chars.stat(Chars.CHAR_DEBUG, "speed"), 130, "明示%値は最優先")
+	check_eq(Chars.stat(Chars.CHAR_DEBUG, "sc_atk"), 0, "旧攻撃ばらつきstatは撤去")
 	check_eq(Chars.stat(999, "speed"), 100, "未知キャラは100(安全側)")
 	check_eq(Chars.stat(999, "sc_toss"), 0, "未知キャラのばらつきは0(安全側)")
 
@@ -26,7 +27,6 @@ func test_rank_stats_feed_existing_physics_as_standard_values() -> void:
 		check_eq(Chars.stat(cid, "slide"), 100, "ブレーキCは距離100%")
 		check_eq(Chars.stat(cid, "guard_max"), 100, "ガードCは100%")
 		check_eq(Chars.stat(cid, "weight"), 100, "重量は標準100%")
-		check_eq(Chars.stat(cid, "sc_atk"), 0, "旧能力由来の攻撃ばらつきはない")
 
 func test_roster_shape() -> void:
 	check_eq(Chars.ROSTER.size(), 4, "ロスターは4slot")

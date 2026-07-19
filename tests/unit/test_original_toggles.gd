@@ -4,12 +4,15 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _rally_world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
+		# 基礎物理テストへパンダの付与能力を混入させない。
+		p.char_id = Chars.CHAR_FOX
 		p.y = cfg.floor_y
 	s.players[0].x = FP.from_int(100)
 	s.players[1].x = FP.from_int(175)
@@ -68,8 +71,8 @@ func test_net_top_default_passes_through() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "既定では上端に阻まれず横速度を保つ")
 
-func test_toss_aim_lands_at_home_position() -> void:
-	# いいとこ取りトス: レシーブが「味方の定位置」へ落ちる横速度に逆算される
+func test_toss_aim_toggle_does_not_grant_toss_good_trait() -> void:
+	# バッチB以降、自動照準はトス上手だけ。旧トグルはバッチCで物理設定ごと削除する。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -79,18 +82,8 @@ func test_toss_aim_lands_at_home_position() -> void:
 	s.ball_vx = 0
 	s.ball_vy = 0  # 入射ゼロ=慣性外乱なしの理想値を検証
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	var target: int = FP.from_int(cfg.spawn_front_px)
-	var air: int = 2 * cfg.bump_up_speed / cfg.gravity
-	# step内で1tick進んでいる分の誤差を許容して「定位置へ向かう速度」を確認
-	var expect: int = (target - (s.ball_x - s.ball_vx)) / air
-	check(absi(s.ball_vx - expect) <= absi(expect) / 10 + 1, "定位置への逆算速度")
-	# 実際に飛ばして着地点を見る(統合検証)
-	s.players[0].x = FP.from_int(30)  # 打った本人はどかす
-	for i in 600:
-		if s.ball_y >= cfg.floor_y - cfg.ball_radius:
-			break
-		Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(absi(s.ball_x - target) < FP.from_int(40), "定位置の近くに落ちる")
+	check_eq(s.ball_vx, cfg.bump_fwd_speed,
+		"旧トグルだけでは特性なしキャラのレシーブを自動照準しない")
 
 func test_toss_aim_off_keeps_legacy() -> void:
 	# 既定(OFF)では従来の打ち出し方式のまま
@@ -146,7 +139,7 @@ func test_air_toss_reflects_inertia() -> void:
 	check(hard < soft, "強い落下球を受けた方が高く上がる(慣性反射)")
 
 func test_soft_ball_gives_full_control() -> void:
-	# 緩い球でもトス技能により通常または低い軌道になる
+	# 特性なしキャラは緩い球を通常高度で完全制御する。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -156,10 +149,8 @@ func test_soft_ball_gives_full_control() -> void:
 	s.ball_vy = FP.from_int(200) / cfg.tick_rate
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(s.ball_vx, 0, "緩い球の真上トスは横成分ゼロ(流されない)")
-	check(s.ball_vy >= -cfg.bump_up_speed + cfg.gravity,
-		"緩い球でも基準より高いトスにしない")
-	check(s.ball_vy <= -cfg.bump_up_speed * 84 / 100 + cfg.gravity,
-		"低いトスも最低高さを保つ")
+	check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
+		"特性なしの緩球トスは通常高度")
 
 func test_fast_ball_still_pushes_through() -> void:
 	# 強い入射球でもトスの縦速度は増幅しない

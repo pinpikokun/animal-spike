@@ -5,6 +5,8 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const Chars := preload("res://src/sim/chars.gd")
 const STANDARD_CHAR := 99
 
 func _world() -> Array:
@@ -34,6 +36,13 @@ func test_cpu_hits_in_reach() -> void:
 	s.ball_y = s.players[1].y - FP.from_int(10)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_ACTION, "リーチ内でACTION")
+
+func test_cpu_uses_shared_trait_aware_receive_reach() -> void:
+	var cfg = SimConfig.new()
+	check_eq(SimCpu._hit_reach(Chars.CHAR_MARIO, cfg.player_reach,
+		HitResolver.INTENT_GROUND_RECEIVE),
+		HitResolver.reach_for_intent(Chars.CHAR_MARIO, cfg.player_reach,
+			HitResolver.INTENT_GROUND_RECEIVE), "CPUも共有レシーブリーチを使う")
 
 func test_cpu_ignores_ball_on_other_side() -> void:
 	var w := _world()

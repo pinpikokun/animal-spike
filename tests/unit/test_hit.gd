@@ -5,6 +5,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const STANDARD_CHAR := 99
 
 func _rally_world() -> Array:
@@ -73,8 +74,8 @@ func test_toss_up_is_vertical() -> void:
 	# step内で重力が1回乗るため厳密等値は避け、前トスより高い初速であることを見る
 	check(s.ball_vy < -cfg.toss_fwd_vy, "真上トスは前トスより高く上がる")
 
-func test_unskilled_toss_is_normal_or_low_never_high() -> void:
-	var saw_low := false
+func test_only_toss_bad_can_produce_low_toss() -> void:
+	var low_count := 0
 	for seed_tick in 201:
 		var w := _rally_world()
 		var s = w[0]
@@ -88,8 +89,225 @@ func test_unskilled_toss_is_normal_or_low_never_high() -> void:
 		var upward: int = -s.ball_vy
 		check(upward <= cfg.bump_up_speed, "下手なトスでも基準より高くしない")
 		if upward < cfg.bump_up_speed * 90 / 100:
-			saw_low = true
-	check(saw_low, "下手なキャラは低いトスを出すことがある")
+			low_count += 1
+	check(low_count > 0, "トス下手は低いトスを出すことがある")
+	var w2 := _rally_world()
+	var s2 = w2[0]
+	var cfg2 = w2[1]
+	s2.players[0].char_id = Chars.CHAR_FOX
+	s2.ball_x = s2.players[0].x + FP.from_int(5)
+	s2.ball_y = cfg2.floor_y - FP.from_int(10)
+	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg2)
+	check_eq(s2.ball_vy, -cfg2.bump_up_speed + cfg2.gravity,
+		"特性なしは低トス失敗なし")
+
+func test_mura_roll_is_deterministic_and_has_10_80_10_distribution() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var counts := {50: 0, 100: 0, 150: 0}
+	var seen := {}
+	for tick in 100000:
+		s.tick = tick
+		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_MURA)
+		if not seen.has(roll):
+			seen[roll] = true
+			var pct: int = HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA)
+			counts[pct] += 1
+			check_eq(pct, HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA),
+				"同じtickとactorならむらっけ結果が同じ")
+			if seen.size() == 100:
+				break
+	check_eq(seen.size(), 100, "決定論サンプルが全ロール値を覆う")
+	check_eq([counts[50], counts[100], counts[150]], [10, 80, 10],
+		"むらっけは10%/80%/10%")
+	check_eq(HitResolver._mura_power_pct(s, 0, Chars.CHAR_MARIO), 100,
+		"むらっけ無しは常に100%")
+
+func _tick_for_mura_pct(target_pct: int) -> int:
+	var w := _rally_world()
+	var s = w[0]
+	for tick in 10000:
+		s.tick = tick
+		if HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA) == target_pct:
+			return tick
+	return -1
+
+func test_mura_applies_to_normal_just_and_attack_serve() -> void:
+	var tick := _tick_for_mura_pct(150)
+	check(tick >= 0, "150%の決定論tickが見つかる")
+	for sweet in [false, true]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.char_id = Chars.CHAR_PANDA
+		p.on_ground = 0
+		s.tick = tick
+		var d2: int = 0 if sweet else cfg.player_reach * cfg.player_reach
+		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, d2)
+		var base: int = cfg.spike_steep_vx * (cfg.spike_power_pct if sweet else 100) / 100
+		check_eq(s.ball_vx, base * 150 / 100,
+			"%sアタックへむらっけ最終倍率" % ("ジャスト" if sweet else "通常"))
+	var ws := _rally_world()
+	var ss = ws[0]
+	var cfgs = ws[1]
+	ss.phase = SimState.PHASE_SERVE
+	ss.serve_tossed = 1
+	ss.tick = tick
+	ss.players[0].char_id = Chars.CHAR_PANDA
+	HitResolver._apply_hit(ss, 0, cfgs, Simulation.IN_ACTION | Simulation.IN_RIGHT, 0)
+	check_eq(ss.ball_vx, cfgs.serve_vx, "地上安全サーブへむらっけを適用しない")
+	var wa := _rally_world()
+	var sa = wa[0]
+	var cfga = wa[1]
+	sa.phase = SimState.PHASE_SERVE
+	sa.serve_tossed = 1
+	sa.tick = tick
+	sa.players[0].char_id = Chars.CHAR_PANDA
+	sa.players[0].on_ground = 0
+	HitResolver._apply_hit(sa, 0, cfga, Simulation.IN_ACTION | Simulation.IN_DOWN,
+		cfga.player_reach * cfga.player_reach)
+	check_eq(sa.ball_vx, cfga.spike_steep_vx * 150 / 100,
+		"空中アタックサーブへむらっけ最終倍率を一度だけ適用")
+
+func test_receive_reach_is_trait_aware_only_for_receive_intent() -> void:
+	var base := FP.from_int(40)
+	check_eq(HitResolver.reach_for_intent(Chars.CHAR_MARIO, base,
+		HitResolver.INTENT_GROUND_RECEIVE), base * 115 / 100, "レシーブ上手115%")
+	check_eq(HitResolver.reach_for_intent(Chars.CHAR_FOX, base,
+		HitResolver.INTENT_GROUND_RECEIVE), base, "レシーブ特性なし100%")
+	check_eq(HitResolver.reach_for_intent(Chars.CHAR_PANDA, base,
+		HitResolver.INTENT_GROUND_RECEIVE), base * 85 / 100, "レシーブ下手85%")
+	for intent in [HitResolver.INTENT_GROUND_TOSS, HitResolver.INTENT_GROUND_FORWARD,
+		HitResolver.INTENT_AIR_SPIKE, HitResolver.INTENT_AIR_TOSS_UP,
+		HitResolver.INTENT_AIR_TOSS_SIDE, HitResolver.INTENT_AIR_FEINT]:
+		check_eq(HitResolver.reach_for_intent(Chars.CHAR_MARIO, base, intent), base,
+			"レシーブ以外のリーチは不変: %d" % intent)
+
+func test_receive_reach_changes_actual_hit_detection() -> void:
+	for row in [[Chars.CHAR_MARIO, 110, 1], [Chars.CHAR_FOX, 110, 0],
+		[Chars.CHAR_FOX, 90, 1], [Chars.CHAR_PANDA, 90, 0]]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.char_id = row[0]
+		s.ball_x = p.x + cfg.player_reach * row[1] / 100
+		s.ball_y = p.y
+		var result: int = HitResolver._resolve_hit(s,
+			[Simulation.IN_ACTION, 0, 0, 0], cfg)
+		check_eq(1 if result != HitResolver.NO_HIT else 0, row[2],
+			"レシーブ実判定: %s" % [row])
+	var wt := _rally_world()
+	var st = wt[0]
+	var cfgt = wt[1]
+	st.players[0].char_id = Chars.CHAR_MARIO
+	st.ball_x = st.players[0].x + cfgt.player_reach * 110 / 100
+	st.ball_y = st.players[0].y
+	check_eq(HitResolver._resolve_hit(st,
+		[Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfgt), HitResolver.NO_HIT,
+		"トス意図はレシーブ上手でもリーチ不変")
+
+func test_toss_good_zone_mapping_mirrors_both_teams() -> void:
+	var cfg = SimConfig.new()
+	check_eq(HitResolver.toss_target_x(0, 0, cfg), FP.from_int(157), "左・無方向=自陣前")
+	check_eq(HitResolver.toss_target_x(0, -1, cfg), FP.from_int(56), "左・ネット逆=自陣後")
+	check_eq(HitResolver.toss_target_x(0, 1, cfg), FP.from_int(448 - 157),
+		"左・ネット方向=敵陣前")
+	check_eq(HitResolver.toss_target_x(1, 0, cfg), FP.from_int(448 - 157),
+		"右・無方向=自陣前")
+	check_eq(HitResolver.toss_target_x(1, 1, cfg), FP.from_int(448 - 56),
+		"右・ネット逆=自陣後")
+	check_eq(HitResolver.toss_target_x(1, -1, cfg), FP.from_int(157),
+		"右・ネット方向=敵陣前")
+
+func test_toss_good_aims_ground_and_air_trajectory_at_zone() -> void:
+	var cfg = SimConfig.new()
+	var target := HitResolver.toss_target_x(0, 0, cfg)
+	for start_y in [cfg.floor_y - FP.from_int(10), cfg.floor_y - FP.from_int(90)]:
+		var start_x: int = FP.from_int(100)
+		var vy: int = -cfg.bump_up_speed
+		var vx: int = HitResolver.toss_aim_vx(start_x, start_y, vy, target, cfg)
+		var landed: int = HitResolver.trajectory_x_at_y(start_x, start_y, vx, vy,
+			cfg.floor_y - cfg.ball_radius, cfg)
+		check(absi(landed - target) <= absi(vx),
+			"地上/空中トスが設定ゾーンへ着地: %d" % start_y)
+	for row in [[0, 1, Simulation.IN_UP], [2, 1, Simulation.IN_UP],
+		[0, 0, Simulation.IN_UP], [2, 0, Simulation.IN_UP]]:
+		var w := _rally_world()
+		var s = w[0]
+		var actual_cfg = w[1]
+		var actor: int = row[0]
+		var p = s.players[actor]
+		p.char_id = Chars.CHAR_MARIO
+		p.on_ground = row[1]
+		if p.on_ground == 0:
+			p.y = actual_cfg.floor_y - FP.from_int(80)
+		s.ball_x = p.x + FP.from_int(5)
+		s.ball_y = p.y - FP.from_int(10)
+		HitResolver._apply_hit(s, actor, actual_cfg,
+			Simulation.IN_ACTION | row[2], 0)
+		var expected_target: int = HitResolver.toss_target_x(actor / 2, 0, actual_cfg)
+		var expected_vx: int = HitResolver.toss_aim_vx(
+			p.x + FP.from_int(5), p.y - FP.from_int(10), s.ball_vy,
+			expected_target, actual_cfg)
+		check_eq(s.ball_vx, expected_vx,
+			"トス上手の両チーム地上/空中統合照準: %s" % [row])
+
+func test_toss_bad_is_exactly_30_percent_and_targets_70_percent_apex() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var seen := {}
+	var low_count := 0
+	for tick in 100000:
+		s.tick = tick
+		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_TOSS_BAD)
+		if not seen.has(roll):
+			seen[roll] = true
+			if HitResolver._toss_apex_pct(s, 0, Chars.CHAR_PANDA) == 70:
+				low_count += 1
+			if seen.size() == 100:
+				break
+	check_eq(low_count, 30, "トス下手は決定論サンプルの30%")
+	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_MARIO), 100,
+		"トス上手は失敗なし")
+	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_FOX), 100,
+		"特性なしは失敗なし")
+	var normal_vy: int = -cfg.bump_up_speed
+	var low_vy: int = HitResolver.toss_vy_for_apex_pct(normal_vy, cfg.gravity, 70)
+	var normal_h: int = HitResolver.apex_height(normal_vy, cfg.gravity)
+	var low_h: int = HitResolver.apex_height(low_vy, cfg.gravity)
+	check(absi(low_h * 100 - normal_h * 70) <= cfg.gravity * 100,
+		"低トスは通常頂点の70%: %d/%d" % [low_h, normal_h])
+
+func test_toss_bad_normal_roll_keeps_unskilled_air_toss_inertia() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	for tick in 10000:
+		s.tick = tick
+		if HitResolver._toss_apex_pct(s, 0, Chars.CHAR_PANDA) == 100:
+			break
+	var outputs: Array[int] = []
+	for cid in [Chars.CHAR_PANDA, Chars.CHAR_FOX]:
+		var sample := _rally_world()
+		var state = sample[0]
+		var sample_cfg = sample[1]
+		state.tick = s.tick
+		var p = state.players[0]
+		p.char_id = cid
+		p.on_ground = 0
+		p.y = sample_cfg.floor_y - FP.from_int(40)
+		state.ball_x = p.x + FP.from_int(30)
+		state.ball_y = p.y
+		state.ball_vy = FP.from_int(700) / sample_cfg.tick_rate
+		HitResolver._apply_hit(state, 0, sample_cfg,
+			Simulation.IN_ACTION | Simulation.IN_UP,
+			sample_cfg.player_reach * sample_cfg.player_reach)
+		outputs.append(state.ball_vy)
+	check_eq(outputs[0], outputs[1],
+		"トス下手の通常ロールは特性なしと同じ空中慣性反射")
 
 func test_fast_incoming_ball_does_not_launch_toss_offscreen() -> void:
 	var w := _rally_world()

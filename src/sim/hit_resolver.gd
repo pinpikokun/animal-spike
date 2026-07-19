@@ -14,7 +14,8 @@ const IN_DOWN := SimInput.IN_DOWN
 
 const NO_HIT := -2
 const HIT_NO_POINT := -1
-const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
+const SALT_MURA := 23
+const SALT_TOSS_BAD := 29
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
 const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
@@ -63,11 +64,97 @@ static func _classify_intent(on_ground: int, input: int, d2: int,
 		return [INTENT_AIR_TOSS_SIDE, hdir, up, 0]
 	return [INTENT_AIR_FEINT, hdir, up, 0]
 
-static func _toss_height_pct(s, actor: int, char_id: int) -> int:
-	# バッチAでは旧Lv5相当の標準値へ統一。付与能力による判定はバッチBで接続する。
-	var low_chance_pct := 25
-	var roll := _scatter(s, actor, 17) + 100
-	return 84 if roll < low_chance_pct * 2 else 100
+static func _mura_power_pct(s, actor: int, char_id: int) -> int:
+	if not Chars.has_trait(char_id, Chars.Profile.TRAIT_MURA):
+		return 100
+	var roll: int = _trait_roll_pct(s, actor, SALT_MURA)
+	if roll < 10:
+		return 50
+	if roll < 90:
+		return 100
+	return 150
+
+static func _toss_apex_pct(s, actor: int, char_id: int) -> int:
+	if not Chars.has_trait(char_id, Chars.Profile.TRAIT_TOSS_BAD):
+		return 100
+	return 70 if _trait_roll_pct(s, actor, SALT_TOSS_BAD) < 30 else 100
+
+static func apex_height(launch_vy: int, gravity: int) -> int:
+	var vy: int = launch_vy
+	var y: int = 0
+	var min_y: int = 0
+	for tick in 600:
+		vy += gravity
+		y += vy
+		min_y = mini(min_y, y)
+		if vy >= 0:
+			break
+	return -min_y
+
+static func toss_vy_for_apex_pct(normal_vy: int, gravity: int, apex_pct: int) -> int:
+	if apex_pct >= 100 or normal_vy >= 0:
+		return normal_vy
+	var target: int = apex_height(normal_vy, gravity) * apex_pct / 100
+	var lo: int = 0
+	var hi: int = -normal_vy
+	var best: int = 0
+	var best_error: int = target
+	while lo <= hi:
+		var mid: int = (lo + hi) / 2
+		var height: int = apex_height(-mid, gravity)
+		var error: int = absi(height - target)
+		if error < best_error:
+			best = mid
+			best_error = error
+		if height < target:
+			lo = mid + 1
+		else:
+			hi = mid - 1
+	return -best
+
+static func toss_target_x(team: int, hdir: int, cfg) -> int:
+	var toward_net: int = 1 if team == 0 else -1
+	var own_back: int = FP.from_int(cfg.toss_zone_back_px) if team == 0 \
+		else cfg.court_width - FP.from_int(cfg.toss_zone_back_px)
+	var own_front: int = FP.from_int(cfg.toss_zone_front_px) if team == 0 \
+		else cfg.court_width - FP.from_int(cfg.toss_zone_front_px)
+	var opponent_front: int = cfg.court_width - FP.from_int(cfg.toss_zone_front_px) \
+		if team == 0 else FP.from_int(cfg.toss_zone_front_px)
+	if hdir == -toward_net:
+		return own_back
+	if hdir == toward_net:
+		return opponent_front
+	return own_front
+
+static func _flight_ticks(start_y: int, launch_vy: int, target_y: int, gravity: int) -> int:
+	var y: int = start_y
+	var vy: int = launch_vy
+	for tick in 600:
+		vy += gravity
+		y += vy
+		if y >= target_y and vy > 0:
+			return tick + 1
+	return 0
+
+static func toss_aim_vx(start_x: int, start_y: int, launch_vy: int,
+		target_x: int, cfg) -> int:
+	var ticks: int = _flight_ticks(start_y, launch_vy,
+		cfg.floor_y - cfg.ball_radius, cfg.gravity)
+	return (target_x - start_x) / ticks if ticks > 0 else 0
+
+static func trajectory_x_at_y(start_x: int, start_y: int, vx: int, vy: int,
+		target_y: int, cfg) -> int:
+	var ticks: int = _flight_ticks(start_y, vy, target_y, cfg.gravity)
+	return start_x + vx * ticks
+
+static func reach_for_intent(char_id: int, base_reach: int, intent_kind: int) -> int:
+	if intent_kind != INTENT_GROUND_RECEIVE:
+		return base_reach
+	if Chars.has_trait(char_id, Chars.Profile.TRAIT_RECEIVE_GOOD):
+		return base_reach * 115 / 100
+	if Chars.has_trait(char_id, Chars.Profile.TRAIT_RECEIVE_BAD):
+		return base_reach * 85 / 100
+	return base_reach
 
 # 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
 # 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
@@ -83,7 +170,6 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 	# 越えずに自陣へ落ちればサーブミス=床判定で相手の得点になる
 	if s.serve_flight == 1:
 		return NO_HIT
-	var reach: int = cfg.player_reach
 	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
 	var best_i: int = -1
 	var best_d2: int = 0
@@ -103,8 +189,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		# 楕円判定: 横はreach、縦はreach_up(頭のかなり上で打てる違和感の抑制)。
 		# dyをreach/reach_up倍して円判定に正規化する。
 		# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
-		var dy_n: int = dy * reach / cfg.player_reach_up
+		var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
 		var d2: int = dx * dx + dy_n * dy_n
+		var intent: Array[int] = _classify_intent(
+			p.on_ground, input, d2, cfg.player_reach, serve_strike)
+		var reach: int = reach_for_intent(p.char_id, cfg.player_reach, intent[0])
 		if d2 > reach * reach:
 			continue
 		var better: bool = best_i < 0 or d2 < best_d2
@@ -202,7 +291,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		p.on_ground, input, d2, cfg.player_reach, serve_strike)
 	var intent_kind: int = intent[0]
 	var hdir: int = intent[1]
-	var up: bool = intent[2] == 1
+	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
+	var toss_bad: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_BAD)
 	if p.on_ground == 1:
 		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
 		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
@@ -235,22 +325,21 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = dir * cfg.bump_fwd_speed
 			p.hit_kind = 0  # レシーブ
-		# いいとこ取りトス(cfg.toss_aim=1): トス/レシーブの横速度を「味方の定位置に
-		# 落ちる値」から逆算する(原作方式)。前トス(hit_kind=2)は現行のまま。
-		# 慣性・ばらつきは外乱としてこの後に乗る=トス上手ほど狙い通り(性能シート接続)
-		if cfg.toss_aim == 1 and p.hit_kind != 2:
-			var target_x: int = FP.from_int(cfg.spawn_front_px) if team == 0 \
-				else cfg.court_width - FP.from_int(cfg.spawn_front_px)
-			target_x += hdir * FP.from_int(TOSS_AIM_SHIFT_PX)  # 上+横で狙いをずらす
-			var air_ticks: int = 2 * cfg.bump_up_speed / cfg.gravity
-			if air_ticks > 0:
-				desired_vx = (target_x - s.ball_x) / air_ticks
-		if not sweet and p.hit_kind != 0 and not serve_strike:
-			desired_vy = desired_vy * _toss_height_pct(s, i, p.char_id) / 100
+		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS \
+			or (intent_kind == INTENT_GROUND_FORWARD and not serve_strike)
+		if is_ground_toss:
+			if toss_bad:
+				desired_vy = toss_vy_for_apex_pct(desired_vy, cfg.gravity,
+					_toss_apex_pct(s, i, p.char_id))
+			if toss_good:
+				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
+					toss_target_x(team, hdir, cfg), cfg)
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
-		s.ball_vx = desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vx = desired_vx * aim_pct / 100 \
+			if toss_good and is_ground_toss \
+			else desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		# トスの高さは入力と技能だけで決める。素レシーブは従来どおり縦の勢いも返す。
 		if p.hit_kind == 0:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
@@ -283,6 +372,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
 			s.hit_freeze = maxi(s.hit_freeze, 4)
 		pct = pct * Chars.stat(p.char_id, "atk") / 100  # アタック威力%
+		pct = pct * _mura_power_pct(s, i, p.char_id) / 100
 		var svx: int
 		var svy: int
 		if hdir != 0:
@@ -311,23 +401,22 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
 			avy = -cfg.feint_vy
 			avx = dir * cfg.feint_vx
-		if not sweet and (up or hdir != 0):
-			avy = avy * _toss_height_pct(s, i, p.char_id) / 100
-		s.ball_vx = avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
-	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
-	# ジャスト成立時は打ち消す(全アクション共通の救済=腕前で常に精密になれる)
-	if not sweet:
-		var sc_key := "sc_toss"
-		if p.on_ground == 1 and p.hit_kind == 0:
-			sc_key = "sc_recv"
-		elif p.on_ground == 0 and (input & IN_DOWN):
-			sc_key = "sc_atk"
-		var sc: int = Chars.stat(p.char_id, sc_key)
-		# トス/レシーブの失敗は上の低軌道だけ。上下左右の速度増幅はアタックだけに限る。
-		if sc != 0 and sc_key == "sc_atk":
-			s.ball_vx += s.ball_vx * sc * _scatter(s, i, 11) / (100 * 100)
-			s.ball_vy += s.ball_vy * sc * _scatter(s, i, 13) / (100 * 100)
+		var is_air_toss: bool = intent_kind == INTENT_AIR_TOSS_UP \
+			or intent_kind == INTENT_AIR_TOSS_SIDE
+		var toss_bad_low: bool = false
+		if is_air_toss:
+			if toss_bad:
+				var apex_pct: int = _toss_apex_pct(s, i, p.char_id)
+				toss_bad_low = apex_pct < 100
+				if toss_bad_low:
+					avy = toss_vy_for_apex_pct(avy, cfg.gravity, apex_pct)
+			if toss_good:
+				avx = toss_aim_vx(s.ball_x, s.ball_y, avy,
+					toss_target_x(team, hdir, cfg), cfg)
+		s.ball_vx = avx * aim_pct / 100 if toss_good and is_air_toss \
+			else avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = avy * aim_pct / 100 if is_air_toss and (toss_good or toss_bad_low) \
+			else avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if s.last_touch_team == team:
@@ -338,12 +427,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 
 # ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
 # キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
-static func _scatter(s, actor: int, salt: int) -> int:
+static func _keyed_hash(s, actor: int, salt: int) -> int:
 	var z: int = s.tick + salt * 1000003 + (actor + 1) * 998244353
 	z = (z ^ (z >> 16)) * 2246822519
 	z = (z ^ (z >> 13)) * 3266489917
-	z = z ^ (z >> 16)
-	return (z & 0x7FFFFFFFFFFFFFFF) % 201 - 100
+	return (z ^ (z >> 16)) & 0x7FFFFFFFFFFFFFFF
+
+static func _scatter(s, actor: int, salt: int) -> int:
+	return _keyed_hash(s, actor, salt) % 201 - 100
+
+static func _trait_roll_pct(s, actor: int, salt: int) -> int:
+	return _keyed_hash(s, actor, salt) % 100
 
 # ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
 # 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
@@ -393,11 +487,6 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			var back_dir: int = -1 if team == 0 else 1
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
-		# ブロックばらつき%: 弾き返す角度の散らばり(荒いキャラの個性)
-		var sc_b: int = Chars.stat(p.char_id, "sc_blk")
-		if sc_b != 0:
-			s.ball_vx += s.ball_vx * sc_b * _scatter(s, i, 17) / (100 * 100)
-			s.ball_vy += s.ball_vy * sc_b * _scatter(s, i, 19) / (100 * 100)
 		s.last_touch_team = team
 		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick

@@ -14,6 +14,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -34,6 +35,9 @@ const HAT_HOVER_TICKS := 90  # = CAP_HOVER_TICKS
 const HAT_RADIUS_PX := 12    # = CAP_RADIUS_PX
 const HAT_HAND_UP_PX := 6    # = CAP_HAND_UP_PX
 const HAT_GUARD_COST := 25   # = HAT_GUARD_COST
+
+static func _hit_reach(char_id: int, base_reach: int, intent_kind: int) -> int:
+	return HitResolver.reach_for_intent(char_id, base_reach, intent_kind)
 
 # プロファイルの欄(8bitずつ)
 const P_AB := 0      # 能力フラグ
@@ -326,7 +330,15 @@ static func decide(s, idx: int, cfg) -> int:
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
 	var dx: int = s.ball_x - p.x
 	var dy: int = s.ball_y - p.y
-	var dy_n: int = dy * reach / cfg.player_reach_up
+	var planned_hit_input: int = SimInput.IN_ACTION
+	if p.on_ground == 1:
+		planned_hit_input |= _ground_shot_keys(s, idx, cfg, team, prof)
+	var base_dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
+	var base_d2: int = dx * dx + base_dy_n * base_dy_n
+	var intent: Array[int] = HitResolver._classify_intent(
+		p.on_ground, planned_hit_input, base_d2, cfg.player_reach, false)
+	reach = _hit_reach(p.char_id, cfg.player_reach, intent[0])
+	var dy_n: int = base_dy_n
 	var d2: int = dx * dx + dy_n * dy_n
 	# ミス抽選が出たタッチでは振りも一拍遅れる(ボールが体の中心を過ぎるまで
 	# 打たない=接触窓が狭まり、位置ずれと合わさって「惜しい後逸」になる)

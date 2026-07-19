@@ -25,7 +25,7 @@ const DEFS := {
 	CHAR_FOX: {"abilities": 0, "stats": {}},
 	CHAR_FROG: {"abilities": 0, "stats": {}},
 	CHAR_DEBUG: {"abilities": CA_HAT | CA_HIP | CA_CLING | CA_DASH,
-		"stats": {"speed": 130, "jump": 120, "atk": 140, "sc_atk": 40}},
+		"stats": {"speed": 130, "jump": 120, "atk": 140}},
 }
 
 # 既定ロスター: slot(0..3)→char_id。キャラ選択画面を通らない場合に使う
@@ -49,6 +49,8 @@ static func has_ability(char_id: int, bit: int) -> bool:
 
 static func stat(char_id: int, key: String) -> int:
 	# 既存物理への整数%窓口。基礎5能力はA-E表、重量は標準値から解決する。
+	if key.begins_with("sc_"):
+		return 0
 	var def: Dictionary = DEFS.get(char_id, {})
 	var stats: Dictionary = def.get("stats", {})
 	if stats.has(key):

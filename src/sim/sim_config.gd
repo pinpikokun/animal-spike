@@ -70,6 +70,8 @@ var serve_delay_ticks: int
 var max_touches: int
 var spawn_back_px: int
 var spawn_front_px: int
+var toss_zone_back_px: int
+var toss_zone_front_px: int
 
 func _init(path: String = DEFAULT_PATH) -> void:
 	var text := FileAccess.get_file_as_string(path)
@@ -162,6 +164,8 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	max_touches = _int_of(raw, "max_touches")
 	spawn_back_px = _int_of(raw, "spawn_back_px")
 	spawn_front_px = _int_of(raw, "spawn_front_px")
+	toss_zone_back_px = _int_of(raw, "toss_zone_back_px")
+	toss_zone_front_px = _int_of(raw, "toss_zone_front_px")
 
 func _int_of(raw: Dictionary, key: String) -> int:
 	if not raw.has(key):

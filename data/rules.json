@@ -55,5 +55,7 @@
 	"serve_delay_ticks": 60,
 	"max_touches": 3,
 	"spawn_back_px": 56,
-	"spawn_front_px": 157
+	"spawn_front_px": 157,
+	"toss_zone_back_px": 56,
+	"toss_zone_front_px": 157
 }
