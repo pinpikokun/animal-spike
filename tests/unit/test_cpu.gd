@@ -5,11 +5,13 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const STANDARD_CHAR := 99
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
+		STANDARD_CHAR, STANDARD_CHAR])
 	return [s, cfg]
 
 func test_cpu_chases_ball_on_own_side() -> void:
@@ -65,7 +67,8 @@ func test_cpu_team_serves_via_team_input() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
-	Simulation.reset_match(s, cfg, 1)
+	Simulation.reset_match(s, cfg, 1, [STANDARD_CHAR, STANDARD_CHAR,
+		STANDARD_CHAR, STANDARD_CHAR])
 	var served := false
 	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
@@ -105,7 +108,8 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
-	Simulation.reset_match(s, cfg, 1)
+	Simulation.reset_match(s, cfg, 1, [STANDARD_CHAR, STANDARD_CHAR,
+		STANDARD_CHAR, STANDARD_CHAR])
 	var served := false
 	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)

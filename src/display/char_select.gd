@@ -15,6 +15,7 @@ const BASE_H := 360.0
 var _cursor := 0
 var _picks: Array[int] = []  # 選んだchar_id(0=手前, 1=奥)
 var _stage_label: Label
+var _stats_label: Label
 var _pick_labels: Array[Label] = []
 var _cursor_rect: ColorRect
 var _cells: Array[Control] = []
@@ -68,26 +69,66 @@ func _ready() -> void:
 		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(name_l)
 
+	# カーソル中キャラの能力表示(10段階レベル+固有技)
+	_stats_label = Label.new()
+	_stats_label.position = Vector2(0, 210)
+	_stats_label.size = Vector2(BASE_W, 88)
+	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stats_label.add_theme_font_size_override("font_size", 11)
+	add_child(_stats_label)
+
 	for s in 2:
 		var l := Label.new()
-		l.position = Vector2(0, 236 + s * 22)
-		l.size = Vector2(BASE_W, 20)
+		l.position = Vector2(0, 300 + s * 15)
+		l.size = Vector2(BASE_W, 15)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_font_size_override("font_size", 11)
 		add_child(l)
 		_pick_labels.append(l)
 
 	var help := Label.new()
 	help.text = "←→:選ぶ  スペース/Enter:決定  Backspace:やり直し  Esc:スキップ(既定編成)"
-	help.position = Vector2(0, 320)
+	help.position = Vector2(0, 336)
 	help.size = Vector2(BASE_W, 20)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.add_theme_font_size_override("font_size", 11)
 	help.modulate = Color(0.7, 0.7, 0.8)
 	add_child(help)
 	_refresh()
 
+const ABILITY_NAMES := {
+	1: "帽子投げ", 2: "ヒップアタック", 4: "壁張り付き", 8: "ダッシュ",
+}
+
+func _bar(lv: int) -> String:
+	return "■".repeat(lv) + "□".repeat(10 - lv)
+
+static func stats_text(cid: int) -> String:
+	var lines: Array[String] = []
+	lines.append("トス %d   アタック %d   ジャンプ %d   ウェイト %d" % [
+		Chars.level(cid, "toss"), Chars.level(cid, "atk"),
+		Chars.level(cid, "jump"), Chars.level(cid, "weight")])
+	lines.append("移動 %d   ブレーキ %d   ガード %d" % [
+		Chars.level(cid, "speed"), Chars.level(cid, "slide"), Chars.level(cid, "guard")])
+	lines.append("ジャスト判定 %d   ジャスト威力 %d   勢い吸収 %d" % [
+		Chars.level(cid, "just_window"), Chars.level(cid, "just_reward"),
+		Chars.level(cid, "absorb")])
+	lines.append("トス安定 %d   レシーブ安定 %d" % [
+		Chars.level(cid, "toss_stability"), Chars.level(cid, "recv_stability")])
+	lines.append("アタック安定 %d   ブロック安定 %d" % [
+		Chars.level(cid, "atk_stability"), Chars.level(cid, "block_stability")])
+	var moves: Array[String] = []
+	for bit in ABILITY_NAMES:
+		if Chars.has_ability(cid, bit):
+			moves.append(ABILITY_NAMES[bit])
+	lines.append("固有技: " + (" / ".join(moves) if moves.size() > 0 else "なし"))
+	return "\n".join(lines)
+
 func _refresh() -> void:
 	_stage_label.text = "手前(操作キャラ)を選べ!" if _picks.size() == 0 else "奥(相方)を選べ!"
 	_cursor_rect.position = _cells[_cursor].position + Vector2(0, 4)
+	var cid: int = Chars.SELECTABLE[_cursor]
+	_stats_label.text = stats_text(cid)
 	for s in 2:
 		if s < _picks.size():
 			var role := "手前" if s == 0 else "奥"

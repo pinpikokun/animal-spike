@@ -4,10 +4,14 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
+const STANDARD_CHAR := 99
 
 func _rally_world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
+	for p in s.players:
+		p.char_id = STANDARD_CHAR
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
 		p.y = cfg.floor_y
@@ -31,6 +35,32 @@ func test_bump_on_ground() -> void:
 	check_eq(s.last_touch_team, 0, "最終タッチは左チーム")
 	check(s.players[0].hit_cooldown > 0, "クールダウン開始")
 
+func test_neutral_receive_keeps_legacy_bounce() -> void:
+	# 方向なしアクションはトスではなく素レシーブ。トス技能の低軌道補正を受けない。
+	for seed_tick in 201:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		s.tick = seed_tick
+		s.ball_x = s.players[0].x + FP.from_int(30)
+		s.ball_y = cfg.floor_y - FP.from_int(10)
+		s.ball_vy = 0
+		Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+		check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
+			"ニュートラルレシーブはトス技能に関係なく従来の高さで跳ねる")
+
+func test_neutral_receive_reflects_vertical_inertia() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vy = FP.from_int(12)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(-s.ball_vy > cfg.bump_up_speed - cfg.gravity,
+		"落下球のニュートラルレシーブは縦の勢いも跳ね返す: actual=%d base=%d" % [
+			-s.ball_vy, cfg.bump_up_speed - cfg.gravity])
+
 func test_toss_up_is_vertical() -> void:
 	# 上入力+アクション: 真上トス(横成分ゼロ、高く上がる)
 	var w := _rally_world()
@@ -42,6 +72,34 @@ func test_toss_up_is_vertical() -> void:
 	check_eq(s.ball_vx, 0, "真上トスは横成分ゼロ")
 	# step内で重力が1回乗るため厳密等値は避け、前トスより高い初速であることを見る
 	check(s.ball_vy < -cfg.toss_fwd_vy, "真上トスは前トスより高く上がる")
+
+func test_unskilled_toss_is_normal_or_low_never_high() -> void:
+	var saw_low := false
+	for seed_tick in 201:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		s.players[0].char_id = Chars.CHAR_PANDA
+		s.tick = seed_tick
+		s.ball_x = s.players[0].x + FP.from_int(30)
+		s.ball_y = cfg.floor_y - FP.from_int(10)
+		s.ball_vy = 0
+		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+		var upward: int = -s.ball_vy
+		check(upward <= cfg.bump_up_speed, "下手なトスでも基準より高くしない")
+		if upward < cfg.bump_up_speed * 90 / 100:
+			saw_low = true
+	check(saw_low, "下手なキャラは低いトスを出すことがある")
+
+func test_fast_incoming_ball_does_not_launch_toss_offscreen() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vy = FP.from_int(700) / cfg.tick_rate
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check(-s.ball_vy <= cfg.bump_up_speed, "強い入射でもトスを基準より高くしない")
 
 func test_toss_forward_goes_far() -> void:
 	# 横入力+アクション: 前トス(横速度が素レシーブより大きく、入力方向へ)
@@ -254,7 +312,7 @@ func test_just_receive_holds_aim() -> void:
 	check_eq(s.ball_vx, expect, "真上トスの横ブレがjust慣性分だけに収まる")
 
 func test_block_reflects_opponent_shot() -> void:
-	# ネット際で空中の体は相手の打球に対して壁になる(入力不要のブロック)
+	# 原作どおり、ネット際でネット方向+アクションを押した時だけブロックする。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -267,10 +325,55 @@ func test_block_reflects_opponent_shot() -> void:
 	s.ball_y = p.y - cfg.player_reach_up  # 手のひらゾーン
 	s.ball_vx = -FP.from_int(8)  # 左(自陣)へ向かう強打
 	s.ball_vy = FP.from_int(6)
-	Simulation.step(s, [0, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "ブロックで打球が跳ね返る")
 	check_eq(s.last_touch_team, 0, "跳ね返した球はブロッカー側の球になる")
-	check_eq(s.touches, 0, "ブロックはタッチ数に数えない")
+	check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
+
+func test_jump_alone_does_not_block() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.x = cfg.net_x - FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 1
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(8)
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(s.ball_vx < 0, "ネット際でジャンプしただけではブロックしない")
+
+func test_block_requires_net_direction() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.x = cfg.net_x - FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 1
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(8)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_LEFT, 0, 0, 0], cfg)
+	check(s.ball_vx < 0, "ネットと逆方向+アクションではブロックしない")
+
+func test_ground_block_works_with_original_input() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.x = cfg.net_x - FP.from_int(20)
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	s.last_touch_team = 1
+	s.ball_x = p.x
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(8)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "原作どおり地上でもネット方向+アクションでブロックできる")
 
 func test_own_shot_is_not_blocked() -> void:
 	# 自チームの打球は自分たちの空中の体に当たらない(空中戦の自滅防止)
@@ -304,7 +407,7 @@ func test_serve_cannot_be_blocked() -> void:
 	s.ball_x = p.x - FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(8)
-	Simulation.step(s, [0, 0, 0, 0], cfg)
+	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
 	check(s.ball_vx > 0, "サーブはブロックされず通り抜ける")
 
 func test_receiving_power_ball_damages_guard() -> void:
@@ -495,7 +598,7 @@ func test_jump_cut_on_release() -> void:
 	check(s.players[0].y > hold.players[0].y, "離した側は高く上がれない")
 
 func test_jump_without_action_is_full() -> void:
-	# アクションなしの↑は従来どおりフルジャンプ
+	# アクションなしの上入力はキャラクター別のフルジャンプを開始する
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -503,7 +606,7 @@ func test_jump_without_action_is_full() -> void:
 	s.ball_x = FP.from_int(400)  # ボールは遠く
 	Simulation.step(s, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(p.on_ground, 0, "フルジャンプで浮く")
-	check(p.vy <= -cfg.jump_speed + cfg.gravity, "フルジャンプの初速")
+	check(p.vy < 0, "フルジャンプは上向きの初速を持つ")
 
 func test_jumping_toss_on_reach_edge() -> void:
 	# 横+アクションでボールがリーチ縁ギリギリ: ジャンピングトス(緩め軌道+演出フラグ)
@@ -516,7 +619,7 @@ func test_jumping_toss_on_reach_edge() -> void:
 	s.ball_y = cfg.floor_y
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "ギリギリでも拾える")
-	check(s.ball_vy <= -cfg.bump_up_speed + cfg.gravity, "救済トスは高く緩く上がる")
+	check(s.ball_vy < 0, "救済トスは低い失敗時でも上向きに拾う")
 	check(p.dive > 0, "飛びつき演出フラグ(右向き)が立つ")
 
 func test_near_toss_is_not_jumping_toss() -> void:

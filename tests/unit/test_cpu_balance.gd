@@ -4,6 +4,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const STANDARD_CHAR := 99
 
 # KPI自動対戦ハーネス(煙感知器)。2026-07-13ユーザー決定により方針転換:
 # CPU対CPUの厳密な単調性(弱<普通<強<最強)はゲートにしない。
@@ -17,7 +18,8 @@ func _run_match(prof_l: int, prof_r: int, serve_first: int, seed: int = 0) -> Ar
 	var cfg = SimConfig.new()
 	cfg.points_to_win = 3
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, serve_first)
+	Simulation.reset_match(s, cfg, serve_first, [STANDARD_CHAR, STANDARD_CHAR,
+		STANDARD_CHAR, STANDARD_CHAR])
 	# 乱数キー(last_hit_tick)の系列をずらして独立サンプル化(決定論のまま多試合化)
 	s.tick = seed * 7919
 	for i in 4:

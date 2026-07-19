@@ -102,6 +102,21 @@ func test_ball_right_wall_bounce() -> void:
 	check(s.ball_vx < 0, "右壁で反射して左向きになる")
 	check(s.ball_x <= cfg.court_width - cfg.ball_radius, "右壁にめり込まない")
 
+func test_power_ball_loses_momentum_and_power_on_wall() -> void:
+	var w := _new_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.ball_x = cfg.ball_radius + FP.from_int(2)
+	s.ball_y = FP.from_int(100)
+	s.ball_vx = -FP.from_int(8)
+	s.ball_vy = FP.from_int(5)
+	s.ball_power = 1
+	var vertical_before: int = s.ball_vy + cfg.gravity
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check(absi(s.ball_vy) < absi(vertical_before), "ジャスト球は壁で縦の勢いも減る")
+	check_eq(s.ball_power, 0, "ジャスト球は壁でパワー状態を失う")
+
 func test_ball_passes_through_ceiling() -> void:
 	# 原作準拠: 上端で跳ね返らずボールは画面上へ突き抜ける(左右の壁だけ反射)
 	var w := _new_world()

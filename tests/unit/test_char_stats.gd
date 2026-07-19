@@ -28,14 +28,9 @@ func test_speed_stat_scales_movement() -> void:
 	var fast: int = s2.players[0].x - x1
 	check_eq(fast, base * 130 / 100, "speed130で移動が1.3倍")
 
-func test_jump_stat_scales_jump() -> void:
-	var w = _rally(); var s = w[0]; var cfg = w[1]
-	Sim.tick(s, [SimInput.IN_JUMP, 0], cfg)
-	var base_vy: int = s.players[0].vy
-	var w2 = _rally(); var s2 = w2[0]
-	s2.players[0].char_id = Chars.CHAR_DEBUG  # jump120
-	Sim.tick(s2, [SimInput.IN_JUMP, 0], cfg)
-	check(s2.players[0].vy < base_vy, "jump120で初速が強い(上向き=より負)")
+func test_jump_level_scales_height() -> void:
+	check(Sim._jump_height_px(8) > Sim._jump_height_px(3),
+		"ジャンプレベルが高いほど最高高度が高い")
 
 func test_guard_max_stat_applies_on_reset() -> void:
 	var w = _rally(); var cfg = w[1]
@@ -67,6 +62,51 @@ func test_reset_match_custom_roster() -> void:
 	Sim.reset_match(s2, cfg, 0)
 	for i in 4:
 		check_eq(s2.players[i].char_id, Chars.ROSTER[i], "省略時は既定ロスター")
+
+func _measure_full_jump(char_id: int) -> Array[int]:
+	var cfg = Cfg.new()
+	var s = St.new()
+	Sim.reset_match(s, cfg, 0)
+	s.phase = St.PHASE_POINT_PAUSE
+	s.timer = 1000000
+	var p = s.players[0]
+	p.char_id = char_id
+	var floor_y: int = p.y
+	var min_y: int = floor_y
+	var apex_tick := -1
+	var land_tick := -1
+	for tick in 240:
+		Sim.step(s, [SimInput.IN_JUMP, 0, 0, 0], cfg)
+		min_y = mini(min_y, p.y)
+		if apex_tick < 0 and p.on_ground == 0 and p.vy >= 0:
+			apex_tick = tick + 1
+		if tick > 0 and p.on_ground == 1:
+			land_tick = tick + 1
+			break
+	return [FP.to_int(floor_y - min_y), apex_tick, land_tick - apex_tick]
+
+func test_jump_level_targets_foot_height() -> void:
+	var panda := _measure_full_jump(Chars.CHAR_PANDA)
+	var mario := _measure_full_jump(Chars.CHAR_MARIO)
+	var frog := _measure_full_jump(Chars.CHAR_FROG)
+	check(absi(panda[0] - 120) <= 2, "ジャンプLv3は足元120px: actual=%d" % panda[0])
+	check(absi(mario[0] - 132) <= 2, "ジャンプLv5は足元132px: actual=%d" % mario[0])
+	check(absi(frog[0] - 150) <= 2, "ジャンプLv8は足元150px: actual=%d" % frog[0])
+
+func test_jump_level_height_table() -> void:
+	var expected := [108, 114, 120, 126, 132, 138, 144, 150, 156, 162]
+	for i in expected.size():
+		check_eq(Sim._jump_height_px(i + 1), expected[i],
+			"ジャンプLv%dの指定高度" % (i + 1))
+
+func test_weight_changes_airtime_without_changing_height() -> void:
+	var heavy := _measure_full_jump(Chars.CHAR_PANDA)
+	var middle := _measure_full_jump(Chars.CHAR_MARIO)
+	var light := _measure_full_jump(Chars.CHAR_FROG)
+	check(light[1] > middle[1] and middle[1] > heavy[1],
+		"軽いキャラほど上昇が長い: %s/%s/%s" % [light[1], middle[1], heavy[1]])
+	check(light[2] > middle[2] and middle[2] > heavy[2],
+		"軽いキャラほど下降が長い: %s/%s/%s" % [light[2], middle[2], heavy[2]])
 
 func test_scatter_is_deterministic() -> void:
 	# 同じtick/actor/saltなら同じ値(両ピア同値・ロールバック再現の土台)

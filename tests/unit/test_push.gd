@@ -122,7 +122,7 @@ func test_power_ball_block_pushes_blocker() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(400) / cfg.tick_rate  # 右へ=右チームへ向かう
 	s.ball_vy = 0
-	Simulation.step(s, [0, 0, 0, 0], cfg)
+	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
 	check_eq(s.last_touch_team, 1, "ブロック成立の前提確認")
 	check(p.push > 0, "右チームのブロッカーは右(後ろ)へ押し込まれる")
 
@@ -140,6 +140,6 @@ func test_normal_ball_block_no_push() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(400) / cfg.tick_rate
 	s.ball_vy = 0
-	Simulation.step(s, [0, 0, 0, 0], cfg)
+	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
 	check_eq(s.last_touch_team, 1, "ブロック成立の前提確認")
 	check_eq(p.push, 0, "通常球のブロックは無反動")

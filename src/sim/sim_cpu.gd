@@ -503,7 +503,9 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 		var post: int = cfg.net_x - FP.from_int(20) if team == 0 \
 			else cfg.net_x + FP.from_int(20)
 		if absi(p.x - post) <= FP.from_int(24):
-			return SimInput.IN_JUMP if p.on_ground == 1 else 0
+			var toward_net: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+			var block_input: int = SimInput.IN_ACTION | toward_net
+			return block_input | SimInput.IN_JUMP if p.on_ground == 1 else block_input
 		return _walk_to(p, post, deadzone / 2)
 	return 0
 

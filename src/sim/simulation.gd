@@ -32,6 +32,8 @@ const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
 const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
+const JUMP_RISE_TICKS := 25
+const JUMP_FALL_TICKS := 27
 const PLAYER_HALF_W_PX := 8    # 体の半幅。ネット面へは体表面で止まる(めり込み防止)
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
@@ -101,6 +103,31 @@ static func ent_free(e) -> void:
 
 static func team_of(i: int) -> int:
 	return i / 2
+
+static func _jump_height_px(level: int) -> int:
+	var lv := clampi(level, 1, 10)
+	return 102 + lv * 6
+
+static func _weight_time_pct(level: int, rising: bool) -> int:
+	var lv := clampi(level, 1, 10)
+	var light := 115 if rising else 125
+	var heavy := 85 if rising else 80
+	if lv <= 5:
+		return light + (lv - 1) * (100 - light) / 4
+	return 100 + (lv - 5) * (heavy - 100) / 5
+
+static func _jump_ticks(weight_level: int, rising: bool) -> int:
+	var base := JUMP_RISE_TICKS if rising else JUMP_FALL_TICKS
+	return maxi(4, base * _weight_time_pct(weight_level, rising) / 100)
+
+static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
+	var den := ticks * (ticks - 1) if rising else ticks * (ticks + 1)
+	return FP.from_int(height_px * 2) / den
+
+static func _toss_height_pct(s, actor: int, char_id: int) -> int:
+	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
+	var roll := _scatter(s, actor, 17) + 100
+	return 84 if roll < low_chance_pct * 2 else 100
 
 static func _dir_of_team(team: int) -> int:
 	return 1 if team == 0 else -1
@@ -188,7 +215,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# ヒットルールで打つ(地上前トス=安全サーブ/走り込みジャンプ+下=アタック)。
 			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
 			_step_players_and_hits(state, inputs, cfg)
-			_step_ball(state, cfg)
+			_step_ball(state, cfg, inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
 					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
 				# 打ち損ねてトスが床に落ちた: 失点にせず構えからやり直す(再トス)。
@@ -205,7 +232,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 				_hold_ball_on_server(state, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		_step_players_and_hits(state, inputs, cfg)
-		_step_ball(state, cfg)
+		_step_ball(state, cfg, inputs)
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
@@ -467,6 +494,8 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not (input & IN_ACTION):
 			continue
+		if _is_active_block(s, i, input, cfg):
+			continue
 		var p = s.players[i]
 		if p.hit_cooldown > 0 or p.stun > 0:
 			continue
@@ -495,10 +524,25 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> void:
 			s.serve_tossed = 0
 			s.serve_flight = 1
 
+static func _is_active_block(s, i: int, input: int, cfg) -> bool:
+	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+		return false
+	var team: int = team_of(i)
+	if s.last_touch_team != 1 - team or not (input & IN_ACTION):
+		return false
+	var toward_net: int = IN_RIGHT if team == 0 else IN_LEFT
+	if not (input & toward_net):
+		return false
+	if absi(s.players[i].x - cfg.net_x) > FP.from_int(60):
+		return false
+	var incoming_dir: int = -1 if team == 0 else 1
+	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
+
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = _dir_of_team(team)
+	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
 	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
 	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
@@ -519,6 +563,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# 反動受け流し%(トス技術・物理面): 高いほど入射の勢いを殺す(200で完全に殺す)。
 	# 100=標準(現行の慣性反射のまま)。ジャストの慣性カットは別枠で全キャラ共通
 	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
+	# サーブは自分で上げた球を打つため、相手打球用の入射反発を差し引かない。
+	if serve_strike:
+		inertia = 0
 	# パワーボールを芯を外して触ると返球の制御を失う(狙い30%+全反射)。
 	# 「アタックはまともに返せない」原作精神: 対処はジャスト受けかブロックのみ
 	var mangled := false
@@ -572,13 +619,13 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# ジャンピングトス(飛びついて片手で拾う救済)になり、緩めの軌道に化ける。
 			# 入力は同じで状況が挙動を変える(演出は表示層がヒット距離から導出する)
 			var edge: int = cfg.player_reach * 3 / 4
-			if d2 >= 0 and d2 > edge * edge:
+			if not serve_strike and d2 >= 0 and d2 > edge * edge:
 				desired_vy = -cfg.bump_up_speed
 				desired_vx = hdir * cfg.toss_mid_vx
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
 			else:
-				desired_vy = -cfg.toss_fwd_vy
-				desired_vx = hdir * cfg.toss_fwd_vx
+				desired_vy = -cfg.serve_vy if serve_strike else -cfg.toss_fwd_vy
+				desired_vx = hdir * (cfg.serve_vx if serve_strike else cfg.toss_fwd_vx)
 			p.hit_kind = 2  # 前トス(横のみ)
 		elif hdir != 0 and up:
 			# 上+横: 中間(高く+そこそこ前)
@@ -605,11 +652,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			var air_ticks: int = 2 * cfg.bump_up_speed / cfg.gravity
 			if air_ticks > 0:
 				desired_vx = (target_x - s.ball_x) / air_ticks
+		if not sweet and p.hit_kind != 0 and not serve_strike:
+			desired_vy = desired_vy * _toss_height_pct(s, i, p.char_id) / 100
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
 		s.ball_vx = desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		# トスの高さは入力と技能だけで決める。素レシーブは従来どおり縦の勢いも返す。
+		if p.hit_kind == 0:
+			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		else:
+			s.ball_vy = desired_vy * aim_pct / 100
 	elif input & IN_DOWN:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
@@ -665,6 +718,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
 			avy = -cfg.feint_vy
 			avx = dir * cfg.feint_vx
+		if not sweet and (up or hdir != 0):
+			avy = avy * _toss_height_pct(s, i, p.char_id) / 100
 		s.ball_vx = avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
@@ -676,7 +731,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		elif p.on_ground == 0 and (input & IN_DOWN):
 			sc_key = "sc_atk"
 		var sc: int = Chars.stat(p.char_id, sc_key)
-		if sc != 0:
+		# トス/レシーブの失敗は上の低軌道だけ。上下左右の速度増幅はアタックだけに限る。
+		if sc != 0 and sc_key == "sc_atk":
 			s.ball_vx += s.ball_vx * sc * _scatter(s, i, 11) / (100 * 100)
 			s.ball_vy += s.ball_vy * sc * _scatter(s, i, 13) / (100 * 100)
 	p.hit_cooldown = cfg.hit_cooldown_ticks
@@ -808,15 +864,23 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。
 		# simで跳ぶと上トスが「空中ヒット」扱いになり地上トス表(慣性込み)から
 		# 外れてしまうバグがあった(実ジャンプ化は意図しない実装だった)
-		p.vy = -cfg.jump_speed * Chars.stat(p.char_id, "jump") / 100
+		var height_px := _jump_height_px(Chars.level(p.char_id, "jump"))
+		var rise_ticks := _jump_ticks(Chars.level(p.char_id, "weight"), true)
+		p.vy = -_jump_gravity(height_px, rise_ticks, true) * rise_ticks
 		p.on_ground = 0
 	if p.on_ground == 0:
 		# 可変ジャンプ: 上昇中に上キーを離すとその場で失速して落下に転じる
 		# (毎tick半減の減衰。intの/2はゼロ方向切り捨てで決定論)
 		if p.vy < 0 and not (input & IN_JUMP):
 			p.vy = p.vy / 2
-		# 重さ%: 重いキャラほど速く落ちる(着地演出の強さも表示層がここから導く)
-		p.vy += cfg.gravity * Chars.stat(p.char_id, "weight") / 100
+		var jump_height := _jump_height_px(Chars.level(p.char_id, "jump"))
+		var weight_level := Chars.level(p.char_id, "weight")
+		if p.vy < 0:
+			var up_ticks := _jump_ticks(weight_level, true)
+			p.vy += _jump_gravity(jump_height, up_ticks, true)
+		else:
+			var down_ticks := _jump_ticks(weight_level, false)
+			p.vy += _jump_gravity(jump_height, down_ticks, false)
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1
 	# ジャンピングトス演出の残時間(符号=方向)。ゼロへ向かって減る
@@ -865,7 +929,7 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		p.hip = 0
 		p.cling = 0
 
-static func _step_ball(s, cfg) -> void:
+static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x
 	s.ball_vy += cfg.gravity
 	s.ball_x += s.ball_vx
@@ -874,25 +938,31 @@ static func _step_ball(s, cfg) -> void:
 	s.ball_spin += s.ball_vx
 	var left: int = cfg.ball_radius
 	var right: int = cfg.court_width - cfg.ball_radius
+	var hit_wall := false
 	if s.ball_x < left:
 		s.ball_x = left + (left - s.ball_x)
 		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+		hit_wall = true
 	elif s.ball_x > right:
 		s.ball_x = right - (s.ball_x - right)
 		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+		hit_wall = true
+	if hit_wall and s.ball_power == 1:
+		s.ball_vy = s.ball_vy * cfg.wall_bounce_num / cfg.ball_bounce_den
+		s.ball_power = 0
 	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
 	_ball_vs_net(s, cfg, prev_x)
-	_ball_vs_block(s, cfg)
+	_ball_vs_block(s, cfg, inputs)
 
-# ブロック: ネット際(60px圏)で空中にいる体は相手の打球に対して壁になる。
-# 入力不要=ジャンプそのものが防御になる(スパイクvsブロックの読み合いの核)。
+# ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
+# 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
 # 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
 # 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
 # サーブは飛行中ブロック不可(バレーのルール準拠)。ボールのパワーは
 # ブロックでは消費されない(自分のメテオが跳ね返ってくるスリルは残す)
-static func _ball_vs_block(s, cfg) -> void:
+static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
 		return
 	if s.last_touch_team < 0:
@@ -903,7 +973,10 @@ static func _ball_vs_block(s, cfg) -> void:
 		if team == s.last_touch_team:
 			continue  # 自チームの打球は自分たちの体に当たらない(空中戦の自滅防止)
 		var p = s.players[i]
-		if p.on_ground == 1 or p.stun > 0 or p.hit_cooldown > 0:
+		var input: int = inputs[i] if i < inputs.size() else 0
+		if not _is_active_block(s, i, input, cfg):
+			continue
+		if p.stun > 0 or p.hit_cooldown > 0:
 			continue
 		if absi(p.x - cfg.net_x) > zone:
 			continue
@@ -937,7 +1010,7 @@ static func _ball_vs_block(s, cfg) -> void:
 			s.ball_vx += s.ball_vx * sc_b * _scatter(s, i, 17) / (100 * 100)
 			s.ball_vy += s.ball_vy * sc_b * _scatter(s, i, 19) / (100 * 100)
 		s.last_touch_team = team
-		s.touches = 0  # ブロックはタッチ数に数えない(バレー準拠)
+		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick
 		p.hit_cooldown = cfg.hit_cooldown_ticks
 		s.hit_freeze = maxi(s.hit_freeze, 2)
