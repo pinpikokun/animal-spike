@@ -4,10 +4,11 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 func test_hit_boundary_declares_three_state_results() -> void:
-	check_eq(Simulation.NO_HIT, -2, "不成立定数")
-	check_eq(Simulation.HIT_NO_POINT, -1, "成立・得点なし定数")
+	check_eq(HitResolver.NO_HIT, -2, "不成立定数")
+	check_eq(HitResolver.HIT_NO_POINT, -1, "成立・得点なし定数")
 
 func _clone_state(s):
 	var clone = SimState.new()
@@ -24,11 +25,11 @@ func _place_ball_on_player(s, player_index: int, cfg) -> int:
 	return FP.from_int(10) * FP.from_int(10)
 
 func _resolve_result(s, inputs: Array[int], cfg):
-	return Simulation._resolve_hit(s, inputs, cfg)
+	return HitResolver._resolve_hit(s, inputs, cfg)
 
 func _legacy_expected_hit(s, player_index: int, input: int, d2: int, cfg,
 		was_serve_strike: bool) -> void:
-	Simulation._apply_hit(s, player_index, cfg, input, d2)
+	HitResolver._apply_hit(s, player_index, cfg, input, d2)
 	if s.touches > cfg.max_touches \
 			and s.phase != SimState.PHASE_POINT_PAUSE \
 			and s.phase != SimState.PHASE_GAME_OVER:
@@ -51,12 +52,12 @@ func test_normal_serve_strike_returns_hit_no_point_and_preserves_state() -> void
 	var result = _resolve_result(actual, [input, 0, 0, 0], cfg)
 	if result == 0 or result == 1:
 		Simulation._award_point(actual, result, cfg)
-	if result != Simulation.NO_HIT:
+	if result != HitResolver.NO_HIT:
 		actual.phase = SimState.PHASE_RALLY
 		actual.serve_tossed = 0
 		actual.serve_flight = 1
 
-	check_eq(result, Simulation.HIT_NO_POINT, "通常サーブ打撃は得点なしの成立")
+	check_eq(result, HitResolver.HIT_NO_POINT, "通常サーブ打撃は得点なしの成立")
 	check_eq(actual.to_int_array(), expected.to_int_array(), "通常サーブ打撃の全state")
 
 func test_zero_max_touches_serve_preserves_award_then_transition_order() -> void:
@@ -74,7 +75,7 @@ func test_zero_max_touches_serve_preserves_award_then_transition_order() -> void
 	var result = _resolve_result(actual, [input, 0, 0, 0], cfg)
 	if result == 0 or result == 1:
 		Simulation._award_point(actual, result, cfg)
-	if result != Simulation.NO_HIT:
+	if result != HitResolver.NO_HIT:
 		actual.phase = SimState.PHASE_RALLY
 		actual.serve_tossed = 0
 		actual.serve_flight = 1
@@ -98,7 +99,7 @@ func test_missed_serve_strike_returns_no_hit_without_state_change() -> void:
 	var result = _resolve_result(actual,
 		[Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 
-	check_eq(result, Simulation.NO_HIT, "届かないサーブ打撃は不成立")
+	check_eq(result, HitResolver.NO_HIT, "届かないサーブ打撃は不成立")
 	check_eq(actual.to_int_array(), before, "不成立時は全state不変")
 
 func test_rally_touch_over_returns_point_and_awards_same_tick() -> void:

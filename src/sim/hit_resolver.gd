@@ -1,0 +1,376 @@
+# ヒット判定と打球解決。int演算のみ
+extends RefCounted
+
+const FP := preload("res://src/sim/fp.gd")
+const SimInput := preload("res://src/sim/sim_input.gd")
+const SimStateScript := preload("res://src/sim/sim_state.gd")
+const Chars := preload("res://src/sim/chars.gd")
+
+const IN_LEFT := SimInput.IN_LEFT
+const IN_RIGHT := SimInput.IN_RIGHT
+const IN_ACTION := SimInput.IN_ACTION
+const IN_UP := SimInput.IN_UP
+const IN_DOWN := SimInput.IN_DOWN
+
+const NO_HIT := -2
+const HIT_NO_POINT := -1
+const TOSS_AIM_SHIFT_PX := 60  # いいとこ取りトス: 上+横入力で狙いをずらす幅
+# ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
+# 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
+const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
+const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
+const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押し込み(約22px)
+const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
+const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=自陣の壁際まで届く大出力
+const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
+const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
+const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
+
+static func team_of(i: int) -> int:
+	return SimStateScript.team_of(i)
+
+static func _server_index(s) -> int:
+	return s.serving_team * 2
+
+static func _toss_height_pct(s, actor: int, char_id: int) -> int:
+	var low_chance_pct := (10 - Chars.level(char_id, "toss")) * 5
+	var roll := _scatter(s, actor, 17) + 100
+	return 84 if roll < low_chance_pct * 2 else 100
+
+# 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
+# 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
+# 負けた側も硬直だけ食らう不公平があった。
+# 同距離ならボールがある側のチームを優先、それも同点ならインデックス小。全て整数比較で決定論
+static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
+	# サーブの2段目(トス済み)はサーバー本人のみ打てる。それ以外のSERVE中は不可
+	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
+	if s.phase != SimStateScript.PHASE_RALLY and not serve_strike:
+		return NO_HIT
+	# サーブは一発で相手コートへ入れる(本物のバレー準拠)。打たれたサーブが
+	# ネットを越えるまでは誰も触れない(味方の中継も、サーバー自身の2度打ちも不可)。
+	# 越えずに自陣へ落ちればサーブミス=床判定で相手の得点になる
+	if s.serve_flight == 1:
+		return NO_HIT
+	var reach: int = cfg.player_reach
+	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
+	var best_i: int = -1
+	var best_d2: int = 0
+	for i in s.players.size():
+		if serve_strike and i != _server_index(s):
+			continue
+		var input: int = inputs[i] if i < inputs.size() else 0
+		if not (input & IN_ACTION):
+			continue
+		if _is_active_block(s, i, input, cfg):
+			continue
+		var p = s.players[i]
+		if p.hit_cooldown > 0 or p.stun > 0:
+			continue
+		var dx: int = s.ball_x - p.x
+		var dy: int = s.ball_y - p.y
+		# 楕円判定: 横はreach、縦はreach_up(頭のかなり上で打てる違和感の抑制)。
+		# dyをreach/reach_up倍して円判定に正規化する。
+		# オーバーフロー検討: dx最大640<<16≈4.2e7、二乗≈1.8e15 < int64上限9.2e18で安全
+		var dy_n: int = dy * reach / cfg.player_reach_up
+		var d2: int = dx * dx + dy_n * dy_n
+		if d2 > reach * reach:
+			continue
+		var better: bool = best_i < 0 or d2 < best_d2
+		if not better and d2 == best_d2:
+			better = team_of(i) == side_team and team_of(best_i) != side_team
+		if better:
+			best_i = i
+			best_d2 = d2
+	if best_i >= 0:
+		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
+		_apply_hit(s, best_i, cfg, winner_input, best_d2)
+		return 1 - team_of(best_i) if s.touches > cfg.max_touches else HIT_NO_POINT
+	return NO_HIT
+
+static func _is_active_block(s, i: int, input: int, cfg) -> bool:
+	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+		return false
+	var team: int = team_of(i)
+	if s.last_touch_team != 1 - team or not (input & IN_ACTION):
+		return false
+	var toward_net: int = IN_RIGHT if team == 0 else IN_LEFT
+	if not (input & toward_net):
+		return false
+	if absi(s.players[i].x - cfg.net_x) > FP.from_int(60):
+		return false
+	var incoming_dir: int = -1 if team == 0 else 1
+	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
+
+static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
+	var p = s.players[i]
+	var team: int = team_of(i)
+	var dir: int = SimStateScript._dir_of_team(team)
+	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
+	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
+	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
+	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
+	# 耐久力が尽きた瞬間にスタン(倒れて動けない)し、満タンへ戻る(気絶サイクル)。
+	# 判定はball_powerを消費する前に読む
+	# スイート判定(芯)は全用途共通: 耐久力の回復/削り、スパイクのパワー化、
+	# そして「芯で捉えたボールは慣性に流されない」(慣性が30%→10%に落ちる)
+	# ジャスト窓の広さ%: 0でそのキャラはジャスト不可(数値で個性を表現)
+	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
+		* Chars.stat(p.char_id, "just_window") / (100 * 100)
+	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
+	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
+	# 支配権切替: 緩い球(閾値未満)は慣性ゼロ=完全に狙い通り打てる。
+	# 強い球だけが「ぎりぎり捕球」で勢いに流される(リアルバレー準拠)
+	var in_sp2: int = s.ball_vx * s.ball_vx + s.ball_vy * s.ball_vy
+	if in_sp2 < cfg.inertia_min_speed * cfg.inertia_min_speed:
+		inertia = 0
+	# 反動受け流し%(トス技術・物理面): 高いほど入射の勢いを殺す(200で完全に殺す)。
+	# 100=標準(現行の慣性反射のまま)。ジャストの慣性カットは別枠で全キャラ共通
+	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
+	# サーブは自分で上げた球を打つため、相手打球用の入射反発を差し引かない。
+	if serve_strike:
+		inertia = 0
+	# パワーボールを芯を外して触ると返球の制御を失う(狙い30%+全反射)。
+	# 「アタックはまともに返せない」原作精神: 対処はジャスト受けかブロックのみ
+	var mangled := false
+	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
+		if sweet:
+			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
+		else:
+			mangled = true
+			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
+			# 耐久力まで尽きたら本スタン(長い方が優先)
+			p.guard -= cfg.guard_dmg_power
+			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
+			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
+			var back: int = -1 if team == 0 else 1
+			# 重さ%で伸縮: 重量級はどっしり、軽量級は大きく飛ばされる
+			p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 / Chars.stat(p.char_id, "weight")
+			# 空中被弾は「打ち上げられて吹っ飛ぶ」: 軽い浮きを与え滞空を延ばす
+			# (滞空中はしりもち減衰が緩いので後方への飛距離も伸びる)
+			if p.on_ground == 0:
+				p.vy = mini(p.vy, -FP.from_int(KNOCK_AIR_UP_PX_S) / cfg.tick_rate)
+			if p.guard <= 0:
+				p.stun = cfg.stun_ticks
+				p.guard = p.guard_max
+				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
+				# 決着の一撃: 自陣の壁際まで吹っ飛ばされて気絶する(壁クランプで止まる)。
+				# 重さ%は掛けない=誰でも壁まで飛ぶフィニッシュ演出(浮きは共通処理が担う)
+				p.push = back * PUSH_STUN_TICKS
+			else:
+				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
+				s.hit_freeze = maxi(s.hit_freeze, 3)
+	s.ball_power = 0
+	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
+	var aim_pct: int = 100
+	if mangled:
+		aim_pct = MANGLE_AIM_PCT
+		inertia = cfg.hit_inertia_den
+	# 押している方向(横=入力方向、上=IN_UP)。地上/空中どちらの打ち分けにも使う
+	var hdir: int = 0
+	if input & IN_LEFT:
+		hdir -= 1
+	if input & IN_RIGHT:
+		hdir += 1
+	var up: bool = (input & IN_UP) != 0
+	if p.on_ground == 1:
+		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
+		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
+		var desired_vx: int = 0
+		var desired_vy: int = 0
+		if hdir != 0 and not up:
+			# 横のみ: 前へ低く遠く。ただしボールがリーチの縁ギリギリなら
+			# ジャンピングトス(飛びついて片手で拾う救済)になり、緩めの軌道に化ける。
+			# 入力は同じで状況が挙動を変える(演出は表示層がヒット距離から導出する)
+			var edge: int = cfg.player_reach * 3 / 4
+			if not serve_strike and d2 >= 0 and d2 > edge * edge:
+				desired_vy = -cfg.bump_up_speed
+				desired_vx = hdir * cfg.toss_mid_vx
+				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
+			else:
+				desired_vy = -cfg.serve_vy if serve_strike else -cfg.toss_fwd_vy
+				desired_vx = hdir * (cfg.serve_vx if serve_strike else cfg.toss_fwd_vx)
+			p.hit_kind = 2  # 前トス(横のみ)
+		elif hdir != 0 and up:
+			# 上+横: 中間(高く+そこそこ前)
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = hdir * cfg.toss_mid_vx
+			p.hit_kind = 1  # トス
+		elif up:
+			# 上のみ: 真上へ高く
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = 0
+			p.hit_kind = 1  # トス
+		else:
+			# ニュートラル: 少し前へ=素レシーブ
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = dir * cfg.bump_fwd_speed
+			p.hit_kind = 0  # レシーブ
+		# いいとこ取りトス(cfg.toss_aim=1): トス/レシーブの横速度を「味方の定位置に
+		# 落ちる値」から逆算する(原作方式)。前トス(hit_kind=2)は現行のまま。
+		# 慣性・ばらつきは外乱としてこの後に乗る=トス上手ほど狙い通り(性能シート接続)
+		if cfg.toss_aim == 1 and p.hit_kind != 2:
+			var target_x: int = FP.from_int(cfg.spawn_front_px) if team == 0 \
+				else cfg.court_width - FP.from_int(cfg.spawn_front_px)
+			target_x += hdir * FP.from_int(TOSS_AIM_SHIFT_PX)  # 上+横で狙いをずらす
+			var air_ticks: int = 2 * cfg.bump_up_speed / cfg.gravity
+			if air_ticks > 0:
+				desired_vx = (target_x - s.ball_x) / air_ticks
+		if not sweet and p.hit_kind != 0 and not serve_strike:
+			desired_vy = desired_vy * _toss_height_pct(s, i, p.char_id) / 100
+		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
+		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
+		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
+		s.ball_vx = desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		# トスの高さは入力と技能だけで決める。素レシーブは従来どおり縦の勢いも返す。
+		if p.hit_kind == 0:
+			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		else:
+			s.ball_vy = desired_vy * aim_pct / 100
+	elif input & IN_DOWN:
+		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
+		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
+		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
+		# 打ち分け: 下のみ=鋭角(手前に鋭く落ちる。近距離でないと自陣落ちのリスク)、
+		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向。
+		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
+		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
+		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
+		var pct: int = 100
+		if sweet:
+			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
+			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
+			s.ball_power = 1
+			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
+			# スローモーション12tick(1/3速)でボールが撃ち出される様をスロー再生する。
+			# 18tickは過剰との指摘で12へ短縮(スマブラの決めカットより軽め)
+			s.hit_freeze = maxi(s.hit_freeze, 5)
+			s.slow_ticks = maxi(s.slow_ticks, 12)
+			# 反作用: 撃った本人がネットと逆へ小さく押し返される(威力の説得力+
+			# ネット際連発への自然な小さな代償)。量は重さ%で伸縮
+			p.push = -dir * mini(PUSH_MAX_TICKS,
+				PUSH_ATK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
+		else:
+			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
+			s.hit_freeze = maxi(s.hit_freeze, 4)
+		pct = pct * Chars.stat(p.char_id, "atk") / 100  # アタック威力%
+		var svx: int
+		var svy: int
+		if hdir != 0:
+			svy = cfg.spike_vy * pct / 100
+			svx = dir * cfg.spike_vx * pct / 100
+		else:
+			svy = cfg.spike_steep_vy * pct / 100
+			svx = dir * cfg.spike_steep_vx * pct / 100
+		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+	else:
+		# 空中トス3種(上/横/フェイント)。地上・スパイクと同じ慣性反射で統一する
+		# (以前は直接代入で慣性が乗らない不整合があった)
+		var avx: int
+		var avy: int
+		if up:
+			# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
+			avy = -cfg.bump_up_speed
+			avx = hdir * cfg.toss_mid_vx
+		elif hdir != 0:
+			# 空中+横: きつめの角度の山なりで遠くへトス
+			avy = -cfg.toss_fwd_vy
+			avx = hdir * cfg.toss_fwd_vx
+		else:
+			# 空中ニュートラル: 軟攻(フェイント)。ふわっとネット越しにポトリと落とす
+			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
+			avy = -cfg.feint_vy
+			avx = dir * cfg.feint_vx
+		if not sweet and (up or hdir != 0):
+			avy = avy * _toss_height_pct(s, i, p.char_id) / 100
+		s.ball_vx = avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		s.ball_vy = avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+	# ばらつき%(アクション別=トス/レシーブ/アタック): 出球速度に散らばりを加える。
+	# ジャスト成立時は打ち消す(全アクション共通の救済=腕前で常に精密になれる)
+	if not sweet:
+		var sc_key := "sc_toss"
+		if p.on_ground == 1 and p.hit_kind == 0:
+			sc_key = "sc_recv"
+		elif p.on_ground == 0 and (input & IN_DOWN):
+			sc_key = "sc_atk"
+		var sc: int = Chars.stat(p.char_id, sc_key)
+		# トス/レシーブの失敗は上の低軌道だけ。上下左右の速度増幅はアタックだけに限る。
+		if sc != 0 and sc_key == "sc_atk":
+			s.ball_vx += s.ball_vx * sc * _scatter(s, i, 11) / (100 * 100)
+			s.ball_vy += s.ball_vy * sc * _scatter(s, i, 13) / (100 * 100)
+	p.hit_cooldown = cfg.hit_cooldown_ticks
+	s.last_hit_tick = s.tick
+	if s.last_touch_team == team:
+		s.touches += 1
+	else:
+		s.touches = 1
+	s.last_touch_team = team
+
+# ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
+# キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
+static func _scatter(s, actor: int, salt: int) -> int:
+	var z: int = s.tick + salt * 1000003 + (actor + 1) * 998244353
+	z = (z ^ (z >> 16)) * 2246822519
+	z = (z ^ (z >> 13)) * 3266489917
+	z = z ^ (z >> 16)
+	return (z & 0x7FFFFFFFFFFFFFFF) % 201 - 100
+
+# ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
+# 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
+# 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
+# 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
+# サーブは飛行中ブロック不可(バレーのルール準拠)。ボールのパワーは
+# ブロックでは消費されない(自分のメテオが跳ね返ってくるスリルは残す)
+static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
+	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+		return
+	if s.last_touch_team < 0:
+		return
+	var zone: int = FP.from_int(60)
+	for i in s.players.size():
+		var team: int = team_of(i)
+		if team == s.last_touch_team:
+			continue  # 自チームの打球は自分たちの体に当たらない(空中戦の自滅防止)
+		var p = s.players[i]
+		var input: int = inputs[i] if i < inputs.size() else 0
+		if not _is_active_block(s, i, input, cfg):
+			continue
+		if p.stun > 0 or p.hit_cooldown > 0:
+			continue
+		if absi(p.x - cfg.net_x) > zone:
+			continue
+		# ボールが自陣へ向かって飛んでいる時だけ(離れる球に壁は要らない)
+		var dir_in: int = -1 if team == 0 else 1
+		if s.ball_vx == 0 or signi(s.ball_vx) != dir_in:
+			continue
+		# 手のひらゾーン: 頭上(reach_up)中心の小さい楕円(横reach/2、縦reach_up/2)
+		var cx: int = p.x
+		var cy: int = p.y - cfg.player_reach_up
+		var rx: int = cfg.player_reach / 2
+		var ry: int = cfg.player_reach_up / 2
+		var dx: int = s.ball_x - cx
+		var dy_n: int = (s.ball_y - cy) * rx / ry
+		if dx * dx + dy_n * dy_n > rx * rx:
+			continue
+		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+		if team == 0:
+			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
+		else:
+			s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
+		# パワーボールを止めた時は腕越しに体が押し込まれる(小さな後退)。
+		# 通常球のブロックは無反動=ブロックの強さは保つ
+		if s.ball_power == 1:
+			var back_dir: int = -1 if team == 0 else 1
+			p.push = back_dir * mini(PUSH_MAX_TICKS,
+				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
+		# ブロックばらつき%: 弾き返す角度の散らばり(荒いキャラの個性)
+		var sc_b: int = Chars.stat(p.char_id, "sc_blk")
+		if sc_b != 0:
+			s.ball_vx += s.ball_vx * sc_b * _scatter(s, i, 17) / (100 * 100)
+			s.ball_vy += s.ball_vy * sc_b * _scatter(s, i, 19) / (100 * 100)
+		s.last_touch_team = team
+		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
+		s.last_hit_tick = s.tick
+		p.hit_cooldown = cfg.hit_cooldown_ticks
+		s.hit_freeze = maxi(s.hit_freeze, 2)
+		return

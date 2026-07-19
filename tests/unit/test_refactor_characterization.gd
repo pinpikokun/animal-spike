@@ -5,6 +5,7 @@ const Chars := preload("res://src/sim/chars.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 const STANDARD_CHAR := 99
 
@@ -35,7 +36,7 @@ func _hit_snapshot(on_ground: int, input: int, d2: int, vx: int, vy: int, power:
 	s.ball_vy = vy
 	s.ball_power = power
 	s.last_touch_team = 1 if power == 1 else -1
-	Simulation._apply_hit(s, 0, cfg, input | Simulation.IN_ACTION, d2)
+	HitResolver._apply_hit(s, 0, cfg, input | Simulation.IN_ACTION, d2)
 	return [p.hit_kind, p.dive, s.ball_vx, s.ball_vy, s.ball_power, p.guard, p.flinch]
 
 func test_intent_classification_table() -> void:
@@ -115,7 +116,7 @@ func test_scatter_stream_snapshot() -> void:
 		s.tick = tick
 		for actor in [0, 1, 3]:
 			for salt in [11, 13, 17, 19]:
-				actual.append(Simulation._scatter(s, actor, salt))
+				actual.append(HitResolver._scatter(s, actor, salt))
 	check_eq(actual, [
 		-52, 89, -94, 83, -59, -28, -35, -60, -27, -2, 49, -3,
 		-42, -97, -85, 94, -73, -16, -93, 42, -61, -41, -87, 55,
@@ -135,14 +136,14 @@ func _chain_hashes() -> Array[int]:
 	# ジャストアタック。
 	s.players[0].on_ground = 0
 	s.players[0].y = cfg.floor_y - FP.from_int(80)
-	Simulation._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, near_d2)
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, near_d2)
 	out.append(s.state_hash())
 
 	# パワーボールを芯外しレシーブし、ガード破壊まで踏む。
 	s.players[2].guard = 1
 	s.ball_power = 1
 	s.last_touch_team = 0
-	Simulation._apply_hit(s, 2, cfg, Simulation.IN_ACTION, miss_d2)
+	HitResolver._apply_hit(s, 2, cfg, Simulation.IN_ACTION, miss_d2)
 	out.append(s.state_hash())
 
 	# 別のパワーボールをネット際でブロックする。
@@ -157,7 +158,7 @@ func _chain_hashes() -> Array[int]:
 	s.ball_vy = FP.from_int(5)
 	s.ball_power = 1
 	s.last_touch_team = 0
-	Simulation._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT])
+	HitResolver._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT])
 	out.append(s.state_hash())
 
 	# 帽子投げの溜めから発射まで進める。

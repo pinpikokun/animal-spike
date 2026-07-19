@@ -4,6 +4,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 func _serve_world(serving: int) -> Array:
 	var cfg = SimConfig.new()
@@ -120,7 +121,7 @@ func test_serve_strike_only_by_server() -> void:
 	s.players[1].y = cfg.floor_y
 	var inputs: Array[int] = [0, Simulation.IN_ACTION, 0, 0]
 	Simulation.step(s, [0, 0], cfg)  # チーム入力APIでは相方はCPU化するため直接step
-	Simulation._resolve_hit(s, inputs, cfg)
+	HitResolver._resolve_hit(s, inputs, cfg)
 	check_eq(s.phase, SimState.PHASE_SERVE, "相方はサーブ打撃できない")
 	check_eq(s.touches, 0, "タッチも発生しない")
 
@@ -139,11 +140,11 @@ func test_serve_in_flight_is_untouchable() -> void:
 	s.players[1].x = s.ball_x
 	s.players[1].y = cfg.floor_y
 	s.players[1].hit_cooldown = 0
-	Simulation._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
+	HitResolver._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
 	check_eq(s.touches, 1, "サーブ飛行中は味方が触れない")
 	# ネットを越えたらserve_flightが消え、通常通り触れる
 	s.serve_flight = 0
-	Simulation._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
+	HitResolver._resolve_hit(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
 	check_eq(s.touches, 2, "越えた後は触れる")
 
 func test_serve_flight_clears_on_net_cross() -> void:
