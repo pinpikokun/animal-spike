@@ -33,6 +33,48 @@ Codexの修正3点をすべて受け入れる。事実確認の上での承認�
 「小さい境界2つで逐語移動の規律とテスト手順を先に実証してから本丸に挑む」
 というリスク順序は俺の原案(ballの次にhit)より安全で優れている。採用する。
 
+## 深掘り検証で新たに発見した事実(工程3-5の実務注意)
+
+承認にあたり、抽出対象3関数の依存を1行ずつ再検証した。結果、Codex回答の
+方針は正しいが、実施時に必要な具体策が2点判明した。
+
+### 発見1: _step_ball の末尾が _ball_vs_block を呼んでいる
+
+`_step_ball`(simulation.gd:933)は末尾で `_ball_vs_net` と `_ball_vs_block` を
+呼ぶ。よって「_ball_vs_blockを除いた球単体のball_physics」は、そのままでは
+逐語移動できない。対策として工程3の前に準備コミットを1つ挟む:
+
+- `_ball_vs_block(s, cfg, inputs)` の呼び出しを `_step_ball` 末尾から
+  呼び出し元3箇所(tick内2箇所 + `_step_ball_loose`)の直後へ巻き上げる。
+  実行順は完全に同一なのでハッシュ不変で検証できる。
+  `_step_ball_loose` 経由の呼び出しはphaseガードで実質no-opだが、
+  逐語規律に従い呼び出し自体は残す。
+- `_ball_vs_net` は球とtouches/serve_flight(SimStateフィールド)のみを触り、
+  Chars/_scatter/プレイヤーに依存しないため、ball_physicsへ移してよい。
+
+### 発見2: PUSH定数群が player_movement と ヒット処理にまたがる
+
+`PUSH_UNIT_PX`/`PUSH_DECAY` は `_step_player` のpush減衰で、
+`PUSH_ATK/BLK/STUN/MAX_TICKS` は `_apply_hit`/`_ball_vs_block` で使う。
+提案: PUSH_*一式は pushフィールドの減衰を所有する player_movement.gd に
+集約し、ヒット側は許可された依存方向(simulation→player_movement)の
+preloadで参照する。工程4で移動、工程5はそれを参照する。
+
+### 付随: テストの直接参照
+
+`test_char_stats.gd` が `Sim._jump_height_px` を直接呼んでいる。工程4で
+player_movementへ移す際、テスト側の参照更新を同一コミットで行う
+(テストはハッシュ対象外なので逐語規律に反しない)。
+
+### 検証済みのその他の事実
+
+- `_step_player` の依存は FP/Chars/SimInput と自ファイル定数のみで葉preload
+  規律に適合。工程4はそのまま成立する。
+- simulation.gd:8 が `SimCpu` をpreloadしている(方向: simulation→sim_cpu)。
+  新モジュールが葉である限り sim_cpu→新モジュール は循環しない。
+  工程6(ミラー定数解消)の実現性を裏付ける。
+- PUSH_*定数の使用は現状simulation.gd内に閉じている(他ファイル使用なし)。
+
 ## 補足(合意済み事項の確認)
 
 - ステップ0は完了済みを確認した(ツリークリーン、タグ
