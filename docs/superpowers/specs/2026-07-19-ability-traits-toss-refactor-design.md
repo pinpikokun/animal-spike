@@ -227,6 +227,21 @@ The first extraction should be deliberately narrow: action intent, hit
 resolution, and ball physics are the highest-risk boundaries. Player/status/serve
 extraction can follow after those are stable.
 
+## Project work order after this design
+
+The agreed project order is mandatory:
+
+1. Complete the narrow behavior-preserving refactor first.
+2. Implement all accepted gameplay decisions in this specification on the new
+   module boundaries.
+3. Run the complete verification below and stabilize any regressions.
+4. After the refactor and this specification are complete, begin the previously
+   planned work to add characters from the source game.
+
+The source-game character task remains in the backlog deliberately. It must not
+be forgotten during the Codex/Claude Code handoff, but it must also not be mixed
+into the refactor or ability-system implementation.
+
 ## Verification
 
 - Every rank mapping and initial all-C roster is tested.

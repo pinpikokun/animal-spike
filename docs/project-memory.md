@@ -25,6 +25,21 @@ refactoring decisions are recorded in:
 That specification supersedes the older 1-to-10 character-stat design where
 the two conflict. Signature techniques are intentionally outside its scope.
 
+## Agreed work order
+
+Work must proceed in this order:
+
+1. Perform the narrow, behavior-preserving refactor described in the current
+   design specification.
+2. Implement the accepted A-to-E abilities, traits, toss behavior, original
+   rules, CPU behavior, and settings removal on top of the extracted modules.
+3. Verify and stabilize the completed gameplay changes with the full test suite.
+4. Resume the originally planned addition of characters from the source game.
+
+Do not start adding source-game characters before the refactor and accepted
+gameplay specification are implemented and stable. Character addition is a
+planned follow-up task, not a discarded idea.
+
 ## Handoff note
 
 The working tree may contain a large set of uncommitted gameplay changes. Do
