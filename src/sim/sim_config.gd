@@ -19,10 +19,7 @@ var hop_speed: int  # トス用の小ジャンプ(アクション+上)。フル�
 var ball_radius: int
 var ball_bounce_num: int
 var ball_bounce_den: int
-# 原作比較用の切替(dev設定が試合開始前に上書きする。既定=現行挙動)
-var wall_bounce_num: int      # 左右壁の反発%(現行78 / 原作式50)
-var net_top_original: int     # 1=ネット上端に当たり判定(縦勢い半減+外へ押し出し)
-var toss_aim: int             # 1=トス/レシーブが定位置へ目的地逆算(いいとこ取り)
+var wall_bounce_num: int      # 左右壁の反発%(原作式50)
 var points_to_win: int
 var deuce: bool
 var net_x: int
@@ -96,8 +93,6 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	ball_bounce_num = _int_of(raw, "ball_bounce_pct")
 	ball_bounce_den = 100
 	wall_bounce_num = _int_of(raw, "wall_bounce_pct")
-	net_top_original = _int_of(raw, "net_top_original")
-	toss_aim = _int_of(raw, "toss_aim")
 	points_to_win = _int_of(raw, "points_to_win")
 	deuce = _int_of(raw, "deuce") != 0
 	net_x = FP.from_int(_int_of(raw, "net_x_px"))

@@ -81,34 +81,6 @@ func _build() -> void:
 	enemy.item_selected.connect(_on_enemy_cpu)
 	v.add_child(enemy)
 
-	var phys_lbl := Label.new()
-	phys_lbl.text = "物理トグル(次の試合から)"
-	v.add_child(phys_lbl)
-
-	var wall := CheckBox.new()
-	wall.text = "壁反射を原作式(勢い半減)"
-	wall.button_pressed = bool(_settings.wall_half)
-	wall.toggled.connect(func(on: bool) -> void:
-		_settings.wall_half = on
-		settings_changed.emit())
-	v.add_child(wall)
-
-	var net_top := CheckBox.new()
-	net_top.text = "ネット上端を原作式(当たって落ちる)"
-	net_top.button_pressed = bool(_settings.net_top_original)
-	net_top.toggled.connect(func(on: bool) -> void:
-		_settings.net_top_original = on
-		settings_changed.emit())
-	v.add_child(net_top)
-
-	var toss := CheckBox.new()
-	toss.text = "トス自動補正(定位置へ逆算=いいとこ取り)"
-	toss.button_pressed = bool(_settings.toss_assist)
-	toss.toggled.connect(func(on: bool) -> void:
-		_settings.toss_assist = on
-		settings_changed.emit())
-	v.add_child(toss)
-
 	var restart := Button.new()
 	restart.text = "キャラ選択からやり直す"
 	restart.pressed.connect(func() -> void:

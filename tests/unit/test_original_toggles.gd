@@ -20,12 +20,11 @@ func _rally_world() -> Array:
 	s.players[3].x = FP.from_int(270)
 	return [s, cfg]
 
-func test_wall_half_damps_reflection() -> void:
-	# 壁反射トグル: 50%なら跳ね返り速度が半分になる
+func test_wall_always_damps_reflection_to_half() -> void:
+	# 原作ルール: 壁は設定分岐なしで横速度を50%維持する
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.wall_bounce_num = 50
 	s.ball_x = FP.from_int(2)
 	s.ball_y = FP.from_int(100)
 	var vin: int = -FP.from_int(200) / cfg.tick_rate
@@ -33,7 +32,7 @@ func test_wall_half_damps_reflection() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.ball_vx, -vin * 50 / 100, "壁反射50%で勢い半減")
 
-func test_wall_default_unchanged() -> void:
+func test_power_ball_loses_power_and_vertical_momentum_at_wall() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -41,52 +40,31 @@ func test_wall_default_unchanged() -> void:
 	s.ball_y = FP.from_int(100)
 	var vin: int = -FP.from_int(200) / cfg.tick_rate
 	s.ball_vx = vin
+	s.ball_vy = FP.from_int(300) / cfg.tick_rate
+	s.ball_power = 1
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, -vin * 78 / 100, "既定は従来の78%")
+	check_eq(s.ball_vx, -vin * 50 / 100, "パワーボールも壁横速度50%")
+	check_eq(s.ball_power, 0, "壁でパワー状態を失う")
+	check(s.ball_vy < (FP.from_int(300) / cfg.tick_rate + cfg.gravity),
+		"壁で縦の勢いも失う")
 
-func test_net_top_original_bounces_and_pushes_out() -> void:
-	# ネット上端トグル: 落下中に白帯へ当たると縦半減で跳ね、ネットから離れる横へ
+func test_net_top_always_bounces_and_pushes_out() -> void:
+	# 原作ルール: 落下中に白帯へ当たると縦半減で跳ね、ネットから離れる横へ
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.net_top_original = 1
 	s.ball_x = cfg.net_x - FP.from_int(1)  # 左側からネット直上へ
 	s.ball_y = cfg.net_top_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vx = 0
 	var vin: int = FP.from_int(300) / cfg.tick_rate
 	s.ball_vy = vin
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(s.ball_vy < 0, "上端に当たって跳ね上がる")
-	check(s.ball_vx < 0, "左側の球は左(ネットから離れる向き)へ押し出される")
+	check_eq(s.ball_vy, -(vin + cfg.gravity) / 2,
+		"上端で落下速度を半減して跳ね上がる")
+	check_eq(s.ball_vx, -cfg.net_repel / 2,
+		"左側の球は左(ネットから離れる向き)へ押し出される")
 
-func test_net_top_default_passes_through() -> void:
-	# 既定: ネット上空は素通し(当たり判定なし)
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	s.ball_x = cfg.net_x - FP.from_int(1)
-	s.ball_y = cfg.net_top_y - cfg.ball_radius - FP.from_int(1)
-	s.ball_vx = FP.from_int(60) / cfg.tick_rate
-	s.ball_vy = 0
-	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(s.ball_vx > 0, "既定では上端に阻まれず横速度を保つ")
-
-func test_toss_aim_toggle_does_not_grant_toss_good_trait() -> void:
-	# バッチB以降、自動照準はトス上手だけ。旧トグルはバッチCで物理設定ごと削除する。
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	cfg.toss_aim = 1
-	s.ball_x = s.players[0].x + FP.from_int(5)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
-	s.ball_vx = 0
-	s.ball_vy = 0  # 入射ゼロ=慣性外乱なしの理想値を検証
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, cfg.bump_fwd_speed,
-		"旧トグルだけでは特性なしキャラのレシーブを自動照準しない")
-
-func test_toss_aim_off_keeps_legacy() -> void:
-	# 既定(OFF)では従来の打ち出し方式のまま
+func test_traitless_toss_keeps_direct_output_without_global_toggle() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]

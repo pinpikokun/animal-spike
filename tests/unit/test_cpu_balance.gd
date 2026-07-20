@@ -45,7 +45,9 @@ func _series(prof_a: int, prof_b: int) -> Array[int]:
 		diff_b += (m1[2] - m1[1]) + (m2[1] - m2[2])
 	return [wins_b, diff_b]
 
-func test_every_preset_beats_weak() -> void:
+# 2026-07-20 ユーザー決定: キャラ性能(A-Eランク実データ)と必殺技が未実装の段階で
+# CPU序列を保証しても無意味なため封印。キャラ実装後に再設計して復活させる
+func disabled_test_every_preset_beats_weak() -> void:
 	# 煙感知器: どのプリセットも弱には勝ち越す(強さの土台が壊れていないこと)。
 	# 隣接同士の順序はゲートにしない(対人間の強さ・面白さが本基準)
 	var pairs := [

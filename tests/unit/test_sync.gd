@@ -16,10 +16,10 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-20 バッチB: むらっけ抽選導入・旧sc_*ばらつき廃止・
-# 特性別レシーブリーチ・トス上手ゾーン照準・トス下手頂点指定・
-# 安全サーブへのむらっけ非適用による意図的な物理変更に合わせて更新。
-const GOLDEN_COMBINED_HASH := -8116443922907290100
+# 2026-07-20 バッチC: CPU壁反射予測をBallPhysics.wall_reflect_vx共有関数化・
+# PRESET_NORMALへAB_ATTACK追加・ジャスト率102から0への正規化による
+# 意図的な挙動変更に合わせて更新。
+const GOLDEN_COMBINED_HASH := -8266136142574960922
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

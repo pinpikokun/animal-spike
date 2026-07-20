@@ -15,6 +15,7 @@ const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -60,8 +61,8 @@ const SALT_SWEET := 3
 #   普通=壁反射を読めない(depth0)、強=精度と判断は高いが役割分担なし。
 #   プレイヤーが「こいつにはアレが効く」と発見できる穴を各段に残す
 const PRESET_WEAK := (24 << P_DELAY) | (40 << P_AIM) | (64 << P_MISS) | (26 << P_SWEET)
-const PRESET_NORMAL := AB_PREDICT | (16 << P_DELAY) | (25 << P_AIM) | (26 << P_MISS) \
-	| (102 << P_SWEET) | (1 << P_TIQ)
+const PRESET_NORMAL := (AB_PREDICT | AB_ATTACK) | (16 << P_DELAY) | (25 << P_AIM) \
+	| (13 << P_MISS) | (0 << P_SWEET) | (1 << P_TIQ)
 const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
 const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
@@ -140,13 +141,13 @@ static func _land_x_from(x: int, y: int, vx: int, vy: int, cfg, target_y: int, m
 				break
 			bounces += 1
 			x = left + (left - x)
-			vx = -vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+			vx = BallPhysics.wall_reflect_vx(vx, cfg)
 		elif x > right:
 			if bounces >= max_bounce:
 				break
 			bounces += 1
 			x = right - (x - right)
-			vx = -vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+			vx = BallPhysics.wall_reflect_vx(vx, cfg)
 		if y >= target_y and vy > 0:
 			break
 	return clampi(x, left, right)

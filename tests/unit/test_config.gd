@@ -2,6 +2,14 @@ extends "res://tests/test_case.gd"
 
 const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
+const DisplayOptions := preload("res://src/display/display_options.gd")
+const OptionsMenu := preload("res://src/display/options_menu.gd")
+
+func _count_checkboxes(node: Node) -> int:
+	var count: int = 1 if node is CheckBox else 0
+	for child in node.get_children():
+		count += _count_checkboxes(child)
+	return count
 
 func test_loads_default_rules() -> void:
 	var cfg = SimConfig.new()
@@ -14,12 +22,41 @@ func test_loads_default_rules() -> void:
 func test_default_rules_valid() -> void:
 	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")
 
-func test_physics_toggle_defaults() -> void:
-	# 物理トグル3種の既定は全OFF=現行挙動(dev設定が試合開始前に上書きする)
+func test_original_wall_is_the_only_configured_rule() -> void:
 	var cfg = SimConfig.new()
-	check_eq(cfg.wall_bounce_num, 78, "壁反射の既定は現行78%")
-	check_eq(cfg.net_top_original, 0, "ネット上端の既定は現行(素通し)")
-	check_eq(cfg.toss_aim, 0, "トスの既定は現行(打ち出し方式)")
+	check_eq(cfg.wall_bounce_num, 50, "壁反射は常時50%")
+	check(not ("net_top_original" in cfg), "ネット上端トグルはSimConfigから削除")
+	check(not ("toss_aim" in cfg), "トス補正トグルはSimConfigから削除")
+
+func test_removed_physics_settings_are_absent_from_defaults_and_rules() -> void:
+	var defaults: Dictionary = DisplayOptions.default_dict()
+	for key in ["wall_half", "net_top_original", "toss_assist"]:
+		check(not defaults.has(key), "表示設定から削除: %s" % key)
+	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
+	var raw: Dictionary = JSON.parse_string(file.get_as_text())
+	for key in ["net_top_original", "toss_aim"]:
+		check(not raw.has(key), "rules.jsonから削除: %s" % key)
+	var menu = OptionsMenu.new()
+	menu.setup(defaults)
+	check_eq(_count_checkboxes(menu), 2,
+		"オプションUIのチェック項目はフルスクリーンとCRTのみ")
+	menu.free()
+
+func test_obsolete_display_settings_are_erased_on_load() -> void:
+	var path := "user://test_batch_c_settings.cfg"
+	var legacy := ConfigFile.new()
+	legacy.set_value("display", "window_scale", 3)
+	legacy.set_value("display", "wall_half", true)
+	legacy.set_value("display", "net_top_original", true)
+	legacy.set_value("display", "toss_assist", true)
+	check_eq(legacy.save(path), OK, "旧設定fixtureを書き込める")
+	var loaded: Dictionary = DisplayOptions.load_or_default(path)
+	check_eq(loaded.window_scale, 3, "現役設定は維持")
+	var migrated := ConfigFile.new()
+	check_eq(migrated.load(path), OK, "移行済み設定を再読込")
+	for key in ["wall_half", "net_top_original", "toss_assist"]:
+		check(not migrated.has_section_key("display", key), "旧キーを消去: %s" % key)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 func test_invalid_rules_detected() -> void:
 	# 下のUSER ERROR出力はこのテストが意図的に出させているもの(異常系の検証)

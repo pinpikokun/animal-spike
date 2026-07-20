@@ -3,6 +3,9 @@ extends RefCounted
 
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
+static func wall_reflect_vx(vx: int, cfg) -> int:
+	return -vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x
 	s.ball_vy += cfg.gravity
@@ -15,11 +18,11 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var hit_wall := false
 	if s.ball_x < left:
 		s.ball_x = left + (left - s.ball_x)
-		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+		s.ball_vx = wall_reflect_vx(s.ball_vx, cfg)
 		hit_wall = true
 	elif s.ball_x > right:
 		s.ball_x = right - (s.ball_x - right)
-		s.ball_vx = -s.ball_vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+		s.ball_vx = wall_reflect_vx(s.ball_vx, cfg)
 		hit_wall = true
 	if hit_wall and s.ball_power == 1:
 		s.ball_vy = s.ball_vy * cfg.wall_bounce_num / cfg.ball_bounce_den
@@ -71,7 +74,7 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 				if s.ball_vx < 0:
 					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
-	elif cfg.net_top_original == 1 and s.ball_vy > 0 \
+	elif s.ball_vy > 0 \
 			and s.ball_x >= net_left and s.ball_x <= net_right \
 			and s.ball_y >= cfg.net_top_y - cfg.ball_radius:
 		# 原作式ネットイン: 上端(白帯)に当たると縦の勢いが半減して跳ね、

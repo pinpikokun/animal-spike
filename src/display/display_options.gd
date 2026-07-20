@@ -15,10 +15,8 @@ static func apply_window(win: Window, scale: int, fullscreen: bool) -> void:
 static func default_dict() -> Dictionary:
 	# ally/enemy_cpu_level: 0=弱 1=普通 2=強 3=最強(sim_cpu.gdのプリセットに対応)。
 	# 開発中の既定は敵=最強・味方=最強。リリース時はストーリーモードが敵を上書きする
-	# 物理トグル3種(原作比較用)。変更は次の試合開始(キャラ選択へ戻る)から効く
 	return {"window_scale": 2, "fullscreen": false, "crt_on": false, "crt_intensity": 0.35,
-		"ally_cpu_level": 3, "enemy_cpu_level": 3,
-		"wall_half": false, "net_top_original": false, "toss_assist": false}
+		"ally_cpu_level": 3, "enemy_cpu_level": 3}
 
 static func save(d: Dictionary) -> void:
 	var cf := ConfigFile.new()
@@ -26,11 +24,18 @@ static func save(d: Dictionary) -> void:
 		cf.set_value("display", k, d[k])
 	cf.save(PATH)
 
-static func load_or_default() -> Dictionary:
+static func load_or_default(path: String = PATH) -> Dictionary:
 	var cf := ConfigFile.new()
 	var d := default_dict()
-	if cf.load(PATH) != OK:
+	if cf.load(path) != OK:
 		return d
+	var migrated: bool = false
+	for key in ["wall_half", "net_top_original", "toss_assist"]:
+		if cf.has_section_key("display", key):
+			cf.erase_section_key("display", key)
+			migrated = true
+	if migrated:
+		cf.save(path)
 	for k in d.keys():
 		d[k] = cf.get_value("display", k, d[k])
 	return d

@@ -154,6 +154,19 @@ func test_profile_pack_roundtrip() -> void:
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_TIQ), 2, "配球IQ")
 	check_eq(prof, SimCpu.PRESET_STRONG, "強プリセットと一致")
 
+func test_normal_attacks_without_sweet_aim() -> void:
+	var abilities: int = SimCpu.prof_byte(SimCpu.PRESET_NORMAL, SimCpu.P_AB)
+	check(abilities & SimCpu.AB_ATTACK, "普通CPUはジャンプアタックを使う")
+	check(not (abilities & SimCpu.AB_SWEET), "普通CPUはジャスト狙いを持たない")
+	check_eq(SimCpu.prof_byte(SimCpu.PRESET_NORMAL, SimCpu.P_SWEET), 0,
+		"未使用のジャスト率は0")
+
+func test_upper_presets_keep_jump_attack() -> void:
+	check(SimCpu.prof_byte(SimCpu.PRESET_STRONG, SimCpu.P_AB) & SimCpu.AB_ATTACK,
+		"強CPUはジャンプアタックを維持")
+	check(SimCpu.prof_byte(SimCpu.PRESET_MAX, SimCpu.P_AB) & SimCpu.AB_ATTACK,
+		"最強CPUはジャンプアタックを維持")
+
 func test_state_default_profile_is_max() -> void:
 	# sim_state.gdの既定リテラルがsim_cpu.PRESET_MAXからずれない番人
 	var s = SimState.new()
@@ -399,3 +412,15 @@ func test_cpu_returns_to_spawn() -> void:
 	s.players[1].x = FP.from_int(100)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=157)へ戻る")
+
+func test_landing_prediction_uses_wall_reflection_not_floor_bounce() -> void:
+	var cfg := {
+		"ball_radius": 10,
+		"court_width": 100,
+		"gravity": 1,
+		"wall_bounce_num": 50,
+		"ball_bounce_num": 78,
+		"ball_bounce_den": 100,
+	}
+	check_eq(SimCpu._land_x_from(11, 0, -4, 0, cfg, 3, 1), 15,
+		"CPUの壁反射予測は実物理と同じ50%")

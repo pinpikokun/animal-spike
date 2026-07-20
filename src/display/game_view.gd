@@ -82,9 +82,6 @@ var local_team := 0
 # キャラ選択画面が渡すロスター(slot0..3のchar_id)。空なら既定Chars.ROSTER。
 # add_child前に設定すること(_readyのreset_matchで使う)
 var roster: Array = []
-# dev設定の物理トグル上書き(cfgフィールド名→値)。add_child前に設定
-var cfg_overrides: Dictionary = {}
-
 func attach_external(cfg_in, state_ref) -> void:
 	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
 	external_sim = true
@@ -97,8 +94,6 @@ func _ready() -> void:
 		if not cfg.valid:
 			push_error("rules.jsonの読み込みに失敗したため起動を中止する")
 			return
-		for k in cfg_overrides:
-			cfg.set(k, cfg_overrides[k])
 		state = SimState.new()
 		var r: Array = roster if not roster.is_empty() else Chars.ROSTER
 		Simulation.reset_match(state, cfg, 0, r)
