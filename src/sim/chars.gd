@@ -26,22 +26,27 @@ const CA_HIP := 2    # ヒップアタック
 const CA_CLING := 4  # 壁張り付き
 const CA_DASH := 8   # ダブルタップダッシュ
 
+# 必殺技ID。DEFSのsupers辞書に登録されたキャラだけが使用できる。
+const SUPER_GHOST_BALL := 1
+const SUPER_FLAME_ATTACK := 2
+
 # 固有技とテスト専用上書き。選択キャラの基礎能力・重量・付与能力はProfileが正本。
 const DEFS := {
-	CHAR_PANDA: {"abilities": 0, "stats": {}},
-	CHAR_MARIO: {"abilities": CA_HAT | CA_HIP | CA_CLING, "stats": {}},
-	CHAR_FOX: {"abilities": 0, "stats": {}},
-	CHAR_FROG: {"abilities": 0, "stats": {}},
-	CHAR_TOME: {"abilities": 0, "stats": {}},
-	CHAR_HITO: {"abilities": 0, "stats": {}},
-	CHAR_PIYO: {"abilities": 0, "stats": {}},
-	CHAR_UME: {"abilities": 0, "stats": {}},
-	CHAR_CARBY: {"abilities": 0, "stats": {}},
-	CHAR_DUO: {"abilities": 0, "stats": {}},
-	CHAR_SEC1: {"abilities": 0, "stats": {}},
-	CHAR_SEC2: {"abilities": 0, "stats": {}},
+	CHAR_PANDA: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_MARIO: {"abilities": CA_HAT | CA_HIP | CA_CLING, "stats": {}, "supers": {}},
+	CHAR_FOX: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_FROG: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_TOME: {"abilities": 0, "stats": {},
+		"supers": {SUPER_GHOST_BALL: true, SUPER_FLAME_ATTACK: true}},
+	CHAR_HITO: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_PIYO: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_UME: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_CARBY: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_DUO: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_SEC1: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_SEC2: {"abilities": 0, "stats": {}, "supers": {}},
 	CHAR_DEBUG: {"abilities": CA_HAT | CA_HIP | CA_CLING | CA_DASH,
-		"stats": {"speed": 130, "jump": 120, "atk": 140}},
+		"stats": {"speed": 130, "jump": 120, "atk": 140}, "supers": {}},
 }
 
 # 既定ロスター: slot(0..3)→char_id。キャラ選択画面を通らない場合に使う
@@ -73,6 +78,11 @@ const NAMES := {
 static func has_ability(char_id: int, bit: int) -> bool:
 	var def: Dictionary = DEFS.get(char_id, {})
 	return (int(def.get("abilities", 0)) & bit) != 0
+
+static func has_super(char_id: int, super_id: int) -> bool:
+	var def: Dictionary = DEFS.get(char_id, {})
+	var supers: Dictionary = def.get("supers", {})
+	return bool(supers.get(super_id, false))
 
 static func stat(char_id: int, key: String) -> int:
 	# 既存物理への整数%窓口。基礎5能力はA-E表、重量は標準値から解決する。

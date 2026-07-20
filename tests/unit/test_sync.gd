@@ -16,10 +16,9 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 2026-07-20 バッチC: CPU壁反射予測をBallPhysics.wall_reflect_vx共有関数化・
-# PRESET_NORMALへAB_ATTACK追加・ジャスト率102から0への正規化による
-# 意図的な挙動変更に合わせて更新。
-const GOLDEN_COMBINED_HASH := -8266136142574960922
+# ball_ghost/ball_flame追加による状態配列拡張(190→192)。
+# 物理挙動の変更ではなくハッシュ構造の変化。
+const GOLDEN_COMBINED_HASH := 8640764298994872477
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

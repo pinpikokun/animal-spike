@@ -87,7 +87,14 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 		if was_left != is_left:
 			s.touches = 0
 			s.serve_flight = 0
+			_clear_ghost_on_opponent_entry(s, is_left)
 	elif was_left != is_left:
 		# ネット上空を越えた: 攻守交代なのでタッチ数リセット。サーブ打球も渡り切り
 		s.touches = 0
 		s.serve_flight = 0
+		_clear_ghost_on_opponent_entry(s, is_left)
+
+static func _clear_ghost_on_opponent_entry(s, is_left: bool) -> void:
+	var entered_team: int = 0 if is_left else 1
+	if s.ball_ghost == 1 and s.last_touch_team >= 0 and entered_team != s.last_touch_team:
+		s.ball_ghost = 0

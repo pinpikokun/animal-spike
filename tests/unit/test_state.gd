@@ -25,16 +25,18 @@ func test_hash_changes_on_diff() -> void:
 
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x11(stun/dive/guard/guard_max/cpu含む)
-	# + ボール6(spin/power含む) + last_hit_tick(1)
+	# + ボール8(spin/power/ghost/flame含む) + last_hit_tick(1)
 	# + サーブ系4(aim/pow/tossed/flight) + hit_freeze(1) + slow_ticks(1) + フェーズ系(12) = 70
-	# プレイヤー4x25=100 + 全体26 + エンティティ8スロットx8欄=64
-	check_eq(SimState.new().to_int_array().size(), 190, "シリアライズ長(エンティティ枠を含む)")
+	# プレイヤー4x25=100 + 全体28 + エンティティ8スロットx8欄=64
+	check_eq(SimState.new().to_int_array().size(), 192, "シリアライズ長(エンティティ枠を含む)")
 
 func test_load_int_array_roundtrip() -> void:
 	# to_int_array→load_int_arrayの往復で全フィールドが復元される(ロールバックの土台)
 	var a = SimState.new()
 	a.tick = 123
 	a.ball_x = 456789
+	a.ball_ghost = 1
+	a.ball_flame = 1
 	a.phase = SimState.PHASE_RALLY
 	a.score_l = 7
 	a.winner = 1
@@ -45,6 +47,8 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.state_hash(), a.state_hash(), "往復でハッシュ一致")
 	check_eq(b.players[2].x, 999, "プレイヤー座標の復元")
 	check_eq(b.tick, 123, "tickの復元")
+	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
+	check_eq(b.ball_flame, 1, "炎状態の復元")
 
 func test_load_int_array_overwrites_everything() -> void:
 	# 汚れた状態に読み込んでも完全に上書きされる(ロールバック時は必ず過去へ戻す)

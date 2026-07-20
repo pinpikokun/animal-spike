@@ -311,6 +311,8 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vy = 0
 	s.ball_spin = 0
 	s.ball_power = 0
+	s.ball_ghost = 0
+	s.ball_flame = 0
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
 	s.serve_pow = 100
 	s.serve_tossed = 0
@@ -407,6 +409,7 @@ static func _check_floor_point(s, cfg) -> void:
 	# 着地したらパワーボールを解除=通常ボールに戻す(レシーブ時と同様)。
 	# ポーズ中のバウンドで熱色や残像トレイルが残らないようにする
 	s.ball_power = 0
+	s.ball_flame = 0
 	var landed_left: bool = s.ball_x < cfg.net_x
 	_award_point(s, 1 if landed_left else 0, cfg)
 

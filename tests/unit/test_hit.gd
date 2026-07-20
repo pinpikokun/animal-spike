@@ -6,6 +6,7 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const STANDARD_CHAR := 99
 
 func _rally_world() -> Array:
@@ -21,6 +22,147 @@ func _rally_world() -> Array:
 	s.players[2].x = FP.from_int(380)
 	s.players[3].x = FP.from_int(270)
 	return [s, cfg]
+
+func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
+	var normal := _rally_world()
+	var ghost := _rally_world()
+	for w in [normal, ghost]:
+		w[0].players[0].char_id = Chars.CHAR_TOME
+		w[0].ball_x = w[0].players[0].x + FP.from_int(5)
+		w[0].ball_y = w[1].floor_y - FP.from_int(10)
+	Simulation.step(normal[0], [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], normal[1])
+	Simulation.step(ghost[0], [Simulation.IN_ABILITY1 | Simulation.IN_UP, 0, 0, 0], ghost[1])
+	check_eq(ghost[0].ball_ghost, 1, "地上の上+Dでゴーストボール")
+	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常上トスと横軌道が同一")
+	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常上トスと縦軌道が同一")
+
+func test_ghost_ball_clears_after_crossing_to_opponent_court() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_ghost = 1
+	s.last_touch_team = 0
+	s.ball_x = cfg.net_x - FP.from_int(1)
+	s.ball_y = cfg.net_top_y - FP.from_int(30)
+	s.ball_vx = FP.from_int(3)
+	BallPhysics._step_ball(s, cfg)
+	check_eq(s.ball_ghost, 0, "相手コートへ渡ったゴースト表示は解除")
+
+func test_tome_flame_attack_requires_high_air_down_ability() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.char_id = Chars.CHAR_TOME
+	p.on_ground = 0
+	p.y = cfg.net_top_y - FP.from_int(1)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_power, 1, "高所の下+Dはパワーボール")
+	check_eq(s.ball_flame, 1, "高所の下+Dは燃えるアタック")
+
+func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.char_id = Chars.CHAR_TOME
+	p.on_ground = 0
+	p.y = cfg.net_top_y
+	s.ball_x = p.x + FP.from_int(30)
+	s.ball_y = p.y
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN,
+		0, 0, 0], cfg)
+	check_eq(s.touches, 1, "高度不足でも通常アタック入力は維持")
+	check_eq(s.ball_flame, 0, "ネット上端以下では炎にならない")
+	check_eq(s.ball_power, 0, "スイート外の通常アタックのまま")
+
+func test_non_tome_ability_input_does_not_hit() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].char_id = Chars.CHAR_FOX
+	s.ball_x = s.players[0].x + FP.from_int(2)
+	s.ball_y = cfg.floor_y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ABILITY1 | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "必殺技未定義キャラのDは何も起こさない")
+	check_eq(s.ball_ghost, 0, "必殺技未定義キャラはゴースト化しない")
+
+func test_tome_ability_input_out_of_range_does_nothing() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].char_id = Chars.CHAR_TOME
+	s.ball_x = s.players[0].x + cfg.player_reach * 2
+	s.ball_y = cfg.floor_y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ABILITY1 | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.touches, 0, "打球圏外のDは空振りしない")
+	check_eq(s.ball_ghost, 0, "打球圏外ではゴースト化しない")
+
+func test_flame_receive_deals_double_power_guard_damage() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	cfg.guard_dmg_power = 10  # ガードブレイク後の全快を避け、減少量そのものを測る
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.last_touch_team = 1
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(s.players[0].guard, 80,
+		"燃える球のレシーブは通常パワー球の2倍ダメージ")
+	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
+
+func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	cfg.guard_dmg_power = 10
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.last_touch_team = 1
+	s.ball_x = s.players[0].x + FP.from_int(2)
+	s.ball_y = cfg.floor_y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.players[0].guard, 80,
+		"炎球は芯でレシーブしても2倍ガードダメージ")
+
+func test_flame_block_deals_double_power_guard_damage() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	cfg.guard_dmg_power = 10
+	var p = s.players[0]
+	p.x = cfg.net_x - FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.last_touch_team = 1
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(8)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(p.guard, 80,
+		"燃える球のブロックは通常パワー球の2倍ダメージ")
+
+func test_air_attack_return_clears_flame_and_power() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(60)
+	s.last_touch_team = 1
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_flame, 0, "アタックで燃える効果を解除")
+	check_eq(s.ball_power, 0, "アタック返しは通常球へ戻る")
 
 func test_bump_on_ground() -> void:
 	var w := _rally_world()

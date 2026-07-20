@@ -11,6 +11,7 @@ const IN_RIGHT := SimInput.IN_RIGHT
 const IN_ACTION := SimInput.IN_ACTION
 const IN_UP := SimInput.IN_UP
 const IN_DOWN := SimInput.IN_DOWN
+const IN_ABILITY1 := SimInput.IN_ABILITY1
 
 const NO_HIT := -2
 const HIT_NO_POINT := -1
@@ -156,6 +157,18 @@ static func reach_for_intent(char_id: int, base_reach: int, intent_kind: int) ->
 		return base_reach * 85 / 100
 	return base_reach
 
+static func _special_for_input(p, input: int, cfg) -> int:
+	if not (input & IN_ABILITY1):
+		return 0
+	if p.on_ground == 1 and (input & IN_UP) and not (input & IN_DOWN) \
+			and Chars.has_super(p.char_id, Chars.SUPER_GHOST_BALL):
+		return Chars.SUPER_GHOST_BALL
+	if p.on_ground == 0 and (input & IN_DOWN) and not (input & IN_UP) \
+			and p.y < cfg.net_top_y \
+			and Chars.has_super(p.char_id, Chars.SUPER_FLAME_ATTACK):
+		return Chars.SUPER_FLAME_ATTACK
+	return 0
+
 # 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
 # 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
 # 負けた側も硬直だけ食らう不公平があった。
@@ -177,11 +190,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		if serve_strike and i != SimStateScript._server_index(s):
 			continue
 		var input: int = inputs[i] if i < inputs.size() else 0
-		if not (input & IN_ACTION):
+		var p = s.players[i]
+		if not (input & IN_ACTION) and _special_for_input(p, input, cfg) == 0:
 			continue
 		if _is_active_block(s, i, input, cfg):
 			continue
-		var p = s.players[i]
 		if p.hit_cooldown > 0 or p.stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
@@ -227,6 +240,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var team: int = team_of(i)
 	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
+	var special: int = _special_for_input(p, input, cfg)
+	var incoming_flame: bool = s.ball_flame == 1
+	var intent: Array[int] = _classify_intent(
+		p.on_ground, input, d2, cfg.player_reach, serve_strike)
+	var intent_kind: int = intent[0]
+	var hdir: int = intent[1]
 	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
 	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
 	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
@@ -238,6 +257,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
 		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
+	if special == Chars.SUPER_FLAME_ATTACK:
+		sweet = true  # 軌道・慣性・演出を通常のジャストアタック相当にする
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
 	# 支配権切替: 緩い球(閾値未満)は慣性ゼロ=完全に狙い通り打てる。
 	# 強い球だけが「ぎりぎり捕球」で勢いに流される(リアルバレー準拠)
@@ -255,12 +276,25 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var mangled := false
 	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
 		if sweet:
-			p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
+			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
+				# 炎球は芯で受けても防ぎ切れず、通常パワー球の2倍を通す。
+				p.guard -= cfg.guard_dmg_power * 2
+				if p.guard <= 0:
+					p.stun = cfg.stun_ticks
+					p.guard = p.guard_max
+					s.hit_freeze = 10
+					var flame_back: int = -1 if team == 0 else 1
+					p.push = flame_back * PUSH_STUN_TICKS
+			else:
+				p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 		else:
 			mangled = true
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
 			# 耐久力まで尽きたら本スタン(長い方が優先)
-			p.guard -= cfg.guard_dmg_power
+			var guard_damage: int = cfg.guard_dmg_power
+			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
+				guard_damage *= 2
+			p.guard -= guard_damage
 			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
 			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
 			var back: int = -1 if team == 0 else 1
@@ -286,11 +320,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	if mangled:
 		aim_pct = MANGLE_AIM_PCT
 		inertia = cfg.hit_inertia_den
-	# 押している方向と地上/空中の意図を、速度計算から独立した純関数で分類する。
-	var intent: Array[int] = _classify_intent(
-		p.on_ground, input, d2, cfg.player_reach, serve_strike)
-	var intent_kind: int = intent[0]
-	var hdir: int = intent[1]
 	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
 	var toss_bad: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_BAD)
 	if p.on_ground == 1:
@@ -334,6 +363,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			if toss_good:
 				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 					toss_target_x(team, hdir, cfg), cfg)
+		if special == Chars.SUPER_GHOST_BALL:
+			s.ball_ghost = 1
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
@@ -383,6 +414,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			svx = dir * cfg.spike_steep_vx * pct / 100
 		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		if special == Chars.SUPER_FLAME_ATTACK:
+			s.ball_flame = 1
+		elif incoming_flame:
+			# 燃える球をアタックで打ち返した時だけ、効果とパワーを通常球へ戻す。
+			s.ball_flame = 0
+			s.ball_power = 0
 	else:
 		# 空中トス3種(上/横/フェイント)。地上・スパイクと同じ慣性反射で統一する
 		# (以前は直接代入で慣性が乗らない不整合があった)
@@ -487,6 +524,13 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			var back_dir: int = -1 if team == 0 else 1
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
+			if s.ball_flame == 1:
+				p.guard -= cfg.guard_dmg_power * 2
+				if p.guard <= 0:
+					p.stun = cfg.stun_ticks
+					p.guard = p.guard_max
+					p.push = back_dir * PUSH_STUN_TICKS
+					s.hit_freeze = maxi(s.hit_freeze, 10)
 		s.last_touch_team = team
 		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick

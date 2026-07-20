@@ -13,6 +13,15 @@ func test_panda_has_no_abilities() -> void:
 	check(not Chars.has_ability(Chars.CHAR_PANDA, Chars.CA_HIP), "パンダヒップなし")
 	check(not Chars.has_ability(Chars.CHAR_PANDA, Chars.CA_CLING), "パンダ壁貼りなし")
 
+func test_only_tome_has_pilot_supers() -> void:
+	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_GHOST_BALL), "トメ=ゴーストボール")
+	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_FLAME_ATTACK), "トメ=殺人燃えるアタック")
+	for cid in Chars.DEFS:
+		if cid == Chars.CHAR_TOME:
+			continue
+		check(not Chars.has_super(cid, Chars.SUPER_GHOST_BALL), "トメ以外はゴーストなし")
+		check(not Chars.has_super(cid, Chars.SUPER_FLAME_ATTACK), "トメ以外は燃えるアタックなし")
+
 func test_stat_defaults() -> void:
 	check_eq(Chars.stat(Chars.CHAR_PANDA, "speed"), 100, "ランクCの速度は100")
 	check_eq(Chars.stat(Chars.CHAR_DEBUG, "speed"), 130, "明示%値は最優先")

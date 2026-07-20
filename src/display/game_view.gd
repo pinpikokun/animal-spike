@@ -496,8 +496,12 @@ func _sync_sprites() -> void:
 	else:
 		_ball.rotation = 0.0
 		_ball.scale = Vector2.ONE * _ball_base_scale
-	# パワーボール(ジャストミートのスパイク)は熱を帯びた色で警告する
-	_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
+	# ゴーストは8tick周期で点滅し、燃えるアタックは赤く変調する。どちらも表示専用。
+	_ball.visible = state.ball_ghost == 0 or state.tick % 8 < 4
+	if state.ball_flame == 1:
+		_ball.modulate = Color(1.0, 0.2, 0.15)
+	else:
+		_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。
 	# 状態から導出しビューに角度を溜めない(ロールバック安全)
