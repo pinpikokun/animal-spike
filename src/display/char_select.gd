@@ -7,8 +7,7 @@ signal done(roster: Array)
 const Chars := preload("res://src/sim/chars.gd")
 const ScoreUI := preload("res://src/display/score_ui.gd")
 
-const PORTRAIT_SCALE := 4.0
-const ORIGINAL_PORTRAIT_SCALE := 2.0
+const PORTRAIT_SIZE := Vector2(64.0, 64.0)
 const CELL_W := 100.0
 const COLUMNS := 6
 const BASE_W := 640.0
@@ -22,16 +21,9 @@ var _pick_labels: Array[Label] = []
 var _cursor_rect: ColorRect
 var _cells: Array[Control] = []
 
-const ORIGINAL_SHEETS := {
-	Chars.CHAR_TOME: "res://assets/reference/vb2211/tome_sheet.png",
-	Chars.CHAR_HITO: "res://assets/reference/vb2211/hito_sheet.png",
-	Chars.CHAR_PIYO: "res://assets/reference/vb2211/piyo_sheet.png",
-	Chars.CHAR_UME: "res://assets/reference/vb2211/ume_sheet.png",
-	Chars.CHAR_CARBY: "res://assets/reference/vb2211/carby_sheet.png",
-	Chars.CHAR_DUO: "res://assets/reference/vb2211/duo_sheet.png",
-	Chars.CHAR_SEC1: "res://assets/reference/vb2211/sec1_sheet.png",
-	Chars.CHAR_SEC2: "res://assets/reference/vb2211/sec2_sheet.png",
-}
+static func portrait_rect(_face: Dictionary) -> Rect2:
+	return Rect2(Vector2((CELL_W - 12.0 - PORTRAIT_SIZE.x) * 0.5, 0.0),
+		PORTRAIT_SIZE)
 
 func _ready() -> void:
 	var bg := ColorRect.new()
@@ -67,21 +59,19 @@ func _ready() -> void:
 			70 + (i / COLUMNS) * 86)
 		add_child(cell)
 		_cells.append(cell)
-		var face: Dictionary
-		if ScoreUI.FACES.has(cid):
-			face = ScoreUI.FACES[cid]
-		else:
-			face = {"tex": ORIGINAL_SHEETS[cid], "region": Rect2(0, 0, 32, 32)}
+		var face: Dictionary = ScoreUI.FACES[cid]
 		var at := AtlasTexture.new()
 		at.atlas = load(face["tex"])
 		at.region = face["region"]
 		var tr := TextureRect.new()
 		tr.texture = at
 		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		var portrait_scale: float = ORIGINAL_PORTRAIT_SCALE \
-			if ORIGINAL_SHEETS.has(cid) else PORTRAIT_SCALE
-		tr.scale = Vector2(portrait_scale, portrait_scale)
-		tr.position = Vector2((CELL_W - 12 - at.region.size.x * portrait_scale) * 0.5, 0)
+		var layout: Rect2 = portrait_rect(face)
+		tr.position = layout.position
+		# 補正後の表示寸法をNode実寸として与え、Transformと配置計算を分離しない。
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size = layout.size
 		cell.add_child(tr)
 		var name_l := Label.new()
 		name_l.text = Chars.NAMES.get(cid, "?")

@@ -2,6 +2,32 @@ extends "res://tests/test_case.gd"
 
 const CharSelect := preload("res://src/display/char_select.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const ScoreUI := preload("res://src/display/score_ui.gd")
+
+func test_every_selectable_character_has_canonical_face() -> void:
+	for cid in Chars.SELECTABLE:
+		check(ScoreUI.FACES.has(cid), "選択可能キャラの顔をScoreUI.FACESへ登録: %d" % cid)
+
+func test_original_faces_use_back_cells_square_regions() -> void:
+	var originals := [Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO,
+		Chars.CHAR_UME, Chars.CHAR_CARBY, Chars.CHAR_DUO, Chars.CHAR_SEC1,
+		Chars.CHAR_SEC2]
+	for k in originals.size():
+		var face: Dictionary = ScoreUI.FACES[originals[k]]
+		check_eq(face["tex"], "res://assets/reference/vb2211/back_cells.png",
+			"原作顔はback_cellsを正本にする")
+		check_eq(face["region"], Rect2(384 + 64 * k, 192, 64, 64),
+			"原作顔セル位置: %d" % k)
+		check_eq(CharSelect.portrait_rect(face), Rect2(12.0, 0.0, 64.0, 64.0),
+			"64x64原作顔を等倍でセル中央へ配置")
+
+func test_every_portrait_fits_inside_cell_face_area() -> void:
+	for cid in Chars.SELECTABLE:
+		var rect: Rect2 = CharSelect.portrait_rect(ScoreUI.FACES[cid])
+		check(rect.position.x >= 0.0, "portrait左端がセル内: %d" % cid)
+		check(rect.end.x <= CharSelect.CELL_W - 12.0, "portrait右端がセル内: %d" % cid)
+		check(rect.position.y >= 0.0 and rect.end.y <= 64.0,
+			"portraitを名前ラベルより上へ収める: %d" % cid)
 
 func test_stats_label_lists_five_ranked_abilities() -> void:
 	var shown := CharSelect.stats_text(Chars.CHAR_PANDA)

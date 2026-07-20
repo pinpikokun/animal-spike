@@ -5,8 +5,8 @@ extends CanvasLayer
 const SimState := preload("res://src/sim/sim_state.gd")
 const Chars := preload("res://src/sim/chars.gd")
 
-# 顔アイコン(仮): 既存スプライトの1フレームから頭部を切り出して使う。
-# char_idキーの辞書(slot=キャラのハードコード禁止)。本番キャラで専用顔に差し替える
+# 顔アイコンの唯一の正本。HUDとキャラ選択が同じchar_id定義を参照する。
+# 既存4体は従来素材、原作8体はback_cellsの原作顔セルを使う。
 const FACES := {
 	Chars.CHAR_PANDA: {
 		"tex": "res://assets/characters/panda/walk/walk.png",
@@ -20,6 +20,30 @@ const FACES := {
 	Chars.CHAR_FROG: {
 		"tex": "res://assets/third_party/sunny_land/PNG/sprites/frog/idle/frog-idle-1.png",
 		"region": Rect2(6, 4, 22, 22)},  # 35x32素材の顔(目玉が主役)
+	Chars.CHAR_TOME: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(384, 192, 64, 64)},
+	Chars.CHAR_HITO: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(448, 192, 64, 64)},
+	Chars.CHAR_PIYO: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(512, 192, 64, 64)},
+	Chars.CHAR_UME: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(576, 192, 64, 64)},
+	Chars.CHAR_CARBY: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(640, 192, 64, 64)},
+	Chars.CHAR_DUO: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(704, 192, 64, 64)},
+	Chars.CHAR_SEC1: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(768, 192, 64, 64)},
+	Chars.CHAR_SEC2: {
+		"tex": "res://assets/reference/vb2211/back_cells.png",
+		"region": Rect2(832, 192, 64, 64)},
 }
 
 # HUD帯レイアウト(内部解像度640x360の最下段)。格ゲー定石: 自チーム左・敵チーム右
@@ -34,6 +58,7 @@ var _hud: Control
 var _cfg
 var _state
 var _face_cache: Dictionary = {}  # char_id → Texture2D(遅延ロード)
+var _missing_face_warned: Dictionary = {}
 
 func _ready() -> void:
 	_score = Label.new()
@@ -93,19 +118,30 @@ func draw_hud(c: Control) -> void:
 		var controlled: int = _state.controlled_l if team == 0 else 2 + _state.controlled_r
 		var border := Color(1.0, 0.90, 0.20) if i == controlled else Color(0.30, 0.40, 0.85)
 		c.draw_rect(Rect2(x, PANEL_Y, PANEL_W, PANEL_H), border, false, 1.0)
-		# 顔アイコン(スタン中は点滅させて状態を顔でも伝える)。char_idから辞書で引く。
-		# 未定義キャラはマリオの顔で代用(仮素材の安全側)
+		# 顔アイコン(スタン中は点滅させて状態を顔でも伝える)。char_idから正本辞書で引く。
 		var cid: int = p.char_id
-		var face: Dictionary = FACES.get(cid, FACES[Chars.CHAR_MARIO])
-		if not _face_cache.has(cid):
-			_face_cache[cid] = load(face["tex"])
-		var tex: Texture2D = _face_cache[cid]
-		var region: Rect2 = face["region"]
-		var face_mod := Color.WHITE
-		if p.stun > 0 and (_state.tick / 4) % 2 == 0:
-			face_mod = Color(1.0, 0.5, 0.5)
-		c.draw_texture_rect_region(tex, Rect2(x + 2.0, PANEL_Y + 2.0, 20.0, 20.0),
-			region, face_mod)
+		if FACES.has(cid):
+			var face: Dictionary = FACES[cid]
+			if not _face_cache.has(cid):
+				_face_cache[cid] = load(face["tex"])
+			var tex: Texture2D = _face_cache[cid]
+			var region: Rect2 = face["region"]
+			var face_mod := Color.WHITE
+			if p.stun > 0 and (_state.tick / 4) % 2 == 0:
+				face_mod = Color(1.0, 0.5, 0.5)
+			var draw_size := Vector2(20.0, 20.0)  # 正方形の原作顔もHUD枠へ収める
+			var draw_pos := Vector2(x + 2.0, PANEL_Y + 2.0) \
+				+ (Vector2(20.0, 20.0) - draw_size) * 0.5
+			c.draw_texture_rect_region(tex, Rect2(draw_pos, draw_size), region, face_mod)
+		else:
+			if not _missing_face_warned.has(cid):
+				push_warning("顔アイコン未登録 char_id=%d" % cid)
+				_missing_face_warned[cid] = true
+			var missing := Rect2(x + 2.0, PANEL_Y + 2.0, 20.0, 20.0)
+			c.draw_rect(missing, Color(0.3, 0.3, 0.3))
+			c.draw_line(missing.position, missing.end, Color(0.7, 0.7, 0.7), 2.0)
+			c.draw_line(Vector2(missing.end.x, missing.position.y),
+				Vector2(missing.position.x, missing.end.y), Color(0.7, 0.7, 0.7), 2.0)
 		# 耐久力バー: アタックを受けると減り、尽きるとスタン。ジャストトスで回復。
 		# 残量で緑→黄→赤と変わる(あと1発で倒れる緊張感の可視化)
 		var bar_x := x + 26.0
