@@ -84,7 +84,7 @@ const ALL_C_RANKS := {
 	ABILITY_GUARD: RANK_C,
 }
 
-# char_idはchars.gdの公開IDと一致する。選択4キャラは全能力C・標準重量。
+# char_idはchars.gdの公開IDと一致する。重量は全員標準。
 const PROFILES := {
 	0: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT,
 		"traits": [TRAIT_TOSS_BAD, TRAIT_RECEIVE_BAD, TRAIT_MURA]},
@@ -92,6 +92,26 @@ const PROFILES := {
 		"traits": [TRAIT_TOSS_GOOD, TRAIT_RECEIVE_GOOD]},
 	2: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 	3: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	4: {"ranks": {
+		ABILITY_POWER: RANK_C, ABILITY_JUMP: RANK_A, ABILITY_SPEED: RANK_E,
+		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_C,
+	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	5: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	6: {"ranks": {
+		ABILITY_POWER: RANK_C, ABILITY_JUMP: RANK_C, ABILITY_SPEED: RANK_D,
+		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_E,
+	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	7: {"ranks": {
+		ABILITY_POWER: RANK_C, ABILITY_JUMP: RANK_E, ABILITY_SPEED: RANK_A,
+		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_A,
+	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	8: {"ranks": {
+		ABILITY_POWER: RANK_C, ABILITY_JUMP: RANK_B, ABILITY_SPEED: RANK_A,
+		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_D,
+	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	9: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	10: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	11: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 }
 
 static func rank(char_id: int, ability: String) -> int:

@@ -10,6 +10,14 @@ const CHAR_PANDA := 0
 const CHAR_MARIO := 1
 const CHAR_FOX := 2
 const CHAR_FROG := 3
+const CHAR_TOME := 4
+const CHAR_HITO := 5
+const CHAR_PIYO := 6
+const CHAR_UME := 7
+const CHAR_CARBY := 8
+const CHAR_DUO := 9
+const CHAR_SEC1 := 10
+const CHAR_SEC2 := 11
 const CHAR_DEBUG := 15  # テスト専用: 全能力持ち+個性値
 
 # 固有技ビット(第3層。付け外し自由。CPUのAB_*は「やりたがるか」、こちらは「できるか」)
@@ -24,6 +32,14 @@ const DEFS := {
 	CHAR_MARIO: {"abilities": CA_HAT | CA_HIP | CA_CLING, "stats": {}},
 	CHAR_FOX: {"abilities": 0, "stats": {}},
 	CHAR_FROG: {"abilities": 0, "stats": {}},
+	CHAR_TOME: {"abilities": 0, "stats": {}},
+	CHAR_HITO: {"abilities": 0, "stats": {}},
+	CHAR_PIYO: {"abilities": 0, "stats": {}},
+	CHAR_UME: {"abilities": 0, "stats": {}},
+	CHAR_CARBY: {"abilities": 0, "stats": {}},
+	CHAR_DUO: {"abilities": 0, "stats": {}},
+	CHAR_SEC1: {"abilities": 0, "stats": {}},
+	CHAR_SEC2: {"abilities": 0, "stats": {}},
 	CHAR_DEBUG: {"abilities": CA_HAT | CA_HIP | CA_CLING | CA_DASH,
 		"stats": {"speed": 130, "jump": 120, "atk": 140}},
 }
@@ -32,7 +48,8 @@ const DEFS := {
 const ROSTER: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
 
 # キャラ選択画面に並ぶ顔ぶれ(CHAR_DEBUGは載せない)
-const SELECTABLE: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
+const SELECTABLE: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG,
+	CHAR_TOME, CHAR_HITO, CHAR_PIYO, CHAR_UME, CHAR_CARBY, CHAR_DUO]
 
 # 表示名(選択画面用。simは参照しない)
 const NAMES := {
@@ -40,6 +57,14 @@ const NAMES := {
 	CHAR_MARIO: "MARIO",
 	CHAR_FOX: "FOX",
 	CHAR_FROG: "FROG",
+	CHAR_TOME: "TOME",
+	CHAR_HITO: "HITO",
+	CHAR_PIYO: "PIYO",
+	CHAR_UME: "UME",
+	CHAR_CARBY: "CARBY",
+	CHAR_DUO: "DUO",
+	CHAR_SEC1: "???",
+	CHAR_SEC2: "???",
 	CHAR_DEBUG: "DEBUG",
 }
 

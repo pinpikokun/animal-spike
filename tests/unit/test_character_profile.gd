@@ -18,12 +18,35 @@ func test_rank_tables_match_accepted_values() -> void:
 		check_eq(Profile.brake_distance_pct(rank), expected[rank][3], "ブレーキ%s" % Profile.rank_name(rank))
 		check_eq(Profile.guard_pct(rank), expected[rank][4], "ガード%s" % Profile.rank_name(rank))
 
-func test_selectable_roster_is_all_rank_c_and_standard_weight() -> void:
+func test_selectable_roster_has_explicit_profile_and_standard_weight() -> void:
 	for cid in Chars.SELECTABLE:
 		check(Profile.PROFILES.has(cid), "%sのプロファイルが明示されている" % Chars.NAMES[cid])
-		for ability in Profile.BASE_ABILITIES:
-			check_eq(Profile.rank(cid, ability), Profile.RANK_C,
-				"%sの%sはC" % [Chars.NAMES[cid], ability])
+		check_eq(Profile.weight_pct(cid), 100, "%sの重量は標準" % Chars.NAMES[cid])
+
+func test_original_character_rank_assignments() -> void:
+	var expected := {
+		Chars.CHAR_TOME: [Profile.RANK_C, Profile.RANK_A, Profile.RANK_E,
+			Profile.RANK_C, Profile.RANK_C],
+		Chars.CHAR_HITO: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
+			Profile.RANK_C, Profile.RANK_C],
+		Chars.CHAR_PIYO: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_D,
+			Profile.RANK_C, Profile.RANK_E],
+		Chars.CHAR_UME: [Profile.RANK_C, Profile.RANK_E, Profile.RANK_A,
+			Profile.RANK_C, Profile.RANK_A],
+		Chars.CHAR_CARBY: [Profile.RANK_C, Profile.RANK_B, Profile.RANK_A,
+			Profile.RANK_C, Profile.RANK_D],
+		Chars.CHAR_DUO: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
+			Profile.RANK_C, Profile.RANK_C],
+		Chars.CHAR_SEC1: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
+			Profile.RANK_C, Profile.RANK_C],
+		Chars.CHAR_SEC2: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
+			Profile.RANK_C, Profile.RANK_C],
+	}
+	for cid in expected:
+		for i in Profile.BASE_ABILITIES.size():
+			check_eq(Profile.rank(cid, Profile.BASE_ABILITIES[i]), expected[cid][i],
+				"%sの%sランク" % [Chars.NAMES[cid], Profile.BASE_ABILITIES[i]])
+		check_eq(Profile.traits(cid), [], "%sの付与能力は空" % Chars.NAMES[cid])
 		check_eq(Profile.weight_pct(cid), 100, "%sの重量は標準" % Chars.NAMES[cid])
 
 func test_trait_catalog_reserves_all_accepted_ids() -> void:

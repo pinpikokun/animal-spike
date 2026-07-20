@@ -8,7 +8,9 @@ const Chars := preload("res://src/sim/chars.gd")
 const ScoreUI := preload("res://src/display/score_ui.gd")
 
 const PORTRAIT_SCALE := 4.0
-const CELL_W := 100.0
+const ORIGINAL_PORTRAIT_SCALE := 2.0
+const CELL_W := 120.0
+const COLUMNS := 5
 const BASE_W := 640.0
 const BASE_H := 360.0
 
@@ -20,6 +22,15 @@ var _pick_labels: Array[Label] = []
 var _cursor_rect: ColorRect
 var _cells: Array[Control] = []
 
+const ORIGINAL_SHEETS := {
+	Chars.CHAR_TOME: "res://assets/reference/vb2211/tome_sheet.png",
+	Chars.CHAR_HITO: "res://assets/reference/vb2211/hito_sheet.png",
+	Chars.CHAR_PIYO: "res://assets/reference/vb2211/piyo_sheet.png",
+	Chars.CHAR_UME: "res://assets/reference/vb2211/ume_sheet.png",
+	Chars.CHAR_CARBY: "res://assets/reference/vb2211/carby_sheet.png",
+	Chars.CHAR_DUO: "res://assets/reference/vb2211/duo_sheet.png",
+}
+
 func _ready() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.08, 0.08, 0.14)
@@ -28,51 +39,59 @@ func _ready() -> void:
 
 	var title := Label.new()
 	title.text = "CHARACTER SELECT"
-	title.position = Vector2(0, 28)
+	title.position = Vector2(0, 4)
 	title.size = Vector2(BASE_W, 30)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	add_child(title)
 
 	_stage_label = Label.new()
-	_stage_label.position = Vector2(0, 66)
+	_stage_label.position = Vector2(0, 38)
 	_stage_label.size = Vector2(BASE_W, 22)
 	_stage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_stage_label)
 
 	var n := Chars.SELECTABLE.size()
-	var x0 := (BASE_W - CELL_W * n) * 0.5
+	var columns: int = mini(n, COLUMNS)
+	var x0 := (BASE_W - CELL_W * columns) * 0.5
 	_cursor_rect = ColorRect.new()
 	_cursor_rect.color = Color(1.0, 0.85, 0.2, 0.35)
-	_cursor_rect.size = Vector2(CELL_W - 12, 96)
+	_cursor_rect.size = Vector2(CELL_W - 12, 84)
 	add_child(_cursor_rect)
 	for i in n:
 		var cid: int = Chars.SELECTABLE[i]
 		var cell := Control.new()
-		cell.position = Vector2(x0 + i * CELL_W, 110)
+		cell.position = Vector2(x0 + (i % COLUMNS) * CELL_W,
+			70 + (i / COLUMNS) * 86)
 		add_child(cell)
 		_cells.append(cell)
-		var face: Dictionary = ScoreUI.FACES[cid]
+		var face: Dictionary
+		if ScoreUI.FACES.has(cid):
+			face = ScoreUI.FACES[cid]
+		else:
+			face = {"tex": ORIGINAL_SHEETS[cid], "region": Rect2(0, 0, 32, 32)}
 		var at := AtlasTexture.new()
 		at.atlas = load(face["tex"])
 		at.region = face["region"]
 		var tr := TextureRect.new()
 		tr.texture = at
 		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		tr.scale = Vector2(PORTRAIT_SCALE, PORTRAIT_SCALE)
-		tr.position = Vector2((CELL_W - 12 - at.region.size.x * PORTRAIT_SCALE) * 0.5, 8)
+		var portrait_scale: float = ORIGINAL_PORTRAIT_SCALE \
+			if ORIGINAL_SHEETS.has(cid) else PORTRAIT_SCALE
+		tr.scale = Vector2(portrait_scale, portrait_scale)
+		tr.position = Vector2((CELL_W - 12 - at.region.size.x * portrait_scale) * 0.5, 0)
 		cell.add_child(tr)
 		var name_l := Label.new()
 		name_l.text = Chars.NAMES.get(cid, "?")
-		name_l.position = Vector2(0, 68)
+		name_l.position = Vector2(0, 64)
 		name_l.size = Vector2(CELL_W - 12, 20)
 		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cell.add_child(name_l)
 
 # カーソル中キャラの能力表示(A-E基礎能力+付与能力+固有技)
 	_stats_label = Label.new()
-	_stats_label.position = Vector2(0, 210)
-	_stats_label.size = Vector2(BASE_W, 88)
+	_stats_label.position = Vector2(0, 240)
+	_stats_label.size = Vector2(BASE_W, 60)
 	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stats_label.add_theme_font_size_override("font_size", 11)
 	add_child(_stats_label)

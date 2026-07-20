@@ -1,3 +1,4 @@
+# 原作スプライトは操作感確認用。製品には同梱しない(差し替え前提)。
 # 個別フレームPNGからSpriteFramesをコード構築する。テクスチャ依存のため
 # ヘッドレス自動テストの対象外(実描画はゲーム起動時のユーザー官能チェックで検証)。
 extends RefCounted
@@ -8,6 +9,7 @@ const FOX := "res://assets/third_party/sunny_land/PNG/sprites/player"
 const FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog"
 const MARIO := "res://assets/characters/mario"
 const PANDA := "res://assets/characters/panda"
+const ORIGINAL := "res://assets/reference/vb2211"
 
 # マリオのセル寸法(全アクション共通の枠)
 const M_CW := 22
@@ -42,6 +44,22 @@ static func build_for(char_id: int) -> SpriteFrames:
 			sf = build_mario()
 		Chars.CHAR_FROG:
 			sf = build_frog()
+		Chars.CHAR_TOME:
+			sf = build_original(ORIGINAL + "/tome_sheet.png")
+		Chars.CHAR_HITO:
+			sf = build_original(ORIGINAL + "/hito_sheet.png")
+		Chars.CHAR_PIYO:
+			sf = build_original(ORIGINAL + "/piyo_sheet.png")
+		Chars.CHAR_UME:
+			sf = build_original(ORIGINAL + "/ume_sheet.png")
+		Chars.CHAR_CARBY:
+			sf = build_original(ORIGINAL + "/carby_sheet.png")
+		Chars.CHAR_DUO:
+			sf = build_original(ORIGINAL + "/duo_sheet.png")
+		Chars.CHAR_SEC1:
+			sf = build_original(ORIGINAL + "/sec1_sheet.png")
+		Chars.CHAR_SEC2:
+			sf = build_original(ORIGINAL + "/sec2_sheet.png")
 		_:
 			sf = build_fox()
 	ensure_fallbacks(sf)
@@ -73,6 +91,9 @@ static func foot_offset(char_id: int) -> Vector2:
 	match char_id:
 		Chars.CHAR_PANDA, Chars.CHAR_MARIO:
 			return Vector2(-11, -29)  # セル22x29(足元中央原点)
+		Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO, Chars.CHAR_UME, \
+				Chars.CHAR_CARBY, Chars.CHAR_DUO, Chars.CHAR_SEC1, Chars.CHAR_SEC2:
+			return Vector2(-16, -32)
 		_:
 			return Vector2(-16, -32)  # 32x32相当の仮素材
 
@@ -116,6 +137,35 @@ static func _add_sheet(sf: SpriteFrames, anim: String, path: String,
 		at.atlas = tex
 		at.region = Rect2(indices[k] * M_CW, 0, M_CW, M_CH)
 		sf.add_frame(anim, at, float(durs[k]))
+
+static func _add_original_sheet(sf: SpriteFrames, anim: String, path: String,
+		indices: Array, durs: Array, loop: bool) -> void:
+	var tex: Texture2D = load(path)
+	sf.add_animation(anim)
+	sf.set_animation_speed(anim, 60.0)
+	sf.set_animation_loop(anim, loop)
+	for k in indices.size():
+		var index: int = indices[k]
+		var at := AtlasTexture.new()
+		at.atlas = tex
+		at.region = Rect2((index % 12) * 32, (index / 12) * 32, 32, 32)
+		sf.add_frame(anim, at, float(durs[k]))
+
+static func build_original(sheet_path: String) -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	_add_original_sheet(sf, "idle", sheet_path, [0, 1], [30, 30], true)
+	_add_original_sheet(sf, "run", sheet_path, [2, 0], [6, 6], true)
+	_add_original_sheet(sf, "jump", sheet_path, [8], [1], false)
+	_add_original_sheet(sf, "attack", sheet_path, [9], [1], false)
+	_add_original_sheet(sf, "toss", sheet_path, [3], [1], false)
+	_add_original_sheet(sf, "toss_fwd", sheet_path, [3], [1], false)
+	_add_original_sheet(sf, "crouch", sheet_path, [10], [1], false)
+	_add_original_sheet(sf, "hurt", sheet_path, [11], [1], false)
+	_add_original_sheet(sf, "brake", sheet_path, [10], [1], false)
+	_add_original_sheet(sf, "stun", sheet_path, [14, 15], [8, 8], true)
+	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [8, 8], true)
+	return sf
 
 # マリオ(参考素材)を、既存のバレー用アニメ名(idle/run/jump/crouch/hurt)に割り当てる。
 # 素材はプラットフォーマーの動きなので「近いポーズ」を見繕う:

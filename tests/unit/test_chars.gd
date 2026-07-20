@@ -22,14 +22,46 @@ func test_stat_defaults() -> void:
 
 func test_rank_stats_feed_existing_physics_as_standard_values() -> void:
 	for cid in Chars.SELECTABLE:
-		check_eq(Chars.stat(cid, "atk"), 100, "パワーCは100%")
-		check_eq(Chars.stat(cid, "speed"), 100, "スピードCは100%")
-		check_eq(Chars.stat(cid, "slide"), 100, "ブレーキCは距離100%")
-		check_eq(Chars.stat(cid, "guard_max"), 100, "ガードCは100%")
+		check_eq(Chars.stat(cid, "atk"), Chars.Profile.power_pct(
+			Chars.rank(cid, Chars.Profile.ABILITY_POWER)), "パワーランクを物理%へ変換")
+		check_eq(Chars.stat(cid, "speed"), Chars.Profile.speed_pct(
+			Chars.rank(cid, Chars.Profile.ABILITY_SPEED)), "スピードランクを物理%へ変換")
+		check_eq(Chars.stat(cid, "slide"), Chars.Profile.brake_distance_pct(
+			Chars.rank(cid, Chars.Profile.ABILITY_BRAKE)), "ブレーキランクを物理%へ変換")
+		check_eq(Chars.stat(cid, "guard_max"), Chars.Profile.guard_pct(
+			Chars.rank(cid, Chars.Profile.ABILITY_GUARD)), "ガードランクを物理%へ変換")
 		check_eq(Chars.stat(cid, "weight"), 100, "重量は標準100%")
+
+func test_original_character_ids_defs_names_and_visibility() -> void:
+	var original_ids := [Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO, Chars.CHAR_UME,
+		Chars.CHAR_CARBY, Chars.CHAR_DUO, Chars.CHAR_SEC1, Chars.CHAR_SEC2]
+	var expected_names := ["TOME", "HITO", "PIYO", "UME", "CARBY", "DUO", "???", "???"]
+	var all_ids := [Chars.CHAR_PANDA, Chars.CHAR_MARIO, Chars.CHAR_FOX, Chars.CHAR_FROG,
+		Chars.CHAR_DEBUG] + original_ids
+	var unique := {}
+	for cid in all_ids:
+		unique[cid] = true
+	check_eq(unique.size(), all_ids.size(), "キャラIDは重複しない")
+	for i in original_ids.size():
+		var cid: int = original_ids[i]
+		check(Chars.DEFS.has(cid), "原作キャラ定義あり: %d" % cid)
+		check(Chars.NAMES.has(cid), "原作キャラ名あり: %d" % cid)
+		check_eq(Chars.NAMES[cid], expected_names[i], "原作キャラ表示名: %d" % cid)
+		check_eq(Chars.DEFS[cid].abilities, 0, "固有メカはステージ1では未実装")
+		check_eq(Chars.DEFS[cid].stats, {}, "旧派生statは空")
+	for cid in [Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO, Chars.CHAR_UME,
+		Chars.CHAR_CARBY, Chars.CHAR_DUO]:
+		check(Chars.SELECTABLE.has(cid), "%sは選択可能" % Chars.NAMES[cid])
+	check_eq(Chars.SELECTABLE.size(), 10, "選択可能キャラは既存4体+原作6体")
+	check(not Chars.SELECTABLE.has(Chars.CHAR_SEC1), "SEC1は隠し")
+	check(not Chars.SELECTABLE.has(Chars.CHAR_SEC2), "SEC2は隠し")
+	check_eq(Chars.NAMES[Chars.CHAR_SEC1], "???", "SEC1表示名")
+	check_eq(Chars.NAMES[Chars.CHAR_SEC2], "???", "SEC2表示名")
 
 func test_roster_shape() -> void:
 	check_eq(Chars.ROSTER.size(), 4, "ロスターは4slot")
+	check_eq(Chars.ROSTER, [Chars.CHAR_PANDA, Chars.CHAR_MARIO,
+		Chars.CHAR_FOX, Chars.CHAR_FROG], "既定ロスターは変更しない")
 	check_eq(Chars.ROSTER[1], Chars.CHAR_MARIO, "slot1=マリオ")
 	for cid in Chars.ROSTER:
 		check(Chars.DEFS.has(cid), "ロスター全員に定義がある")
