@@ -25,3 +25,7 @@ export_presets.cfg
 # プレビュー撮影の生成物とユーザーのローカル画像
 court_preview.png
 istockphoto-*.jpg
+
+# レビュー用スクショ(コミットしない)
+select_preview.png
+match_preview_*.png
