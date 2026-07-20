@@ -27,6 +27,7 @@ const FALLBACK := {
 	"brake": ["crouch", "idle"],
 	"hurt": ["crouch", "idle"],
 	"stun": ["hurt", "idle"],
+	"burn": ["stun", "hurt", "idle"],
 	"victory": ["jump", "idle"],
 	"hat-throw": ["toss_fwd", "idle"],
 	"hat-catch": ["idle"],
@@ -164,6 +165,7 @@ static func build_original(sheet_path: String) -> SpriteFrames:
 	_add_original_sheet(sf, "hurt", sheet_path, [11], [1], false)
 	_add_original_sheet(sf, "brake", sheet_path, [10], [1], false)
 	_add_original_sheet(sf, "stun", sheet_path, [14, 15], [8, 8], true)
+	_add_original_sheet(sf, "burn", sheet_path, [16, 17], [4, 4], true)
 	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [8, 8], true)
 	return sf
 

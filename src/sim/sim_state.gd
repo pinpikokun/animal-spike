@@ -27,6 +27,7 @@ class Player:
 	var on_ground: int = 1
 	var hit_cooldown: int = 0
 	var stun: int = 0  # 耐久力が尽きた硬直(移動・ヒット不可)の残りtick
+	var burn: int = 0  # 燃えるアタック被弾後の炎上表示残りtick
 	var dive: int = 0  # ジャンピングトス演出の残りtick(符号=飛びつき方向)。表示層が読む
 	var hit_kind: int = 0  # 直近の地上ヒット種別(0=レシーブ,1=トス,2=前トス)。表示層が読む
 	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
@@ -121,6 +122,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.on_ground)
 		out.append(p.hit_cooldown)
 		out.append(p.stun)
+		out.append(p.burn)
 		out.append(p.dive)
 		out.append(p.hit_kind)
 		out.append(p.brake)
@@ -189,6 +191,7 @@ func load_int_array(arr: Array) -> void:
 		p.on_ground = arr[k]; k += 1
 		p.hit_cooldown = arr[k]; k += 1
 		p.stun = arr[k]; k += 1
+		p.burn = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
 		p.hit_kind = arr[k]; k += 1
 		p.brake = arr[k]; k += 1

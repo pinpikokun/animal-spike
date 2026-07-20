@@ -10,6 +10,7 @@ const IN_RIGHT := SimInput.IN_RIGHT
 const IN_JUMP := SimInput.IN_JUMP
 const IN_ACTION := SimInput.IN_ACTION
 const IN_DOWN := SimInput.IN_DOWN
+const IN_ABILITY1 := SimInput.IN_ABILITY1
 
 const BRAKE_TICKS := 8  # 急ブレーキ(スキッド)で旧方向へ滑る長さ(tick)
 const SKID_MIN_RUN := 12  # この連続走行tick以上でのみ反転スキッドが出る(細かい追尾は滑らない)
@@ -41,6 +42,8 @@ static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 	return FP.from_int(height_px * 2) / den
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
+	if p.burn > 0:
+		p.burn -= 1
 	# 帽子投げの溜め中: 入力を一切受け付けず、その場で凍結(空中なら浮いたまま)。
 	# 投げは強いがリスク=硬直を負う。溜め終了で_update_hatが帽子を発射する
 	if p.throw > 0:
@@ -146,8 +149,10 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.push != 0:
 		p.vx += signi(p.push) * FP.from_int(PUSH_UNIT_PX) * absi(p.push) / PUSH_DECAY
 		p.push -= signi(p.push)
-	if (input & IN_JUMP) and p.on_ground == 1 and not toss_stance:
+	if (input & IN_JUMP) and p.on_ground == 1 and not toss_stance \
+			and not (input & IN_ABILITY1):
 		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。
+		# Dは必殺技の方向モディファイア。上+Dも地上技判定まで接地を維持する。
 		# simで跳ぶと上トスが「空中ヒット」扱いになり地上トス表(慣性込み)から
 		# 外れてしまうバグがあった(実ジャンプ化は意図しない実装だった)
 		var height_px := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))

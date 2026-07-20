@@ -25,6 +25,7 @@ const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押�
 const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
 const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=自陣の壁際まで届く大出力
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
+const BURN_TICKS := 60     # 燃えるアタック被弾後の炎上表示時間
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
 
@@ -274,11 +275,19 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# パワーボールを芯を外して触ると返球の制御を失う(狙い30%+全反射)。
 	# 「アタックはまともに返せない」原作精神: 対処はジャスト受けかブロックのみ
 	var mangled := false
-	if s.last_touch_team >= 0 and s.last_touch_team != team and s.ball_power == 1:
+	var flame_received := false
+	var flame_spike_return: bool = incoming_flame and intent_kind == INTENT_AIR_SPIKE
+	var opposing_power: bool = s.last_touch_team >= 0 and s.last_touch_team != team \
+		and s.ball_power == 1 and not flame_spike_return
+	var flame_touch: bool = incoming_flame and s.ball_power == 1 \
+		and intent_kind != INTENT_AIR_SPIKE
+	if opposing_power or flame_touch:
 		if sweet:
 			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
 				# 炎球は芯で受けても防ぎ切れず、通常パワー球の2倍を通す。
 				p.guard -= cfg.guard_dmg_power * 2
+				p.burn = BURN_TICKS
+				flame_received = true
 				if p.guard <= 0:
 					p.stun = cfg.stun_ticks
 					p.guard = p.guard_max
@@ -294,6 +303,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			var guard_damage: int = cfg.guard_dmg_power
 			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
 				guard_damage *= 2
+				p.burn = BURN_TICKS
+				flame_received = true
 			p.guard -= guard_damage
 			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
 			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
@@ -315,6 +326,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
+	if flame_received:
+		s.ball_flame = 0
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
 	var aim_pct: int = 100
 	if mangled:
@@ -526,6 +539,8 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
 			if s.ball_flame == 1:
 				p.guard -= cfg.guard_dmg_power * 2
+				p.burn = BURN_TICKS
+				s.ball_flame = 0
 				if p.guard <= 0:
 					p.stun = cfg.stun_ticks
 					p.guard = p.guard_max

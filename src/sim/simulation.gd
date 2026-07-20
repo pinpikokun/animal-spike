@@ -323,6 +323,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	for i in s.players.size():
 		var p = s.players[i]
 		p.stun = 0
+		p.burn = 0
 		p.dive = 0
 		p.brake = 0
 		p.run = 0

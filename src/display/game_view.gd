@@ -25,6 +25,7 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
+var _flame_ball: Sprite2D
 var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer、通常合成)
 var _fxg: Node2D  # 発光エフェクトレイヤー(FxGlowLayer、加算合成)
 var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
@@ -148,6 +149,15 @@ func _ready() -> void:
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
 	_ball_base_scale = ball_px / float(_ball_frame_w)
 	_ball.scale = Vector2.ONE * _ball_base_scale
+	# 原作BALL.DAT由来の炎球。simのball_flameとtickだけで表示コマを決める。
+	_flame_ball = Sprite2D.new()
+	_flame_ball.texture = load("res://assets/reference/vb2211/ball_sheet.png")
+	_flame_ball.centered = true
+	_flame_ball.region_enabled = true
+	_flame_ball.region_rect = Rect2(32, 32, 32, 32)  # index13
+	_flame_ball.visible = false
+	_flame_ball.z_index = _ball.z_index
+	_ball.get_parent().add_child(_flame_ball)
 	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する。
 	# 通常レイヤー(_fx)=影/マーカー等の暗色・単色UI。
 	# 加算合成レイヤー(_fxg)=発光エフェクト(重なると白飛びして光る=ROUNDS風)
@@ -383,6 +393,8 @@ func _sync_sprites() -> void:
 			anim = "victory"
 			if cid == Chars.CHAR_MARIO and spr.sprite_frames != _mario_hat:
 				spr.sprite_frames = _mario_hat
+		if p.burn > 0:
+			anim = "burn"
 		# 向き: 移動中はvxの符号で更新、静止中は保持。
 		# ただしアタック(空中打撃)だけはネット(相手)側を向く
 		if p.vx > 0:
@@ -412,7 +424,13 @@ func _sync_sprites() -> void:
 		_was_air[i] = p.on_ground == 0
 		# ジャンプは時間再生でなくvy(上下速度)で絵を固定選択する:
 		# 上昇中(vy<0)=1枚目をずっと / 落下中(vy>=0)=2枚目をずっと / 着地=3枚目を数フレーム
-		if anim == "hipdrop":
+		if anim == "burn":
+			if spr.animation != "burn":
+				spr.animation = "burn"
+			spr.pause()
+			var burn_frames: int = spr.sprite_frames.get_frame_count("burn")
+			spr.frame = int(state.tick / 4) % burn_frames if burn_frames > 0 else 0
+		elif anim == "hipdrop":
 			# ヒップアタック: 空中静止中(hip>0)は回転コマ0-8を進行に合わせて,
 			# 急降下中(hip==-1)は10枚目(index9)。フレームはhipから導出(時間再生しない)
 			if spr.animation != "hipdrop":
@@ -459,6 +477,10 @@ func _sync_sprites() -> void:
 			_flash[i] -= 1
 			spr.modulate = Color.WHITE if (_flash[i] / 2) % 2 == 0 \
 				else Color(1.0, 0.3, 0.3)
+		elif p.burn > 0 and not (cid in [Chars.CHAR_TOME, Chars.CHAR_HITO,
+				Chars.CHAR_PIYO, Chars.CHAR_UME, Chars.CHAR_CARBY, Chars.CHAR_DUO,
+				Chars.CHAR_SEC1, Chars.CHAR_SEC2]):
+			spr.modulate = Color(1.0, 0.55, 0.2)
 		elif p.stun > 0:
 			spr.modulate = Color(1.0, 0.75, 0.75)
 		else:
@@ -476,6 +498,7 @@ func _sync_sprites() -> void:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(SimState._server_index(state))
 	_ball.position = ball_pos.round()
+	_flame_ball.position = ball_pos.round()
 	if _cap != null:
 		var cap_i := Simulation.ent_find(state, Simulation.KIND_CAP)
 		if cap_i >= 0:
@@ -496,12 +519,14 @@ func _sync_sprites() -> void:
 	else:
 		_ball.rotation = 0.0
 		_ball.scale = Vector2.ONE * _ball_base_scale
-	# ゴーストは8tick周期で点滅し、燃えるアタックは赤く変調する。どちらも表示専用。
-	_ball.visible = state.ball_ghost == 0 or state.tick % 8 < 4
-	if state.ball_flame == 1:
-		_ball.modulate = Color(1.0, 0.2, 0.15)
-	else:
-		_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
+	# ゴーストは8tick周期で点滅。炎球は原作シートindex13/14を4tickごとに交互表示。
+	_flame_ball.visible = state.ball_flame == 1
+	var flame_index: int = 13 if state.tick % 8 < 4 else 14
+	_flame_ball.region_rect = Rect2((flame_index % 12) * 32,
+		(flame_index / 12) * 32, 32, 32)
+	_ball.visible = state.ball_flame == 0 \
+		and (state.ball_ghost == 0 or state.tick % 8 < 4)
+	_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。
 	# 状態から導出しビューに角度を溜めない(ロールバック安全)

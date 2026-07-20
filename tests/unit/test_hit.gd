@@ -31,10 +31,19 @@ func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 		w[0].ball_x = w[0].players[0].x + FP.from_int(5)
 		w[0].ball_y = w[1].floor_y - FP.from_int(10)
 	Simulation.step(normal[0], [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], normal[1])
-	Simulation.step(ghost[0], [Simulation.IN_ABILITY1 | Simulation.IN_UP, 0, 0, 0], ghost[1])
+	Simulation.step(ghost[0], [Simulation.IN_ABILITY1 | Simulation.IN_JUMP |
+		Simulation.IN_UP, 0, 0, 0], ghost[1])
 	check_eq(ghost[0].ball_ghost, 1, "地上の上+Dでゴーストボール")
+	check_eq(ghost[0].players[0].on_ground, 1, "Dを技モディファイアとして押す間は跳ばない")
 	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常上トスと横軌道が同一")
 	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常上トスと縦軌道が同一")
+
+func test_up_without_ability_still_jumps() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.step(s, [Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(s.players[0].on_ground, 0, "D無しの上入力は従来どおりジャンプ")
 
 func test_ghost_ball_clears_after_crossing_to_opponent_court() -> void:
 	var w := _rally_world()
@@ -114,6 +123,8 @@ func test_flame_receive_deals_double_power_guard_damage() -> void:
 	check_eq(s.players[0].guard, 80,
 		"燃える球のレシーブは通常パワー球の2倍ダメージ")
 	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
+	check_eq(s.players[0].burn, 60, "炎被弾で60tick炎上")
+	check_eq(s.ball_flame, 0, "レシーブで炎球効果を消費")
 
 func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	var w := _rally_world()
@@ -128,6 +139,10 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 80,
 		"炎球は芯でレシーブしても2倍ガードダメージ")
+	check_eq(s.players[0].burn, 60, "芯受けでも60tick炎上")
+	check_eq(s.ball_flame, 0, "芯レシーブでも炎球効果を消費")
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check_eq(s.players[0].burn, 59, "炎上残り時間は毎tick減衰")
 
 func test_flame_block_deals_double_power_guard_damage() -> void:
 	var w := _rally_world()
@@ -147,12 +162,31 @@ func test_flame_block_deals_double_power_guard_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(p.guard, 80,
 		"燃える球のブロックは通常パワー球の2倍ダメージ")
+	check_eq(p.burn, 60, "炎球ブロックでも60tick炎上")
+	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
+
+func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	cfg.guard_dmg_power = 10
+	var teammate = s.players[1]
+	s.last_touch_team = 0
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.ball_x = teammate.x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
+	check_eq(teammate.guard, 80, "味方の炎球でも2倍ガードダメージ")
+	check_eq(teammate.burn, 60, "味方の炎球でも60tick炎上")
+	check_eq(s.ball_flame, 0, "味方接触で炎球効果を消費")
 
 func test_air_attack_return_clears_flame_and_power() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
+	p.guard = 40
 	p.on_ground = 0
 	p.y = cfg.floor_y - FP.from_int(60)
 	s.last_touch_team = 1
@@ -163,6 +197,43 @@ func test_air_attack_return_clears_flame_and_power() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_flame, 0, "アタックで燃える効果を解除")
 	check_eq(s.ball_power, 0, "アタック返しは通常球へ戻る")
+	check_eq(p.guard, 40, "アタック返しはガード無傷かつ回復もしない")
+	check_eq(p.burn, 0, "アタック返しした本人は燃えない")
+
+func test_flame_ball_wall_contact_consumes_flame_without_damage() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_flame = 1
+	s.ball_x = cfg.ball_radius + FP.from_int(1)
+	s.ball_y = cfg.net_top_y - FP.from_int(30)
+	s.ball_vx = -FP.from_int(5)
+	BallPhysics._step_ball(s, cfg)
+	check_eq(s.ball_flame, 0, "壁接触で炎球効果を消費")
+	for p in s.players:
+		check_eq(p.guard, 100, "壁接触ではガードダメージなし")
+
+func test_flame_ball_net_contact_consumes_flame() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_flame = 1
+	s.ball_x = cfg.net_x - cfg.net_half_w - cfg.ball_radius - FP.from_int(1)
+	s.ball_y = cfg.net_top_y + FP.from_int(20)
+	s.ball_vx = FP.from_int(4)
+	BallPhysics._step_ball(s, cfg)
+	check_eq(s.ball_flame, 0, "ネット側面接触で炎球効果を消費")
+
+func test_flame_ball_net_top_contact_consumes_flame() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_flame = 1
+	s.ball_x = cfg.net_x
+	s.ball_y = cfg.net_top_y - cfg.ball_radius - FP.from_int(1)
+	s.ball_vy = FP.from_int(4)
+	BallPhysics._step_ball(s, cfg)
+	check_eq(s.ball_flame, 0, "ネット上端接触で炎球効果を消費")
 
 func test_bump_on_ground() -> void:
 	var w := _rally_world()

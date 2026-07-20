@@ -16,9 +16,9 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# ball_ghost/ball_flame追加による状態配列拡張(190→192)。
+# プレイヤーburn追加による状態配列拡張。
 # 物理挙動の変更ではなくハッシュ構造の変化。
-const GOLDEN_COMBINED_HASH := 8640764298994872477
+const GOLDEN_COMBINED_HASH := -3091032304254230571
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

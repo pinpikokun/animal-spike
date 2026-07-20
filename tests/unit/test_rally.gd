@@ -30,8 +30,10 @@ func test_reset_rally_keeps_player_positions() -> void:
 	var cfg = w[1]
 	var moved_x: int = FP.from_int(123)
 	s.players[0].x = moved_x
+	s.players[0].burn = 30
 	Simulation.reset_rally(s, cfg, 1)
 	check_eq(s.players[0].x, moved_x, "reset_rallyでキャラ位置が変わらない")
+	check_eq(s.players[0].burn, 0, "reset_rallyで炎上を解除")
 	check_eq(s.phase, SimState.PHASE_SERVE, "フェーズはSERVEに戻る")
 	check_eq(s.touches, 0, "タッチはリセット")
 
