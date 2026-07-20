@@ -9,8 +9,8 @@ const ScoreUI := preload("res://src/display/score_ui.gd")
 
 const PORTRAIT_SCALE := 4.0
 const ORIGINAL_PORTRAIT_SCALE := 2.0
-const CELL_W := 120.0
-const COLUMNS := 5
+const CELL_W := 100.0
+const COLUMNS := 6
 const BASE_W := 640.0
 const BASE_H := 360.0
 
@@ -29,6 +29,8 @@ const ORIGINAL_SHEETS := {
 	Chars.CHAR_UME: "res://assets/reference/vb2211/ume_sheet.png",
 	Chars.CHAR_CARBY: "res://assets/reference/vb2211/carby_sheet.png",
 	Chars.CHAR_DUO: "res://assets/reference/vb2211/duo_sheet.png",
+	Chars.CHAR_SEC1: "res://assets/reference/vb2211/sec1_sheet.png",
+	Chars.CHAR_SEC2: "res://assets/reference/vb2211/sec2_sheet.png",
 }
 
 func _ready() -> void:

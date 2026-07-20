@@ -35,7 +35,7 @@ func test_rank_stats_feed_existing_physics_as_standard_values() -> void:
 func test_original_character_ids_defs_names_and_visibility() -> void:
 	var original_ids := [Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO, Chars.CHAR_UME,
 		Chars.CHAR_CARBY, Chars.CHAR_DUO, Chars.CHAR_SEC1, Chars.CHAR_SEC2]
-	var expected_names := ["TOME", "HITO", "PIYO", "UME", "CARBY", "DUO", "???", "???"]
+	var expected_names := ["TOME", "HITO", "PIYO", "UME", "CARBY", "DUO", "ALIEN", "UMA"]
 	var all_ids := [Chars.CHAR_PANDA, Chars.CHAR_MARIO, Chars.CHAR_FOX, Chars.CHAR_FROG,
 		Chars.CHAR_DEBUG] + original_ids
 	var unique := {}
@@ -49,14 +49,11 @@ func test_original_character_ids_defs_names_and_visibility() -> void:
 		check_eq(Chars.NAMES[cid], expected_names[i], "原作キャラ表示名: %d" % cid)
 		check_eq(Chars.DEFS[cid].abilities, 0, "固有メカはステージ1では未実装")
 		check_eq(Chars.DEFS[cid].stats, {}, "旧派生statは空")
-	for cid in [Chars.CHAR_TOME, Chars.CHAR_HITO, Chars.CHAR_PIYO, Chars.CHAR_UME,
-		Chars.CHAR_CARBY, Chars.CHAR_DUO]:
+	for cid in original_ids:
 		check(Chars.SELECTABLE.has(cid), "%sは選択可能" % Chars.NAMES[cid])
-	check_eq(Chars.SELECTABLE.size(), 10, "選択可能キャラは既存4体+原作6体")
-	check(not Chars.SELECTABLE.has(Chars.CHAR_SEC1), "SEC1は隠し")
-	check(not Chars.SELECTABLE.has(Chars.CHAR_SEC2), "SEC2は隠し")
-	check_eq(Chars.NAMES[Chars.CHAR_SEC1], "???", "SEC1表示名")
-	check_eq(Chars.NAMES[Chars.CHAR_SEC2], "???", "SEC2表示名")
+	check_eq(Chars.SELECTABLE.size(), 12, "開発中は既存4体+原作8体を全公開")
+	check_eq(Chars.NAMES[Chars.CHAR_SEC1], "ALIEN", "SEC1表示名")
+	check_eq(Chars.NAMES[Chars.CHAR_SEC2], "UMA", "SEC2表示名")
 
 func test_roster_shape() -> void:
 	check_eq(Chars.ROSTER.size(), 4, "ロスターは4slot")

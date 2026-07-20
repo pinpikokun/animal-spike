@@ -47,9 +47,11 @@ const DEFS := {
 # 既定ロスター: slot(0..3)→char_id。キャラ選択画面を通らない場合に使う
 const ROSTER: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG]
 
-# キャラ選択画面に並ぶ顔ぶれ(CHAR_DEBUGは載せない)
+# キャラ選択画面に並ぶ顔ぶれ。開発中は全公開。製品時に隠し扱いを再検討。
+# CHAR_DEBUGは載せない。
 const SELECTABLE: Array[int] = [CHAR_PANDA, CHAR_MARIO, CHAR_FOX, CHAR_FROG,
-	CHAR_TOME, CHAR_HITO, CHAR_PIYO, CHAR_UME, CHAR_CARBY, CHAR_DUO]
+	CHAR_TOME, CHAR_HITO, CHAR_PIYO, CHAR_UME, CHAR_CARBY, CHAR_DUO,
+	CHAR_SEC1, CHAR_SEC2]
 
 # 表示名(選択画面用。simは参照しない)
 const NAMES := {
@@ -63,8 +65,8 @@ const NAMES := {
 	CHAR_UME: "UME",
 	CHAR_CARBY: "CARBY",
 	CHAR_DUO: "DUO",
-	CHAR_SEC1: "???",
-	CHAR_SEC2: "???",
+	CHAR_SEC1: "ALIEN",
+	CHAR_SEC2: "UMA",
 	CHAR_DEBUG: "DEBUG",
 }
 
