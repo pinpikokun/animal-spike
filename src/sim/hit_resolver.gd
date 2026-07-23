@@ -395,7 +395,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
-		var pct: int = 100
+		var pct: int = cfg.spike_normal_pct
 		if sweet:
 			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
 			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100

@@ -89,7 +89,7 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 		check_eq(actual, row[4], "純粋意図分類: %s" % [row])
 
 func test_output_velocity_snapshot() -> void:
-	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
+	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)。2026-07-20設計会仕様
 	var w: Array = _world()
 	var cfg = w[1]
 	var near_d2 := FP.from_int(5) * FP.from_int(5)
@@ -107,8 +107,8 @@ func test_output_velocity_snapshot() -> void:
 		[1, 0, 64299, -567978, 0, 100, 0],
 		[1, 0, 221585, -567978, 0, 100, 0],
 		[1, 14, 387280, -567978, 0, 100, 0],
-		[0, 0, 1937408, 521011, 1, 100, 0],
-		[0, 0, 1724688, 362632, 0, 100, 0],
+		[0, 0, 1549926, 368094, 1, 100, 0],
+		[0, 0, 1500774, 305834, 0, 100, 0],
 		[0, 0, 429202, -749294, 0, 100, 0],
 		[1, 0, 805721, -170393, 0, 50, 24],
 	], "固定フィクスチャの整数出力速度")
@@ -123,7 +123,8 @@ func test_collision_order_hit_move_net_block() -> void:
 	attacker.y = cfg.floor_y - FP.from_int(100)
 	attacker.x = cfg.net_x - cfg.net_half_w - FP.from_int(8)
 	blocker.on_ground = 0
-	blocker.y = cfg.floor_y - FP.from_int(56)
+	# 通常アタック80%化後も、同tick移動後の手のひら楕円内で接触する高さに置く。
+	blocker.y = cfg.floor_y - FP.from_int(57)
 	blocker.x = cfg.net_x + FP.from_int(16)
 	s.ball_x = attacker.x + FP.from_int(5)
 	s.ball_y = attacker.y - FP.from_int(10)
@@ -131,10 +132,10 @@ func test_collision_order_hit_move_net_block() -> void:
 	s.ball_vy = 0
 	Simulation.step(s, [0, Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 		0, Simulation.IN_ACTION | Simulation.IN_UP], cfg)
-	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
+	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)+ブロッカー位置1px調整。2026-07-20設計会仕様
 	check_eq([s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, s.last_touch_team,
 		s.touches, attacker.hit_cooldown, blocker.hit_cooldown],
-		[15237120, 14209478, -741212, 446918, 1, 1, 14, 14],
+		[15101366, 14095882, -635324, 333322, 1, 1, 14, 14],
 		"同tickのヒット→移動→ネット→ブロック順")
 
 func test_scatter_stream_snapshot() -> void:
@@ -204,10 +205,10 @@ func _chain_hashes() -> Array[int]:
 	return out
 
 func test_hit_chain_second_golden() -> void:
-	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
+	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)。2026-07-20設計会仕様
 	check_eq(_chain_hashes(), [
-		6272102908485989474,
-		8591929783393520418,
+		3872450047985681493,
+		3827381796205771196,
 		919436620370763387,
 		-4916841278586804129,
 		-7454915879545196849,

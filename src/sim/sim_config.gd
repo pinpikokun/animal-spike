@@ -46,6 +46,7 @@ var spike_vy: int
 var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面狙い
 var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
+var spike_normal_pct: int  # 通常アタックの速度倍率(%)
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
@@ -126,9 +127,13 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if spike_sweet_pct < 0 or spike_sweet_pct > 100:
 		_fail("spike_sweet_pctは0..100であること")
 		return
+	spike_normal_pct = _int_of(raw, "spike_normal_pct")
+	if spike_normal_pct <= 0:
+		_fail("spike_normal_pctは正であること")
+		return
 	spike_power_pct = _int_of(raw, "spike_power_pct")
-	if spike_power_pct < 100:
-		_fail("spike_power_pctは100以上であること")
+	if spike_power_pct <= spike_normal_pct:
+		_fail("spike_power_pctはspike_normal_pctより大きいこと")
 		return
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:

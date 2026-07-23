@@ -358,7 +358,7 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, d2)
 		# むらっけは通常/ジャスト共に最終pctへ1回だけ乗る。横速度は着地点から
 		# 逆算される新体系では比例しないため、比例が保存される縦速度で検証する。
-		var pct: int = cfg.spike_power_pct if sweet else 100
+		var pct: int = cfg.spike_power_pct if sweet else cfg.spike_normal_pct
 		if sweet:
 			pct = pct * Chars.stat(Chars.CHAR_PANDA, "just_reward") / 100
 		pct = pct * Chars.stat(Chars.CHAR_PANDA, "atk") / 100
@@ -388,9 +388,34 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	sa.players[0].on_ground = 0
 	HitResolver._apply_hit(sa, 0, cfga, Simulation.IN_ACTION | Simulation.IN_DOWN,
 		cfga.player_reach * cfga.player_reach)
-	var serve_pct: int = Chars.stat(Chars.CHAR_PANDA, "atk") * 150 / 100
+	var serve_pct: int = cfga.spike_normal_pct
+	serve_pct = serve_pct * Chars.stat(Chars.CHAR_PANDA, "atk") / 100
+	serve_pct = serve_pct * 150 / 100
 	check_eq(sa.ball_vy, (cfga.spike_steep_vy + cfga.spike_vy) * serve_pct / 200,
 		"空中アタックサーブへむらっけ最終倍率を一度だけ適用")
+
+func test_attack_speed_uses_rules_normal_80_and_just_110() -> void:
+	var outputs: Array[int] = []
+	for sweet in [false, true]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.on_ground = 0
+		p.y = cfg.floor_y - FP.from_int(60)
+		s.ball_x = p.x
+		s.ball_y = p.y
+		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN,
+			0 if sweet else cfg.player_reach * cfg.player_reach)
+		var expected_pct: int = cfg.spike_power_pct if sweet else cfg.spike_normal_pct
+		var expected_vy: int = (cfg.spike_steep_vy + cfg.spike_vy) * expected_pct / 200
+		check_eq(s.ball_vy, expected_vy,
+			"%s速度倍率はrules.jsonの%d%%" %
+			["ジャスト" if sweet else "通常", expected_pct])
+		outputs.append(s.ball_vy)
+	check_eq(SimConfig.new().spike_normal_pct, 80, "通常は旧100%でなく80%")
+	check_eq(SimConfig.new().spike_power_pct, 110, "ジャストは旧150%でなく110%")
+	check(outputs[0] < outputs[1], "通常80%はジャスト110%より遅い")
 
 func test_receive_reach_is_trait_aware_only_for_receive_intent() -> void:
 	var base := FP.from_int(40)
@@ -687,8 +712,9 @@ func test_perfect_spike_boosts_power() -> void:
 	s.ball_y = p.y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_power, 1, "ジャストミートはパワーボールになる")
-	# 同step内の重力1tick分を考慮して通常スパイクより明確に速いことを見る
-	check(s.ball_vy > cfg.spike_steep_vy + cfg.gravity, "ジャストミートは通常鋭角より速い")
+	var normal_vy: int = (cfg.spike_steep_vy + cfg.spike_vy) \
+		* cfg.spike_normal_pct / 200
+	check(s.ball_vy > normal_vy + cfg.gravity, "ジャスト110%は通常80%より速い")
 	check(s.ball_vx > 0, "横速度も敵陣方向へ出る")
 
 func test_edge_spike_is_normal() -> void:
@@ -720,7 +746,8 @@ func test_spike_reflects_incoming_inertia() -> void:
 	s.ball_y = p.y
 	s.ball_vy = -FP.from_int(8)  # 上昇中
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	var expect: int = (cfg.spike_steep_vy + cfg.spike_vy) / 2 \
+	var expect: int = (cfg.spike_steep_vy + cfg.spike_vy) \
+		* cfg.spike_normal_pct / 200 \
 		+ FP.from_int(8) * cfg.hit_inertia_num / cfg.hit_inertia_den + cfg.gravity
 	check_eq(s.ball_vy, expect, "上がり際の反発が縦速度に乗る")
 

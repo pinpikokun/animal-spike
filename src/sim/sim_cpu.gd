@@ -249,8 +249,9 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 	if can_spike:
 		var rvx: int = s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
 		var rvy: int = s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
-		for row in [[back_key, cfg.spike_steep_vy], [
-			0, (cfg.spike_steep_vy + cfg.spike_vy) / 2], [fwd_key, cfg.spike_vy]]:
+		for row in [[back_key, cfg.spike_steep_vy * cfg.spike_normal_pct / 100], [
+			0, (cfg.spike_steep_vy + cfg.spike_vy) * cfg.spike_normal_pct / 200],
+			[fwd_key, cfg.spike_vy * cfg.spike_normal_pct / 100]]:
 			var spike_vy: int = row[1]
 			var relative: int = 1 if row[0] == fwd_key else (-1 if row[0] == back_key else 0)
 			var spike_vx: int = HitResolver.toss_aim_vx(
