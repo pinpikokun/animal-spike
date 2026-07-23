@@ -16,8 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)。2026-07-20設計会仕様
-const GOLDEN_COMBINED_HASH := 8021369352498050527
+# drive_gauge/drive_recovery_progress/ball_attack_kind追加による状態配列拡張+ドライブゲージ削りの挙動追加。2026-07-20設計会仕様
+const GOLDEN_COMBINED_HASH := 3888333164871151364
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

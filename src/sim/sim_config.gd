@@ -48,6 +48,9 @@ var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_normal_pct: int  # 通常アタックの速度倍率(%)
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
+var drive_gauge_stock: int
+var drive_gauge_max: int
+var drive_recovery_ticks_per_stock: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
@@ -134,6 +137,15 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	spike_power_pct = _int_of(raw, "spike_power_pct")
 	if spike_power_pct <= spike_normal_pct:
 		_fail("spike_power_pctはspike_normal_pctより大きいこと")
+		return
+	drive_gauge_stock = _int_of(raw, "drive_gauge_stock")
+	drive_gauge_max = _int_of(raw, "drive_gauge_max")
+	drive_recovery_ticks_per_stock = _int_of(raw, "drive_recovery_ticks_per_stock")
+	if drive_gauge_stock <= 0 or drive_gauge_max != drive_gauge_stock * 6:
+		_fail("drive_gauge_maxはdrive_gauge_stockの6本分であること")
+		return
+	if drive_recovery_ticks_per_stock <= 0:
+		_fail("drive_recovery_ticks_per_stockは正であること")
 		return
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:

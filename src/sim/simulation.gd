@@ -114,6 +114,7 @@ static func _cpu_input(state, idx: int, cfg) -> int:
 static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
+	_update_drive_recovery(state, cfg)
 	# ヒットストップ: パワーボール成立や気絶の瞬間、数tick世界が止まる(重さの演出)。
 	# tickは進める(ネットコードの入力消費と1対1を保つ)が物理・入力は凍結
 	if state.hit_freeze > 0:
@@ -195,6 +196,23 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		# 勝敗確定後もキャラの移動・ジャンプは生かす
 		_step_players_and_hits(state, inputs, cfg)
 		BallPhysics._step_ball_loose(state, cfg)
+
+static func _update_drive_recovery(state, cfg) -> void:
+	if state.phase != SimStateScript.PHASE_RALLY:
+		return
+	for p in state.players:
+		if p.drive_gauge >= cfg.drive_gauge_max:
+			p.drive_gauge = cfg.drive_gauge_max
+			p.drive_recovery_progress = 0
+			continue
+		p.drive_recovery_progress += cfg.drive_gauge_stock
+		var recovered: int = p.drive_recovery_progress \
+			/ cfg.drive_recovery_ticks_per_stock
+		p.drive_recovery_progress = p.drive_recovery_progress \
+			% cfg.drive_recovery_ticks_per_stock
+		p.drive_gauge = mini(p.drive_gauge + recovered, cfg.drive_gauge_max)
+		if p.drive_gauge == cfg.drive_gauge_max:
+			p.drive_recovery_progress = 0
 
 static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
@@ -311,6 +329,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vy = 0
 	s.ball_spin = 0
 	s.ball_power = 0
+	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	s.ball_ghost = 0
 	s.ball_flame = 0
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
@@ -364,6 +383,8 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		# 耐久値%: 基準100にキャラ%を掛ける(ゴリラ=高耐久などの器)
 		p.guard_max = 100 * Chars.stat(p.char_id, "guard_max") / 100
 		p.guard = p.guard_max
+		p.drive_gauge = cfg.drive_gauge_max
+		p.drive_recovery_progress = 0
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

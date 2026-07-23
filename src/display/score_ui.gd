@@ -1,4 +1,4 @@
-# スコア・フェーズ・勝敗の文字表示+画面下端の顔HUD(スタン値/必殺ゲージ)。
+# スコア・フェーズ・勝敗の文字表示+画面下端の顔HUD(耐久/ドライブゲージ)。
 # 表示層。sim_stateを読むだけ
 extends CanvasLayer
 
@@ -104,7 +104,7 @@ class HudLayer:
 			ui.draw_hud(self)
 
 func draw_hud(c: Control) -> void:
-	# 4キャラ分のパネル: 顔アイコン+スタン値バー(赤)+必殺ゲージ(水色、値は未実装で0)。
+	# 4キャラ分のパネル: 顔アイコン+耐久バー+ドライブゲージ。
 	# 全てsim状態からの毎フレーム導出(ロールバック安全)
 	if _state == null or _cfg == null:
 		return
@@ -159,6 +159,18 @@ func draw_hud(c: Control) -> void:
 				col = Color(0.6, 0.6, 0.6)
 			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), col)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)
-		# 必殺ゲージ(水色): 値はまだsimに無いので枠と空バーのみ(M3bで接続)
+		# ドライブゲージ(水色): 既存の第2ゲージ枠を6本のセグメントとして使う。
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), Color(0.15, 0.15, 0.2, 0.9))
-		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), Color(0.35, 0.65, 0.85), false, 1.0)
+		var segment_gap := 1.0
+		var segment_w := (bar_w - segment_gap * 5.0) / 6.0
+		for segment in 6:
+			var segment_x := bar_x + float(segment) * (segment_w + segment_gap)
+			var fill_units: int = clampi(
+				p.drive_gauge - segment * _cfg.drive_gauge_stock,
+				0, _cfg.drive_gauge_stock)
+			var fill_w := segment_w * float(fill_units) / float(_cfg.drive_gauge_stock)
+			if fill_units > 0:
+				c.draw_rect(Rect2(segment_x, PANEL_Y + 13.0, fill_w, 7.0),
+					Color(0.25, 0.75, 1.0, 0.95))
+			c.draw_rect(Rect2(segment_x, PANEL_Y + 13.0, segment_w, 7.0),
+				Color(0.35, 0.65, 0.85), false, 1.0)

@@ -9,6 +9,10 @@ const PHASE_RALLY := 1
 const PHASE_POINT_PAUSE := 2
 const PHASE_GAME_OVER := 3
 
+const BALL_ATTACK_NONE := 0
+const BALL_ATTACK_NORMAL := 1
+const BALL_ATTACK_JUST := 2
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -49,6 +53,8 @@ class Player:
 	# ジャストトスで回復。guard_maxはキャラ別ステータスの器(M4で個体差を接続)
 	var guard: int = 100
 	var guard_max: int = 100
+	var drive_gauge: int = 0
+	var drive_recovery_progress: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
 	var cpu: int = 848543938514047
@@ -61,6 +67,7 @@ var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
 var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(耐久力を削る+熱色表示)
+var ball_attack_kind: int = BALL_ATTACK_NONE  # ドライブ削り用の飛来アタック種別
 var ball_ghost: int = 0  # 1=相手コートへ渡るまで表示層で点滅するゴーストボール
 var ball_flame: int = 0  # 1=ガードダメージ強化と赤色表示を持つ燃えるアタック球
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
@@ -139,6 +146,8 @@ func to_int_array() -> Array[int]:
 		out.append(p.push)
 		out.append(p.guard)
 		out.append(p.guard_max)
+		out.append(p.drive_gauge)
+		out.append(p.drive_recovery_progress)
 		out.append(p.cpu)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -146,6 +155,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_vy)
 	out.append(ball_spin)
 	out.append(ball_power)
+	out.append(ball_attack_kind)
 	out.append(ball_ghost)
 	out.append(ball_flame)
 	out.append(last_hit_tick)
@@ -208,6 +218,8 @@ func load_int_array(arr: Array) -> void:
 		p.push = arr[k]; k += 1
 		p.guard = arr[k]; k += 1
 		p.guard_max = arr[k]; k += 1
+		p.drive_gauge = arr[k]; k += 1
+		p.drive_recovery_progress = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1
@@ -215,6 +227,7 @@ func load_int_array(arr: Array) -> void:
 	ball_vy = arr[k]; k += 1
 	ball_spin = arr[k]; k += 1
 	ball_power = arr[k]; k += 1
+	ball_attack_kind = arr[k]; k += 1
 	ball_ghost = arr[k]; k += 1
 	ball_flame = arr[k]; k += 1
 	last_hit_tick = arr[k]; k += 1

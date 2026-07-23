@@ -21,6 +21,12 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.spike_normal_pct, 80, "通常アタック速度80%")
 	check_eq(cfg.spike_power_pct, 110, "ジャストアタック速度110%")
 
+func test_drive_gauge_rules_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")
+	check_eq(cfg.drive_gauge_max, 6000, "ドライブゲージ6本満タン")
+	check_eq(cfg.drive_recovery_ticks_per_stock, 180, "自然回復は1本180tick")
+
 func test_default_rules_valid() -> void:
 	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")
 

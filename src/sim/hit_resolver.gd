@@ -250,6 +250,13 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	var incoming_dir: int = -1 if team == 0 else 1
 	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
 
+static func _drive_damage_for_attack(attack_kind: int, cfg) -> int:
+	if attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
+		return cfg.drive_gauge_stock
+	if attack_kind == SimStateScript.BALL_ATTACK_JUST:
+		return cfg.drive_gauge_stock * 2
+	return 0
+
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
@@ -261,6 +268,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		p.on_ground, input, d2, cfg.player_reach, serve_strike)
 	var intent_kind: int = intent[0]
 	var hdir: int = intent[1]
+	var incoming_attack_kind: int = s.ball_attack_kind
+	var opposing_drive_attack: bool = s.last_touch_team >= 0 \
+		and s.last_touch_team != team \
+		and incoming_attack_kind != SimStateScript.BALL_ATTACK_NONE
+	var is_attack_return: bool = opposing_drive_attack \
+		and intent_kind == INTENT_AIR_SPIKE
+	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE:
+		p.drive_gauge = maxi(p.drive_gauge
+			- _drive_damage_for_attack(incoming_attack_kind, cfg), 0)
 	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
 	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
 	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
@@ -340,6 +356,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
+	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	if flame_received:
 		s.ball_flame = 0
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
@@ -396,6 +413,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
 		var pct: int = cfg.spike_normal_pct
+		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
+		if drive_just_attack:
+			p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock / 2, 0)
 		if sweet:
 			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
 			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
@@ -433,6 +453,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# 燃える球をアタックで打ち返した時だけ、効果とパワーを通常球へ戻す。
 			s.ball_flame = 0
 			s.ball_power = 0
+		if special == 0 and not is_attack_return:
+			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
+				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
 	else:
 		# 空中ニュートラル段は横3種とも敵陣の前面/中央/後面へトスする。
 		var avy: int = -cfg.toss_fwd_vy
@@ -512,6 +535,9 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var dy_n: int = (s.ball_y - cy) * rx / ry
 		if dx * dx + dy_n * dy_n > rx * rx:
 			continue
+		p.drive_gauge = maxi(p.drive_gauge
+			- _drive_damage_for_attack(s.ball_attack_kind, cfg), 0)
+		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 		if team == 0:
 			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
