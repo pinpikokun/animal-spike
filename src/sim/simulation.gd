@@ -198,9 +198,18 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		BallPhysics._step_ball_loose(state, cfg)
 
 static func _update_drive_recovery(state, cfg) -> void:
+	for p in state.players:
+		if p.just_receive_flash > 0:
+			p.just_receive_flash -= 1
 	if state.phase != SimStateScript.PHASE_RALLY:
 		return
 	for p in state.players:
+		if p.burnout_ticks > 0:
+			p.burnout_ticks -= 1
+			if p.burnout_ticks == 0:
+				p.drive_gauge = cfg.drive_gauge_max
+				p.drive_recovery_progress = 0
+			continue
 		if p.drive_gauge >= cfg.drive_gauge_max:
 			p.drive_gauge = cfg.drive_gauge_max
 			p.drive_recovery_progress = 0
@@ -228,7 +237,18 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		state.phase = SimStateScript.PHASE_RALLY
 		state.serve_tossed = 0
 		state.serve_flight = 1
+	_update_receive_stances(state, inputs)
 	_update_hat(state, inputs, cfg)
+
+static func _update_receive_stances(state, inputs: Array[int]) -> void:
+	for i in state.players.size():
+		var p = state.players[i]
+		var input: int = inputs[i] if i < inputs.size() else 0
+		var holding: bool = state.phase == SimStateScript.PHASE_RALLY \
+			and p.on_ground == 1 and p.vx == 0 and p.stun == 0 \
+			and (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0 \
+			and (input & (IN_LEFT | IN_RIGHT)) == 0
+		p.receive_stance = mini(p.receive_stance + 1, 2) if holding else 0
 
 # 帽子投げ(お邪魔ギミック): Dキーで前方へ投げ、飛行→滞在→高速帰還→キャッチ。
 # 飛んでる間ボールと当たり判定を持ち、触れると弾く。一度に1個だけ
@@ -241,7 +261,8 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
-				and p.stun == 0 and p.flinch == 0 and ent_find(state, KIND_CAP) < 0:
+				and p.stun == 0 and p.flinch == 0 and p.burnout_ticks == 0 \
+				and ent_find(state, KIND_CAP) < 0:
 			if p.guard >= HAT_GUARD_COST:
 				p.guard -= HAT_GUARD_COST  # 帽子はスタミナを消費
 				p.throw = THROW_TICKS
@@ -350,6 +371,8 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.flinch = 0
 		p.hip = 0
 		p.cling = 0
+		p.receive_stance = 0
+		p.just_receive_flash = 0
 		# 投げっぱなしの帽子はラリー再開で戻す(帽子を持たないキャラは持たないまま)
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
 	# 飛んでるエンティティ(帽子等)は全て消す(ラリーをまたぐ置き物は今後kind別に判断)
@@ -385,6 +408,10 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.guard = p.guard_max
 		p.drive_gauge = cfg.drive_gauge_max
 		p.drive_recovery_progress = 0
+		p.receive_stance = 0
+		p.just_receive_flash = 0
+		p.just_receive_event = 0
+		p.burnout_ticks = 0
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

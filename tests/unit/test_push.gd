@@ -76,8 +76,10 @@ func test_just_receive_keeps_control() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
+	p.receive_stance = 1
 	s.last_touch_team = 1
 	s.ball_power = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_x = p.x + FP.from_int(5)  # スイート内
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	var vin_x: int = FP.from_int(600) / cfg.tick_rate

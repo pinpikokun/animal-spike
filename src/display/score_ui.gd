@@ -160,7 +160,12 @@ func draw_hud(c: Control) -> void:
 			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), col)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)
 		# ドライブゲージ(水色): 既存の第2ゲージ枠を6本のセグメントとして使う。
-		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), Color(0.15, 0.15, 0.2, 0.9))
+		var burnout: bool = p.burnout_ticks > 0
+		var burnout_dim: bool = burnout and (_state.tick / 6) % 2 == 0
+		var drive_bg := Color(0.3, 0.3, 0.32, 0.45) \
+			if burnout_dim else Color(0.22, 0.22, 0.24, 0.9) \
+			if burnout else Color(0.15, 0.15, 0.2, 0.9)
+		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), drive_bg)
 		var segment_gap := 1.0
 		var segment_w := (bar_w - segment_gap * 5.0) / 6.0
 		for segment in 6:
@@ -170,7 +175,11 @@ func draw_hud(c: Control) -> void:
 				0, _cfg.drive_gauge_stock)
 			var fill_w := segment_w * float(fill_units) / float(_cfg.drive_gauge_stock)
 			if fill_units > 0:
+				var drive_color := Color(0.35, 0.35, 0.38, 0.45) \
+					if burnout_dim else Color(0.45, 0.45, 0.48, 0.9) \
+					if burnout else Color(0.25, 0.75, 1.0, 0.95)
 				c.draw_rect(Rect2(segment_x, PANEL_Y + 13.0, fill_w, 7.0),
-					Color(0.25, 0.75, 1.0, 0.95))
+					drive_color)
 			c.draw_rect(Rect2(segment_x, PANEL_Y + 13.0, segment_w, 7.0),
-				Color(0.35, 0.65, 0.85), false, 1.0)
+				Color(0.4, 0.4, 0.42) if burnout else Color(0.35, 0.65, 0.85),
+				false, 1.0)

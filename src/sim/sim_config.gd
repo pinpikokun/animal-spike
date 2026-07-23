@@ -51,10 +51,10 @@ var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
 var drive_gauge_stock: int
 var drive_gauge_max: int
 var drive_recovery_ticks_per_stock: int
+var burnout_recovery_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
-var guard_heal_just: int   # パワーボールをジャストで受け切った時の回復量
 var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
@@ -147,6 +147,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if drive_recovery_ticks_per_stock <= 0:
 		_fail("drive_recovery_ticks_per_stockは正であること")
 		return
+	burnout_recovery_ticks = _int_of(raw, "burnout_recovery_ticks")
+	if burnout_recovery_ticks <= 0:
+		_fail("burnout_recovery_ticksは正であること")
+		return
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:
 		_fail("stun_ticksは0以上であること")
@@ -156,8 +160,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 		_fail("stagger_ticksは0..stun_ticksであること")
 		return
 	guard_dmg_power = _int_of(raw, "guard_dmg_power")
-	guard_heal_just = _int_of(raw, "guard_heal_just")
-	if guard_dmg_power < 0 or guard_heal_just < 0:
+	if guard_dmg_power < 0:
 		_fail("guard系の値は0以上であること")
 		return
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate

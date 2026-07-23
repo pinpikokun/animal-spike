@@ -181,7 +181,8 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	# その後まっすぐ急降下。帽子所持への相乗りは廃止(技として独立)
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \
 			and not (input & IN_ACTION) \
-			and Chars.has_ability(p.char_id, Chars.CA_HIP)
+			and Chars.has_ability(p.char_id, Chars.CA_HIP) \
+			and p.burnout_ticks == 0
 	if p.hip == 0 and want_hip:
 		p.hip = HIP_HOVER_TICKS
 	if p.hip > 0:

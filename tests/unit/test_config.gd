@@ -26,6 +26,14 @@ func test_drive_gauge_rules_loaded() -> void:
 	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")
 	check_eq(cfg.drive_gauge_max, 6000, "ドライブゲージ6本満タン")
 	check_eq(cfg.drive_recovery_ticks_per_stock, 180, "自然回復は1本180tick")
+	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
+
+func test_guard_heal_just_is_removed() -> void:
+	var cfg = SimConfig.new()
+	check(not ("guard_heal_just" in cfg), "回復全廃により設定プロパティを残さない")
+	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
+	var raw: Dictionary = JSON.parse_string(file.get_as_text())
+	check(not raw.has("guard_heal_just"), "回復全廃によりrules.jsonキーを残さない")
 
 func test_default_rules_valid() -> void:
 	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")

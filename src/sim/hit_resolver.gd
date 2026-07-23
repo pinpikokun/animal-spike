@@ -170,6 +170,8 @@ static func reach_for_intent(char_id: int, base_reach: int, intent_kind: int) ->
 	return base_reach
 
 static func _special_for_input(p, input: int, cfg) -> int:
+	if p.burnout_ticks > 0:
+		return 0
 	if not (input & IN_ABILITY1):
 		return 0
 	if p.on_ground == 1 and (input & IN_UP) and not (input & IN_DOWN) \
@@ -257,6 +259,15 @@ static func _drive_damage_for_attack(attack_kind: int, cfg) -> int:
 		return cfg.drive_gauge_stock * 2
 	return 0
 
+static func _spend_drive(p, amount: int, cfg) -> void:
+	p.drive_gauge = maxi(p.drive_gauge - amount, 0)
+	if amount > 0 and p.drive_gauge == 0 and p.burnout_ticks == 0:
+		p.burnout_ticks = cfg.burnout_recovery_ticks
+		p.drive_recovery_progress = 0
+
+static func _burnout_guard_damage(p, damage: int) -> int:
+	return damage * 3 / 2 if p.burnout_ticks > 0 else damage
+
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
@@ -274,12 +285,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		and incoming_attack_kind != SimStateScript.BALL_ATTACK_NONE
 	var is_attack_return: bool = opposing_drive_attack \
 		and intent_kind == INTENT_AIR_SPIKE
-	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE:
-		p.drive_gauge = maxi(p.drive_gauge
-			- _drive_damage_for_attack(incoming_attack_kind, cfg), 0)
-	# 耐久力(ガード)システム: パワーボール(ジャストミート由来)を受けると
-	# 耐久力が削れる。ただしスイートスポットで受け切った「ジャストトス」なら
-	# 逆に回復する(完璧な防御へのご褒美)。通常スパイクはノーダメージ。
+	# 耐久力(ガード)システム: パワーボールを受けると耐久力が削れる。
+	# 静止した下レシーブ構えからのジャストレシーブだけが削りを無効化する。
+	# 回復はラチェット原則により全廃。通常スパイクはノーダメージ。
 	# 耐久力が尽きた瞬間にスタン(倒れて動けない)し、満タンへ戻る(気絶サイクル)。
 	# 判定はball_powerを消費する前に読む
 	# スイート判定(芯)は全用途共通: 耐久力の回復/削り、スパイクのパワー化、
@@ -290,6 +298,23 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
 	if special == Chars.SUPER_FLAME_ATTACK:
 		sweet = true  # 軌道・慣性・演出を通常のジャストアタック相当にする
+	if p.burnout_ticks > 0:
+		sweet = false
+	var just_receive: bool = opposing_drive_attack \
+		and intent_kind == INTENT_GROUND_RECEIVE \
+		and sweet and p.receive_stance > 0 \
+		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
+		and p.burnout_ticks == 0 and not incoming_flame
+	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE \
+			and not just_receive:
+		_spend_drive(p, _drive_damage_for_attack(incoming_attack_kind, cfg), cfg)
+	if just_receive:
+		p.just_receive_flash = 8
+		p.just_receive_event += 1
+		s.hit_freeze = maxi(s.hit_freeze, 5)
+	if intent_kind == INTENT_GROUND_RECEIVE and not just_receive \
+			and not incoming_flame:
+		sweet = false
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
 	# 支配権切替: 緩い球(閾値未満)は慣性ゼロ=完全に狙い通り打てる。
 	# 強い球だけが「ぎりぎり捕球」で勢いに流される(リアルバレー準拠)
@@ -315,7 +340,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
 				# 炎球は芯で受けても防ぎ切れず、通常パワー球の2倍を通す。
-				p.guard -= cfg.guard_dmg_power * 2
+				p.guard -= _burnout_guard_damage(p, cfg.guard_dmg_power * 2)
 				p.burn = BURN_TICKS
 				flame_received = true
 				if p.guard <= 0:
@@ -324,8 +349,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 					s.hit_freeze = 10
 					var flame_back: int = -1 if team == 0 else 1
 					p.push = flame_back * PUSH_STUN_TICKS
-			else:
-				p.guard = mini(p.guard + cfg.guard_heal_just, p.guard_max)
 		else:
 			mangled = true
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
@@ -335,6 +358,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				guard_damage *= 2
 				p.burn = BURN_TICKS
 				flame_received = true
+			guard_damage = _burnout_guard_damage(p, guard_damage)
 			p.guard -= guard_damage
 			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
 			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
@@ -415,7 +439,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		var pct: int = cfg.spike_normal_pct
 		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
 		if drive_just_attack:
-			p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock / 2, 0)
+			_spend_drive(p, cfg.drive_gauge_stock / 2, cfg)
 		if sweet:
 			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
 			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
@@ -535,8 +559,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var dy_n: int = (s.ball_y - cy) * rx / ry
 		if dx * dx + dy_n * dy_n > rx * rx:
 			continue
-		p.drive_gauge = maxi(p.drive_gauge
-			- _drive_damage_for_attack(s.ball_attack_kind, cfg), 0)
+		_spend_drive(p, _drive_damage_for_attack(s.ball_attack_kind, cfg), cfg)
 		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 		if team == 0:
@@ -550,7 +573,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
 			if s.ball_flame == 1:
-				p.guard -= cfg.guard_dmg_power * 2
+				p.guard -= _burnout_guard_damage(p, cfg.guard_dmg_power * 2)
 				p.burn = BURN_TICKS
 				s.ball_flame = 0
 				if p.guard <= 0:

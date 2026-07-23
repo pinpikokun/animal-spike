@@ -44,6 +44,7 @@ var _prev_vx: Array[int] = [0, 0, 0, 0]
 var _prev_cd: Array[int] = [0, 0, 0, 0]
 var _prev_flinch: Array[int] = [0, 0, 0, 0]  # しりもち検知用(0→>0で砂煙)
 var _prev_stun: Array[int] = [0, 0, 0, 0]
+var _prev_just_receive_event: Array[int] = [0, 0, 0, 0]
 var _prev_power := 0
 var _prev_bvy := 0
 var _prev_score := Vector2i.ZERO
@@ -195,7 +196,7 @@ static func _depth_offset(i: int) -> Vector2:
 
 func _setup_sfx() -> void:
 	# 仮SE(tools/gen_sfx.gdが合成したWAV)。ファイルが無ければ無音のまま動く
-	for sfx_name in ["hit", "just", "block", "score"]:
+	for sfx_name in ["hit", "just", "just_receive", "block", "score"]:
 		var path := "res://assets/sfx/%s.wav" % sfx_name
 		if ResourceLoader.exists(path):
 			var pl := AudioStreamPlayer.new()
@@ -268,6 +269,12 @@ func _detect_fx() -> void:
 		if p.flinch > 0 and _prev_flinch[i] == 0:
 			_spawn_fx("land", foot, 0.0, Vector2(0, 6))
 		_prev_flinch[i] = p.flinch
+		if p.just_receive_event > _prev_just_receive_event[i]:
+			_spawn_fx("just", bpos, up, bvel * 0.2)
+			_play_sfx("just_receive")
+			_shake_amp = maxf(_shake_amp, 3.0)
+		_prev_just_receive_event[i] = maxi(
+			_prev_just_receive_event[i], p.just_receive_event)
 		if _prev_cd[i] < cfg.hit_cooldown_ticks and p.hit_cooldown == cfg.hit_cooldown_ticks:
 			# ヒットの瞬間。打った逆方向へ散る(=-ボール速度の向き)
 			var away := (-bvel).angle() if bvel.length() > 0.5 else up
@@ -473,7 +480,10 @@ func _sync_sprites() -> void:
 			spr.rotation = 0.0
 		# 被弾直後は白/赤の高速点滅(ダメージフラッシュ)。その後スタン中は薄い赤み。
 		# 頭上の渦巻きはFxLayerが描く
-		if _flash[i] > 0:
+		if p.just_receive_flash > 0:
+			spr.modulate = Color.WHITE if p.just_receive_flash % 2 == 0 \
+				else Color(0.25, 0.9, 1.0)
+		elif _flash[i] > 0:
 			_flash[i] -= 1
 			spr.modulate = Color.WHITE if (_flash[i] / 2) % 2 == 0 \
 				else Color(1.0, 0.3, 0.3)

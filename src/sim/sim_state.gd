@@ -55,6 +55,10 @@ class Player:
 	var guard_max: int = 100
 	var drive_gauge: int = 0
 	var drive_recovery_progress: int = 0
+	var receive_stance: int = 0
+	var just_receive_flash: int = 0
+	var just_receive_event: int = 0
+	var burnout_ticks: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
 	var cpu: int = 848543938514047
@@ -148,6 +152,10 @@ func to_int_array() -> Array[int]:
 		out.append(p.guard_max)
 		out.append(p.drive_gauge)
 		out.append(p.drive_recovery_progress)
+		out.append(p.receive_stance)
+		out.append(p.just_receive_flash)
+		out.append(p.just_receive_event)
+		out.append(p.burnout_ticks)
 		out.append(p.cpu)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -220,6 +228,10 @@ func load_int_array(arr: Array) -> void:
 		p.guard_max = arr[k]; k += 1
 		p.drive_gauge = arr[k]; k += 1
 		p.drive_recovery_progress = arr[k]; k += 1
+		p.receive_stance = arr[k]; k += 1
+		p.just_receive_flash = arr[k]; k += 1
+		p.just_receive_event = arr[k]; k += 1
+		p.burnout_ticks = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1

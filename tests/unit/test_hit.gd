@@ -131,7 +131,10 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	cfg.guard_dmg_power = 10
+	s.players[0].receive_stance = 1
+	s.players[0].drive_gauge = cfg.drive_gauge_max
 	s.ball_power = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)
@@ -773,6 +776,9 @@ func test_just_receive_holds_aim() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
+	s.players[0].receive_stance = 1
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = s.players[0].y - FP.from_int(2)
 	s.ball_vx = -FP.from_int(20)
@@ -923,29 +929,33 @@ func test_normal_spike_receive_no_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 100, "通常スパイク受けはノーダメージ")
 
-func test_just_receive_of_power_ball_heals() -> void:
-	# パワーボールをスイートスポットで受け切る(ジャストトス)と逆に回復する
+func test_just_receive_of_power_ball_does_not_heal() -> void:
+	# 回復全廃(ラチェット原則)。2026-07-20設計会仕様
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.players[0].guard = 40
+	s.players[0].receive_stance = 1
 	s.ball_power = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 40 + cfg.guard_heal_just, "ジャスト受けで回復")
+	check_eq(s.players[0].guard, 40, "ジャスト受けでも回復しない")
 	check_eq(s.players[0].stun, 0, "ダメージは受けない")
 	# 上限は満タンまで
 	var w2 := _rally_world()
 	var s2 = w2[0]
 	s2.players[0].guard = 95
+	s2.players[0].receive_stance = 1
 	s2.ball_power = 1
+	s2.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s2.last_touch_team = 1
 	s2.ball_x = s2.players[0].x + FP.from_int(2)
 	s2.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s2.players[0].guard, 100, "回復は満タンで頭打ち")
+	check_eq(s2.players[0].guard, 95, "芯受けでも耐久は増えない")
 
 func test_plain_toss_does_not_heal() -> void:
 	# パワーボール以外はスイートで取っても回復しない(ご褒美はジャスト防御だけ)
