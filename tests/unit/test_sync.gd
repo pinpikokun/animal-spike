@@ -16,8 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# ダメージ絶対値化(GUARD A120-E80/POWER削りA35-E15、ball_guard_damage直列化)+気絶連打短縮の意図的変更。2026-07-20設計会仕様
-const GOLDEN_COMBINED_HASH := 5877464883883903276
+# 必殺技カタログ化(固定威力40/ゲージ3本消費/防御分類ball_defense_class直列化)+ゴーストのゲージ1本消費。2026-07-20設計会仕様
+const GOLDEN_COMBINED_HASH := -866360709441890210
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

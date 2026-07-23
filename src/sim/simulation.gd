@@ -349,6 +349,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_power = 0
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	s.ball_guard_damage = 0
+	s.ball_defense_class = Chars.DEFENSE_NONE
 	s.ball_ghost = 0
 	s.ball_flame = 0
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
@@ -418,6 +419,7 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.stun_mash_event = 0
 	s.hip_quake_event = 0
 	s.ball_guard_damage = 0
+	s.ball_defense_class = Chars.DEFENSE_NONE
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:
@@ -464,6 +466,9 @@ static func _check_floor_point(s, cfg) -> void:
 	# 着地したらパワーボールを解除=通常ボールに戻す(レシーブ時と同様)。
 	# ポーズ中のバウンドで熱色や残像トレイルが残らないようにする
 	s.ball_power = 0
+	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
+	s.ball_guard_damage = 0
+	s.ball_defense_class = Chars.DEFENSE_NONE
 	s.ball_flame = 0
 	var landed_left: bool = s.ball_x < cfg.net_x
 	_award_point(s, 1 if landed_left else 0, cfg)

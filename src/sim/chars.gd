@@ -30,6 +30,45 @@ const CA_DASH := 8   # ダブルタップダッシュ
 const SUPER_GHOST_BALL := 1
 const SUPER_FLAME_ATTACK := 2
 
+enum DefenseClass {
+	DEFENSE_NONE,
+	DEFENSE_UNBLOCKABLE,
+	DEFENSE_KNOCKBACK,
+	DEFENSE_DELAYED,
+}
+
+enum SuperCondition {
+	CONDITION_GROUND_UP_ABILITY,
+	CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
+}
+
+const DEFENSE_NONE := DefenseClass.DEFENSE_NONE
+const DEFENSE_UNBLOCKABLE := DefenseClass.DEFENSE_UNBLOCKABLE
+const DEFENSE_KNOCKBACK := DefenseClass.DEFENSE_KNOCKBACK
+const DEFENSE_DELAYED := DefenseClass.DEFENSE_DELAYED
+const CONDITION_GROUND_UP_ABILITY := SuperCondition.CONDITION_GROUND_UP_ABILITY
+const CONDITION_AIR_DOWN_ABILITY_ABOVE_NET := \
+	SuperCondition.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET
+
+const GHOST_BALL_DEF := {
+	"power": 0,
+	"gauge_cost": 1000,
+	"condition": CONDITION_GROUND_UP_ABILITY,
+	"defense_class": DEFENSE_DELAYED,
+	"visual": "ghost",
+}
+const FLAME_ATTACK_DEF := {
+	"power": 40,
+	"gauge_cost": 3000,
+	"condition": CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
+	"defense_class": DEFENSE_UNBLOCKABLE,
+	"visual": "flame",
+}
+const SUPER_CATALOG := {
+	SUPER_GHOST_BALL: GHOST_BALL_DEF,
+	SUPER_FLAME_ATTACK: FLAME_ATTACK_DEF,
+}
+
 # 固有技とテスト専用上書き。選択キャラの基礎能力・重量・付与能力はProfileが正本。
 const DEFS := {
 	CHAR_PANDA: {"abilities": 0, "stats": {}, "supers": {}},
@@ -37,7 +76,10 @@ const DEFS := {
 	CHAR_FOX: {"abilities": 0, "stats": {}, "supers": {}},
 	CHAR_FROG: {"abilities": 0, "stats": {}, "supers": {}},
 	CHAR_TOME: {"abilities": 0, "stats": {},
-		"supers": {SUPER_GHOST_BALL: true, SUPER_FLAME_ATTACK: true}},
+		"supers": {
+			SUPER_GHOST_BALL: GHOST_BALL_DEF,
+			SUPER_FLAME_ATTACK: FLAME_ATTACK_DEF,
+		}},
 	CHAR_HITO: {"abilities": 0, "stats": {}, "supers": {}},
 	CHAR_PIYO: {"abilities": 0, "stats": {}, "supers": {}},
 	CHAR_UME: {"abilities": 0, "stats": {}, "supers": {}},
@@ -82,7 +124,10 @@ static func has_ability(char_id: int, bit: int) -> bool:
 static func has_super(char_id: int, super_id: int) -> bool:
 	var def: Dictionary = DEFS.get(char_id, {})
 	var supers: Dictionary = def.get("supers", {})
-	return bool(supers.get(super_id, false))
+	return supers.has(super_id)
+
+static func super_def(super_id: int) -> Dictionary:
+	return SUPER_CATALOG.get(super_id, {})
 
 static func stat(char_id: int, key: String) -> int:
 	# 既存物理への整数%窓口。基礎5能力はA-E表、重量は標準値から解決する。

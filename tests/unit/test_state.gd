@@ -25,9 +25,9 @@ func test_hash_changes_on_diff() -> void:
 
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x35(気絶連打状態を含む)
-	# + 全体30(ball_guard_damageを含む) + エンティティ8スロットx8欄
-	# 1 + 4x35 + 30 + 8x8 = 235
-	check_eq(SimState.new().to_int_array().size(), 235,
+	# + 全体31(ball_guard_damage/ball_defense_classを含む) + エンティティ8スロットx8欄
+	# 1 + 4x35 + 31 + 8x8 = 236
+	check_eq(SimState.new().to_int_array().size(), 236,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -53,6 +53,7 @@ func test_load_int_array_roundtrip() -> void:
 	a.players[2].stun_mash_event = 4
 	a.hip_quake_event = 9
 	a.ball_guard_damage = 35
+	a.ball_defense_class = 2
 	a.players[3].hit_cooldown = 5
 	var b = SimState.new()
 	b.load_int_array(a.to_int_array())
@@ -70,6 +71,7 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.players[2].stun_mash_event, 4, "気絶連打演出イベントの復元")
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
 	check_eq(b.ball_guard_damage, 35, "飛来球の絶対ガード削り値の復元")
+	check_eq(b.ball_defense_class, 2, "飛来球の防御分類の復元")
 	check_eq(b.tick, 123, "tickの復元")
 	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
 	check_eq(b.ball_flame, 1, "炎状態の復元")

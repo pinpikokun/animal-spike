@@ -174,13 +174,20 @@ static func _special_for_input(p, input: int, cfg) -> int:
 		return 0
 	if not (input & IN_ABILITY1):
 		return 0
-	if p.on_ground == 1 and (input & IN_UP) and not (input & IN_DOWN) \
-			and Chars.has_super(p.char_id, Chars.SUPER_GHOST_BALL):
-		return Chars.SUPER_GHOST_BALL
-	if p.on_ground == 0 and (input & IN_DOWN) and not (input & IN_UP) \
-			and p.y < cfg.net_top_y \
-			and Chars.has_super(p.char_id, Chars.SUPER_FLAME_ATTACK):
-		return Chars.SUPER_FLAME_ATTACK
+	for super_id in Chars.SUPER_CATALOG:
+		if not Chars.has_super(p.char_id, super_id):
+			continue
+		var entry: Dictionary = Chars.super_def(super_id)
+		if p.drive_gauge < int(entry.gauge_cost):
+			continue
+		var condition: int = int(entry.condition)
+		if condition == Chars.CONDITION_GROUND_UP_ABILITY \
+				and p.on_ground == 1 and (input & IN_UP) and not (input & IN_DOWN):
+			return super_id
+		if condition == Chars.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET \
+				and p.on_ground == 0 and (input & IN_DOWN) and not (input & IN_UP) \
+				and p.y < cfg.net_top_y:
+			return super_id
 	return 0
 
 # 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
@@ -281,10 +288,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var hdir: int = intent[1]
 	var incoming_attack_kind: int = s.ball_attack_kind
 	var incoming_guard_damage: int = s.ball_guard_damage
-	var opposing_drive_attack: bool = s.last_touch_team >= 0 \
+	var incoming_defense_class: int = s.ball_defense_class
+	var incoming_unblockable: bool = incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE
+	var opposing_attack: bool = s.last_touch_team >= 0 \
 		and s.last_touch_team != team \
+		and (incoming_attack_kind != SimStateScript.BALL_ATTACK_NONE \
+			or incoming_defense_class != Chars.DEFENSE_NONE)
+	var opposing_drive_attack: bool = opposing_attack \
 		and incoming_attack_kind != SimStateScript.BALL_ATTACK_NONE
-	var is_attack_return: bool = opposing_drive_attack \
+	var is_attack_return: bool = opposing_attack \
 		and intent_kind == INTENT_AIR_SPIKE
 	# 耐久力(ガード)システム: パワーボールを受けると耐久力が削れる。
 	# 静止した下レシーブ構えからのジャストレシーブだけが削りを無効化する。
@@ -297,15 +309,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
 		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
-	if special == Chars.SUPER_FLAME_ATTACK:
-		sweet = true  # 軌道・慣性・演出を通常のジャストアタック相当にする
+	if special != 0:
+		sweet = true  # 必殺技は芯位置によらず、成立すれば常に同じ技になる
 	if p.burnout_ticks > 0:
 		sweet = false
-	var just_receive: bool = opposing_drive_attack \
+	var just_receive: bool = opposing_attack \
 		and intent_kind == INTENT_GROUND_RECEIVE \
 		and sweet and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
-		and p.burnout_ticks == 0 and not incoming_flame
+		and p.burnout_ticks == 0 and not incoming_unblockable
 	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE \
 			and not just_receive:
 		_spend_drive(p, _drive_damage_for_attack(incoming_attack_kind, cfg), cfg)
@@ -332,17 +344,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	# 「アタックはまともに返せない」原作精神: 対処はジャスト受けかブロックのみ
 	var mangled := false
 	var flame_received := false
-	var flame_spike_return: bool = incoming_flame and intent_kind == INTENT_AIR_SPIKE
+	var flame_spike_return: bool = incoming_unblockable and intent_kind == INTENT_AIR_SPIKE
 	var opposing_power: bool = s.last_touch_team >= 0 and s.last_touch_team != team \
 		and s.ball_power == 1 and not flame_spike_return
-	var flame_touch: bool = incoming_flame and s.ball_power == 1 \
+	var unblockable_touch: bool = incoming_unblockable and s.ball_power == 1 \
 		and intent_kind != INTENT_AIR_SPIKE
-	if opposing_power or flame_touch:
+	if opposing_power or unblockable_touch:
 		if sweet:
-			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
-				# 炎球は芯で受けても防ぎ切れず、通常パワー球の2倍を通す。
-				p.guard -= _burnout_guard_damage(p, incoming_guard_damage * 2)
-				p.burn = BURN_TICKS
+			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
+				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
+				if incoming_flame:
+					p.burn = BURN_TICKS
 				flame_received = true
 				if p.guard <= 0:
 					p.stun = cfg.stun_ticks
@@ -355,9 +367,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
 			# 耐久力まで尽きたら本スタン(長い方が優先)
 			var guard_damage: int = incoming_guard_damage
-			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
-				guard_damage *= 2
-				p.burn = BURN_TICKS
+			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
+				if incoming_flame:
+					p.burn = BURN_TICKS
 				flame_received = true
 			guard_damage = _burnout_guard_damage(p, guard_damage)
 			p.guard -= guard_damage
@@ -383,8 +395,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	s.ball_power = 0
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	s.ball_guard_damage = 0
+	s.ball_defense_class = Chars.DEFENSE_NONE
 	if flame_received:
 		s.ball_flame = 0
+	if special != 0:
+		_spend_drive(p, int(Chars.super_def(special).gauge_cost), cfg)
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
 	var aim_pct: int = 100
 	if mangled:
@@ -418,6 +433,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 					toss_target_x(team, hdir, cfg), cfg)
 		if special == Chars.SUPER_GHOST_BALL:
 			s.ball_ghost = 1
+			var ghost_def: Dictionary = Chars.super_def(special)
+			s.ball_guard_damage = int(ghost_def.power)
+			s.ball_defense_class = int(ghost_def.defense_class)
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
@@ -482,10 +500,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if special == 0 and not is_attack_return:
 			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
 				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
-		s.ball_guard_damage = cfg.power_guard_damage_for_rank(
-			Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER)) if sweet else 0
+		if special != 0:
+			var special_def: Dictionary = Chars.super_def(special)
+			s.ball_guard_damage = int(special_def.power)
+			s.ball_defense_class = int(special_def.defense_class)
+		else:
+			s.ball_guard_damage = cfg.power_guard_damage_for_rank(
+				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER)) if sweet else 0
+			s.ball_defense_class = Chars.DEFENSE_NONE
 	else:
 		s.ball_guard_damage = 0
+		s.ball_defense_class = Chars.DEFENSE_NONE
 		# 空中ニュートラル段は横3種とも敵陣の前面/中央/後面へトスする。
 		var avy: int = -cfg.toss_fwd_vy
 		var avx: int = toss_aim_vx(s.ball_x, s.ball_y, avy,
@@ -565,9 +590,11 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		if dx * dx + dy_n * dy_n > rx * rx:
 			continue
 		var incoming_guard_damage: int = s.ball_guard_damage
+		var incoming_defense_class: int = s.ball_defense_class
 		_spend_drive(p, _drive_damage_for_attack(s.ball_attack_kind, cfg), cfg)
 		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 		s.ball_guard_damage = 0
+		s.ball_defense_class = Chars.DEFENSE_NONE
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 		if team == 0:
 			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
@@ -579,9 +606,10 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			var back_dir: int = -1 if team == 0 else 1
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
-			if s.ball_flame == 1:
-				p.guard -= _burnout_guard_damage(p, incoming_guard_damage * 2)
-				p.burn = BURN_TICKS
+			if incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE:
+				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
+				if s.ball_flame == 1:
+					p.burn = BURN_TICKS
 				s.ball_flame = 0
 				if p.guard <= 0:
 					p.stun = cfg.stun_ticks

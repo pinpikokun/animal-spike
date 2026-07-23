@@ -29,6 +29,9 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 		s.ball_power = 0
 	if hit_wall:
 		s.ball_flame = 0
+		if s.ball_defense_class != 0:
+			s.ball_guard_damage = 0
+			s.ball_defense_class = 0
 	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
@@ -66,6 +69,9 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 		# ネット下部は壁。来た側へ押し返す
 		if s.ball_x >= net_left and s.ball_x <= net_right:
 			s.ball_flame = 0
+			if s.ball_defense_class != 0:
+				s.ball_guard_damage = 0
+				s.ball_defense_class = 0
 			# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
 			if was_left:
 				s.ball_x = net_left - (s.ball_x - net_left)
@@ -84,6 +90,9 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 		# ネットから離れる向きへ押し出される=ポトリと落ちる緊張感
 		s.ball_y = cfg.net_top_y - cfg.ball_radius
 		s.ball_flame = 0
+		if s.ball_defense_class != 0:
+			s.ball_guard_damage = 0
+			s.ball_defense_class = 0
 		s.ball_vy = -s.ball_vy / 2
 		var out_dir: int = -1 if is_left else 1
 		if s.ball_vx * out_dir < cfg.net_repel / 2:
@@ -102,3 +111,5 @@ static func _clear_ghost_on_opponent_entry(s, is_left: bool) -> void:
 	var entered_team: int = 0 if is_left else 1
 	if s.ball_ghost == 1 and s.last_touch_team >= 0 and entered_team != s.last_touch_team:
 		s.ball_ghost = 0
+		s.ball_guard_damage = 0
+		s.ball_defense_class = 0

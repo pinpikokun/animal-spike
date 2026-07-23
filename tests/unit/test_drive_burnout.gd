@@ -26,7 +26,9 @@ func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	s.last_touch_team = 1 - SimState.team_of(i)
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40 if flame else \
+		cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE if flame else Chars.DEFENSE_NONE
 	s.ball_flame = 1 if flame else 0
 	HitResolver._apply_hit(s, i, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
@@ -64,8 +66,8 @@ func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	_arm_receive(s, cfg)
 	p.drive_gauge = 3000
 	_incoming_just(s, cfg, 0, true)
-	check_eq(p.guard, 50, "防御不能の炎球はPOWER C絶対値25の2倍を通す")
-	check_eq(p.drive_gauge, 1000, "防御不能の炎球はドライブ削りも通す")
+	check_eq(p.guard, 60, "防御不能系はカタログ固定40を通す")
+	check_eq(p.drive_gauge, 1000, "人工的なジャスト属性分だけドライブを削る")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
 
 func test_just_toss_does_not_heal_guard() -> void:
@@ -141,10 +143,11 @@ func test_burnout_guard_damage_is_one_and_half_including_flame() -> void:
 	s.last_touch_team = 1
 	s.ball_power = 1
 	s.ball_flame = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 25, "炎の50ダメージにもバーンアウト*3/2を適用")
+	check_eq(p.guard, 40, "必殺技40へバーンアウト*3/2を適用して60")
 
 func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

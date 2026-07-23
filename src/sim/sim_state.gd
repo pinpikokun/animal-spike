@@ -76,6 +76,7 @@ var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転�
 var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(耐久力を削る+熱色表示)
 var ball_attack_kind: int = BALL_ATTACK_NONE  # ドライブ削り用の飛来アタック種別
 var ball_guard_damage: int = 0
+var ball_defense_class: int = 0
 var ball_ghost: int = 0  # 1=相手コートへ渡るまで表示層で点滅するゴーストボール
 var ball_flame: int = 0  # 1=ガードダメージ強化と赤色表示を持つ燃えるアタック球
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
@@ -173,6 +174,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_power)
 	out.append(ball_attack_kind)
 	out.append(ball_guard_damage)
+	out.append(ball_defense_class)
 	out.append(ball_ghost)
 	out.append(ball_flame)
 	out.append(last_hit_tick)
@@ -254,6 +256,7 @@ func load_int_array(arr: Array) -> void:
 	ball_power = arr[k]; k += 1
 	ball_attack_kind = arr[k]; k += 1
 	ball_guard_damage = arr[k]; k += 1
+	ball_defense_class = arr[k]; k += 1
 	ball_ghost = arr[k]; k += 1
 	ball_flame = arr[k]; k += 1
 	last_hit_tick = arr[k]; k += 1

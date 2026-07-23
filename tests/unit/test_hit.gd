@@ -28,6 +28,7 @@ func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 	var ghost := _rally_world()
 	for w in [normal, ghost]:
 		w[0].players[0].char_id = Chars.CHAR_TOME
+		w[0].players[0].drive_gauge = w[1].drive_gauge_max
 		w[0].ball_x = w[0].players[0].x + FP.from_int(5)
 		w[0].ball_y = w[1].floor_y - FP.from_int(10)
 	Simulation.step(normal[0], [Simulation.IN_ACTION, 0, 0, 0], normal[1])
@@ -37,6 +38,10 @@ func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 	check_eq(ghost[0].players[0].on_ground, 1, "Dを技モディファイアとして押す間は跳ばない")
 	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常ニュートラルトスと横軌道が同一")
 	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常ニュートラルトスと縦軌道が同一")
+	check_eq(ghost[0].players[0].drive_gauge, ghost[1].drive_gauge_max - 1000,
+		"ゴーストボールはゲージ1本消費")
+	check_eq(ghost[0].ball_attack_kind, SimState.BALL_ATTACK_NONE,
+		"必殺技は相手ドライブを削らない")
 
 func test_up_without_ability_still_jumps() -> void:
 	var w := _rally_world()
@@ -63,6 +68,7 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	var cfg = w[1]
 	var p = s.players[0]
 	p.char_id = Chars.CHAR_TOME
+	p.drive_gauge = cfg.drive_gauge_max
 	p.on_ground = 0
 	p.y = cfg.net_top_y - FP.from_int(1)
 	s.ball_x = p.x + FP.from_int(2)
@@ -71,8 +77,29 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	check_eq(s.ball_power, 1, "高所の下+Dはパワーボール")
 	check_eq(s.ball_flame, 1, "高所の下+Dは燃えるアタック")
 
-	check_eq(s.ball_guard_damage, 25,
-		"TOMEのPOWER Cから炎球の基準削り25を記録")
+	check_eq(s.ball_guard_damage, 40, "カタログ固定威力40を記録")
+	check_eq(s.ball_defense_class, Chars.DEFENSE_UNBLOCKABLE,
+		"防御不能分類を飛来球へ記録")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max - 3000,
+		"殺人燃えるアタックはゲージ3本消費")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
+		"必殺技は相手ドライブを削らない")
+
+func test_flame_super_needs_three_stocks_and_falls_back_to_normal_spike() -> void:
+	var w := _rally_world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.char_id = Chars.CHAR_TOME
+	p.drive_gauge = 2999
+	p.on_ground = 0
+	p.y = cfg.net_top_y - FP.from_int(1)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
+	# 発動可否の境界値を自然回復と切り離し、入力時点の2999で判定する。
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
+	check_eq(s.ball_flame, 0, "3本未満では必殺技にならない")
+	check_eq(s.ball_guard_damage, 25, "通常ジャストスパイクへフォールバック")
+	check_eq(p.drive_gauge, 2499, "通常ジャスト分の0.5本だけ消費")
 
 func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
 	var w := _rally_world()
@@ -112,19 +139,20 @@ func test_tome_ability_input_out_of_range_does_nothing() -> void:
 	check_eq(s.touches, 0, "打球圏外のDは空振りしない")
 	check_eq(s.ball_ghost, 0, "打球圏外ではゴースト化しない")
 
-func test_flame_receive_deals_double_power_guard_damage() -> void:
+func test_flame_receive_deals_catalog_fixed_guard_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 50,
-		"燃える球のレシーブは通常パワー球の2倍ダメージ")
+	check_eq(s.players[0].guard, 60,
+		"燃える球のレシーブはカタログ固定40ダメージ")
 	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
 	check_eq(s.players[0].burn, 60, "炎被弾で60tick炎上")
 	check_eq(s.ball_flame, 0, "レシーブで炎球効果を消費")
@@ -136,21 +164,22 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	s.players[0].receive_stance = 1
 	s.players[0].drive_gauge = cfg.drive_gauge_max
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 50,
-		"炎球は芯でレシーブしても2倍ガードダメージ")
+	check_eq(s.players[0].guard, 60,
+		"防御不能系は芯でレシーブしても固定40ダメージ")
 	check_eq(s.players[0].burn, 60, "芯受けでも60tick炎上")
 	check_eq(s.ball_flame, 0, "芯レシーブでも炎球効果を消費")
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.players[0].burn, 59, "炎上残り時間は毎tick減衰")
 
-func test_flame_block_deals_double_power_guard_damage() -> void:
+func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -160,14 +189,15 @@ func test_flame_block_deals_double_power_guard_damage() -> void:
 	p.on_ground = 0
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(p.guard, 50,
-		"燃える球のブロックは通常パワー球の2倍ダメージ")
+	check_eq(p.guard, 60,
+		"燃える球のブロックはカタログ固定40ダメージ")
 	check_eq(p.burn, 60, "炎球ブロックでも60tick炎上")
 	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
 
@@ -178,12 +208,13 @@ func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
 	var teammate = s.players[1]
 	s.last_touch_team = 0
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = teammate.x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
-	check_eq(teammate.guard, 50, "味方の炎球でもPOWER C絶対値25の2倍ダメージ")
+	check_eq(teammate.guard, 60, "味方の炎球でもカタログ固定40ダメージ")
 	check_eq(teammate.burn, 60, "味方の炎球でも60tick炎上")
 	check_eq(s.ball_flame, 0, "味方接触で炎球効果を消費")
 
@@ -197,6 +228,8 @@ func test_air_attack_return_clears_flame_and_power() -> void:
 	p.y = cfg.floor_y - FP.from_int(60)
 	s.last_touch_team = 1
 	s.ball_power = 1
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = p.x + FP.from_int(2)
 	s.ball_y = p.y - FP.from_int(2)
