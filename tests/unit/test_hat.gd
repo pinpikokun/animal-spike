@@ -76,13 +76,21 @@ func test_hat_costs_one_drive_stock_without_guard_cost() -> void:
 		"帽子投げはドライブゲージ1本消費")
 	check_eq(p.guard, guard0, "帽子投げで耐久は消費しない")
 
-func test_hat_without_one_drive_stock_does_nothing() -> void:
+func test_hat_spends_partial_stock_and_starts_burnout() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	var p = s.players[1]
 	p.drive_gauge = cfg.drive_gauge_stock / 2
 	var guard0: int = p.guard
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
-	check_eq(p.throw, 0, "ゲージ1本未満では溜めも始まらない")
-	check(_cap(s) == null, "帽子は出ない")
-	check_eq(p.guard, guard0, "不発時も耐久は変化しない")
-	check_eq(p.stun, 0, "ゲージ不足でスタンしない")
+	check(p.throw > 0, "残量が1以上なら1本未満でも帽子投げ発動")
+	check_eq(p.drive_gauge, 0, "残量を全消費")
+	check(p.burnout_ticks > 0, "使い切ってバーンアウト突入")
+	check(s.hit_freeze > 0, "バーンアウト突入瞬間にヒットストップ")
+	check_eq(p.guard, guard0, "使い切り発動でも耐久は変化しない")
+
+func test_hat_at_zero_drive_does_nothing() -> void:
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	var p = s.players[1]
+	p.drive_gauge = 0
+	Sim._update_hat(s, [SimInput.IN_ABILITY1, 0, 0, 0], cfg)
+	check_eq(p.throw, 0, "ゲージ0では帽子投げ不発")

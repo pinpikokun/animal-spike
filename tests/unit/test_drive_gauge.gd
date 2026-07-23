@@ -55,9 +55,9 @@ func test_drive_gauge_recovers_only_during_rally() -> void:
 		Simulation._update_drive_recovery(s, cfg)
 	check(p.drive_gauge > cfg.drive_gauge_max - cfg.drive_gauge_stock,
 		"ラリー中は整数端数を使って毎tick段階的に回復")
-	check(p.drive_gauge < cfg.drive_gauge_max, "180tick未満では1本分に届かない")
+	check(p.drive_gauge < cfg.drive_gauge_max, "240tick未満では1本分に届かない")
 	Simulation._update_drive_recovery(s, cfg)
-	check_eq(p.drive_gauge, cfg.drive_gauge_max, "ラリー180tickで1本回復")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max, "ラリー240tickで1本回復")
 	check_eq(p.drive_recovery_progress, 0, "満タン時は回復端数を残さない")
 
 func test_normal_attack_shaves_receiver_one_stock() -> void:

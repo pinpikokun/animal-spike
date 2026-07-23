@@ -161,7 +161,7 @@ func draw_hud(c: Control) -> void:
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)
 		# ドライブゲージ(水色): 既存の第2ゲージ枠を6本のセグメントとして使う。
 		var burnout: bool = p.burnout_ticks > 0
-		var burnout_dim: bool = burnout and (_state.tick / 6) % 2 == 0
+		var burnout_dim: bool = burnout and (_state.tick / 5) % 2 == 0
 		var drive_bg := Color(0.3, 0.3, 0.32, 0.45) \
 			if burnout_dim else Color(0.22, 0.22, 0.24, 0.9) \
 			if burnout else Color(0.15, 0.15, 0.2, 0.9)
@@ -183,3 +183,11 @@ func draw_hud(c: Control) -> void:
 			c.draw_rect(Rect2(segment_x, PANEL_Y + 13.0, segment_w, 7.0),
 				Color(0.4, 0.4, 0.42) if burnout else Color(0.35, 0.65, 0.85),
 				false, 1.0)
+		if burnout:
+			var alert := Color(1.0, 0.18, 0.12) if burnout_dim \
+				else Color(0.65, 0.04, 0.03)
+			c.draw_rect(Rect2(bar_x - 1.0, PANEL_Y + 12.0, bar_w + 2.0, 9.0),
+				alert, false, 2.0)
+			c.draw_string(ThemeDB.fallback_font,
+				Vector2(bar_x, PANEL_Y + 20.0), "BURNOUT",
+				HORIZONTAL_ALIGNMENT_CENTER, bar_w, 8, alert)

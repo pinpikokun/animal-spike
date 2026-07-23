@@ -114,6 +114,9 @@ static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
 	_update_drive_recovery(state, cfg)
+	var burnout_before: Array[int] = []
+	for p in state.players:
+		burnout_before.append(p.burnout_ticks)
 	# ヒットストップ: パワーボール成立や気絶の瞬間、数tick世界が止まる(重さの演出)。
 	# tickは進める(ネットコードの入力消費と1対1を保つ)が物理・入力は凍結
 	if state.hit_freeze > 0:
@@ -185,6 +188,12 @@ static func step(state, inputs: Array[int], cfg) -> void:
 		# 勝敗確定後もキャラの移動・ジャンプは生かす
 		_step_players_and_hits(state, inputs, cfg)
 		BallPhysics._step_ball_loose(state, cfg)
+	_apply_burnout_entry_feedback(state, burnout_before)
+
+static func _apply_burnout_entry_feedback(state, burnout_before: Array[int]) -> void:
+	for i in state.players.size():
+		if burnout_before[i] == 0 and state.players[i].burnout_ticks > 0:
+			state.hit_freeze = maxi(state.hit_freeze, 4)
 
 static func _update_drive_recovery(state, cfg) -> void:
 	for p in state.players:
@@ -262,8 +271,8 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 				and p.stun == 0 and p.flinch == 0 and p.burnout_ticks == 0 \
 				and p.hip == 0 and p.quake_stun == 0 \
 				and ent_find(state, KIND_CAP) < 0:
-			if p.drive_gauge >= cfg.drive_gauge_stock:
-				p.drive_gauge -= cfg.drive_gauge_stock
+			if p.drive_gauge > 0:
+				p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock, 0)
 				if p.drive_gauge == 0:
 					p.burnout_ticks = cfg.burnout_recovery_ticks
 					p.drive_recovery_progress = 0

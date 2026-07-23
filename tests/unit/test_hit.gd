@@ -85,7 +85,7 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"必殺技は相手ドライブを削らない")
 
-func test_flame_super_needs_three_stocks_and_falls_back_to_normal_spike() -> void:
+func test_flame_super_spends_all_remaining_drive_and_starts_burnout() -> void:
 	var w := _rally_world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.char_id = Chars.CHAR_TOME
@@ -94,12 +94,26 @@ func test_flame_super_needs_three_stocks_and_falls_back_to_normal_spike() -> voi
 	p.y = cfg.net_top_y - FP.from_int(1)
 	s.ball_x = p.x + FP.from_int(2)
 	s.ball_y = p.y - FP.from_int(2)
-	# 発動可否の境界値を自然回復と切り離し、入力時点の2999で判定する。
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
-	check_eq(s.ball_flame, 0, "3本未満では必殺技にならない")
+	check_eq(s.ball_flame, 1, "残量が1以上なら3本未満でも必殺技になる")
+	check_eq(s.ball_guard_damage, 40, "使い切り発動でも固定威力40")
+	check_eq(p.drive_gauge, 0, "不足分を問わず残量を全消費")
+	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks, "使い切ってバーンアウト突入")
+
+func test_flame_super_at_zero_drive_falls_back_to_normal_spike() -> void:
+	var w := _rally_world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.char_id = Chars.CHAR_TOME
+	p.drive_gauge = 0
+	p.on_ground = 0
+	p.y = cfg.net_top_y - FP.from_int(1)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
+	check_eq(s.ball_flame, 0, "ゲージ0では必殺技にならない")
 	check_eq(s.ball_guard_damage, 25, "通常ジャストスパイクへフォールバック")
-	check_eq(p.drive_gauge, 2499, "通常ジャスト分の0.5本だけ消費")
 
 func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
 	var w := _rally_world()
@@ -770,6 +784,22 @@ func test_edge_spike_is_normal() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_power, 0, "ズレたスパイクはパワーボールにならない")
 	check(s.ball_vy <= cfg.spike_steep_vy + cfg.gravity, "ズレたスパイクは通常威力")
+
+func test_sweet_boundary_is_forty_five_percent() -> void:
+	var inside := _rally_world(); var si = inside[0]; var cfg = inside[1]
+	var pi = si.players[0]
+	pi.on_ground = 0
+	var sweet_r: int = cfg.player_reach * 45 / 100
+	HitResolver._apply_hit(si, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN, sweet_r * sweet_r)
+	check_eq(si.ball_power, 1, "45%境界内はジャスト")
+	var outside := _rally_world(); var so = outside[0]
+	var po = so.players[0]
+	po.on_ground = 0
+	var old_window_r: int = cfg.player_reach * 50 / 100
+	HitResolver._apply_hit(so, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN, old_window_r * old_window_r)
+	check_eq(so.ball_power, 0, "旧45-60%帯は通常アタック")
 
 func test_spike_reflects_incoming_inertia() -> void:
 	# 空中アタックにも慣性反射: 上がり際(上昇中)のボールを叩くと反発が乗って

@@ -67,14 +67,13 @@ func test_no_throw_without_ability_flag() -> void:
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_ABILITY1), "能力なしは投げない")
 
-func test_no_throw_on_low_drive_gauge() -> void:
-	# 投げた後にもう1回ぶんのドライブが残らないなら温存する
+func test_cpu_can_throw_with_last_drive_point() -> void:
 	var w := _hat_scene()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[1].drive_gauge = cfg.drive_gauge_stock * 2 - 1
+	s.players[1].drive_gauge = 1
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_ABILITY1), "ドライブゲージ余力なしは投げない")
+	check(input & Simulation.IN_ABILITY1, "CPUも残量1以上なら使い切り発動できる")
 
 func test_no_throw_at_own_team_ball() -> void:
 	# 味方が触った球の間に投げても敵の妨害にならない(自陣の組み立て時間を潰すだけ)

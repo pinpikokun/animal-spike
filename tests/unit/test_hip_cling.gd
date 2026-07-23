@@ -3,6 +3,7 @@ const Cfg := preload("res://src/sim/sim_config.gd")
 const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
+const PlayerMovement := preload("res://src/sim/player_movement.gd")
 
 func _rally():
 	var cfg = Cfg.new()
@@ -64,14 +65,26 @@ func test_hip_needs_ability() -> void:
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
 	check_eq(s.players[0].hip, 0, "CA_HIP無しはヒップ不可")
 
-func test_hip_needs_two_drive_stocks() -> void:
+func test_hip_spends_last_stock_and_starts_burnout() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	var p = s.players[1]
 	p.y = cfg.floor_y - (20 << 16)
 	p.on_ground = 0
 	p.drive_gauge = cfg.drive_gauge_stock
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
-	check_eq(p.hip, 0, "ゲージ2本未満ではヒップアタック不発")
+	check(p.hip > 0, "残量が1以上なら2本未満でもヒップアタック発動")
+	check_eq(p.drive_gauge, 0, "ヒップで残量を全消費")
+	check(p.burnout_ticks > 0, "使い切ってバーンアウト突入")
+
+func test_hip_at_zero_drive_does_nothing() -> void:
+	var w = _rally(); var s = w[0]; var cfg = w[1]
+	var p = s.players[1]
+	p.y = cfg.floor_y - (20 << 16)
+	p.on_ground = 0
+	p.drive_gauge = 0
+	PlayerMovement._step_player(p,
+		SimInput.IN_DOWN | SimInput.IN_ABILITY1, cfg, 0)
+	check_eq(p.hip, 0, "ゲージ0ではヒップアタック不発")
 
 func test_hip_quake_stops_everyone_for_configured_ticks() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]

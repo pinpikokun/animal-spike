@@ -20,12 +20,13 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.deuce, true, "デュース有")
 	check_eq(cfg.spike_normal_pct, 80, "通常アタック速度80%")
 	check_eq(cfg.spike_power_pct, 110, "ジャストアタック速度110%")
+	check_eq(cfg.spike_sweet_pct, 45, "ジャスト判定はリーチ45%以内")
 
 func test_drive_gauge_rules_loaded() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")
 	check_eq(cfg.drive_gauge_max, 6000, "ドライブゲージ6本満タン")
-	check_eq(cfg.drive_recovery_ticks_per_stock, 180, "自然回復は1本180tick")
+	check_eq(cfg.drive_recovery_ticks_per_stock, 240, "自然回復は1本240tick")
 	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
 	check_eq(cfg.hip_quake_stun_ticks, 6, "ヒップ着地地震の全員硬直は6tick")
 

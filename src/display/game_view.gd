@@ -490,12 +490,15 @@ func _sync_sprites() -> void:
 		# 被弾直後は白/赤の高速点滅(ダメージフラッシュ)。その後スタン中は薄い赤み。
 		# 頭上の渦巻きはFxLayerが描く
 		if p.just_receive_flash > 0:
-			spr.modulate = Color.WHITE if p.just_receive_flash % 2 == 0 \
-				else Color(0.25, 0.9, 1.0)
+			var just_t := clampf(float(p.just_receive_flash) / 30.0, 0.0, 1.0)
+			spr.modulate = Color.WHITE.lerp(Color(0.20, 0.75, 1.0), 1.0 - just_t)
 		elif _flash[i] > 0:
 			_flash[i] -= 1
 			spr.modulate = Color.WHITE if (_flash[i] / 2) % 2 == 0 \
 				else Color(1.0, 0.3, 0.3)
+		elif p.burnout_ticks > 0:
+			spr.modulate = Color(0.72, 0.72, 0.76) \
+				if (state.tick / 5) % 2 == 0 else Color(0.38, 0.38, 0.42)
 		elif p.burn > 0 and not (cid in [Chars.CHAR_TOME, Chars.CHAR_HITO,
 				Chars.CHAR_PIYO, Chars.CHAR_UME, Chars.CHAR_CARBY, Chars.CHAR_DUO,
 				Chars.CHAR_SEC1, Chars.CHAR_SEC2]):
@@ -612,6 +615,30 @@ func draw_fx(c: CanvasItem) -> void:
 		if e["k"] == "kiran":
 			continue
 		FxParticles.draw_opaque(c, e["k"], e["p"], e["d"], e["iner"], e["f0"], f, ground)
+	_draw_drive_feedback(c)
+
+func _draw_drive_feedback(c: CanvasItem) -> void:
+	# simカウンタだけから導出するため、ロールバック後も同じtickは同じ表示になる。
+	var just_screen_flash: bool = false
+	var burnout_screen_flash: bool = false
+	for p in state.players:
+		just_screen_flash = just_screen_flash or p.just_receive_flash >= 29
+		burnout_screen_flash = burnout_screen_flash \
+			or p.burnout_ticks > cfg.burnout_recovery_ticks - 2
+	var screen_rect := Rect2(-position, Vector2(640.0, 360.0))
+	if burnout_screen_flash:
+		c.draw_rect(screen_rect, Color(0.75, 0.08, 0.08, 0.38))
+	if just_screen_flash:
+		c.draw_rect(screen_rect, Color(1.0, 1.0, 1.0, 0.58))
+	var font := ThemeDB.fallback_font
+	for i in state.players.size():
+		var p = state.players[i]
+		if p.just_receive_flash <= 0:
+			continue
+		var pos := ViewTransform.pos_of(p) + _depth_offset(i) + Vector2(-24.0, -42.0)
+		var alpha := clampf(float(p.just_receive_flash) / 12.0, 0.35, 1.0)
+		c.draw_string(font, pos, "JUST!", HORIZONTAL_ALIGNMENT_CENTER, 48.0, 14,
+			Color(0.65, 0.95, 1.0, alpha))
 
 func draw_fx_glow(c: CanvasItem) -> void:
 	# 加算合成レイヤー: 発光する要素(火花)。sim状態から導出でロールバック安全

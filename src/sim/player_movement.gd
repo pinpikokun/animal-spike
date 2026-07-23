@@ -194,9 +194,9 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 			and (input & IN_ABILITY1) != 0 \
 			and Chars.has_ability(p.char_id, Chars.CA_HIP) \
 			and p.burnout_ticks == 0 \
-			and p.drive_gauge >= cfg.drive_gauge_stock * 2
+			and p.drive_gauge > 0
 	if p.hip == 0 and want_hip:
-		p.drive_gauge -= cfg.drive_gauge_stock * 2
+		p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock * 2, 0)
 		if p.drive_gauge == 0:
 			p.burnout_ticks = cfg.burnout_recovery_ticks
 			p.drive_recovery_progress = 0

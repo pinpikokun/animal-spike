@@ -551,8 +551,8 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 	if p.has_hat != 1 or p.throw != 0 or _cap_exists(s) or p.on_ground != 1 \
 			or p.burnout_ticks > 0:
 		return 0
-	# 投げた後にもう1回ぶんのドライブが残らないなら温存する。
-	if p.drive_gauge < cfg.drive_gauge_stock * 2:
+	# スト6式使い切り: CPUも残量1以上なら最後の一手として発動できる。
+	if p.drive_gauge <= 0:
 		return 0
 	# サーブ打球の飛行中は場が動く前=無駄撃ちになるので投げない
 	if s.serve_flight != 0:

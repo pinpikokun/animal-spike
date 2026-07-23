@@ -178,7 +178,8 @@ static func _special_for_input(p, input: int, cfg) -> int:
 		if not Chars.has_super(p.char_id, super_id):
 			continue
 		var entry: Dictionary = Chars.super_def(super_id)
-		if p.drive_gauge < int(entry.gauge_cost):
+		# スト6式使い切り: 1でも残っていれば発動し、コスト超過分は下限0へ丸める。
+		if p.drive_gauge <= 0:
 			continue
 		var condition: int = int(entry.condition)
 		if condition == Chars.CONDITION_GROUND_UP_ABILITY \
@@ -322,9 +323,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			and not just_receive:
 		_spend_drive(p, _drive_damage_for_attack(incoming_attack_kind, cfg), cfg)
 	if just_receive:
-		p.just_receive_flash = 8
+		p.just_receive_flash = 30
 		p.just_receive_event += 1
-		s.hit_freeze = maxi(s.hit_freeze, 5)
+		s.hit_freeze = maxi(s.hit_freeze, 10)
 	if intent_kind == INTENT_GROUND_RECEIVE and not just_receive \
 			and not incoming_flame:
 		sweet = false

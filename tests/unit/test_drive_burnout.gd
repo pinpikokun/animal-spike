@@ -42,8 +42,9 @@ func test_just_receive_from_stance_nullifies_drive_and_guard_without_healing() -
 	_incoming_just(s, cfg)
 	check_eq(p.guard, 40, "ジャストレシーブはガード削りを無効化し回復もしない")
 	check_eq(p.drive_gauge, 3000, "ジャストレシーブはドライブ削りを無効化し回復もしない")
-	check(p.just_receive_flash > 0, "専用フラッシュ用カウンタ")
+	check_eq(p.just_receive_flash, 30, "JUST表示と本体発光を約30tick維持")
 	check_eq(p.just_receive_event, 1, "専用SE用イベント番号")
+	check_eq(s.hit_freeze, 10, "ジャストレシーブのヒットストップは10tick")
 	check(s.hit_freeze > 0, "専用ヒットストップ")
 
 func test_moving_receive_does_not_trigger_just_receive() -> void:
