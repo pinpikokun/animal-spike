@@ -24,10 +24,10 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != c.state_hash(), "プレイヤー差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick(1) + プレイヤー4体x33(quake_stunを含む)
-	# + 全体29(hip_quake_eventを含む) + エンティティ8スロットx8欄
-	# 1 + 4x33 + 29 + 8x8 = 226
-	check_eq(SimState.new().to_int_array().size(), 226,
+	# tick(1) + プレイヤー4体x35(気絶連打状態を含む)
+	# + 全体30(ball_guard_damageを含む) + エンティティ8スロットx8欄
+	# 1 + 4x35 + 30 + 8x8 = 235
+	check_eq(SimState.new().to_int_array().size(), 235,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -49,7 +49,10 @@ func test_load_int_array_roundtrip() -> void:
 	a.players[2].just_receive_event = 11
 	a.players[2].burnout_ticks = 456
 	a.players[2].quake_stun = 5
+	a.players[2].stun_action_held = 1
+	a.players[2].stun_mash_event = 4
 	a.hip_quake_event = 9
+	a.ball_guard_damage = 35
 	a.players[3].hit_cooldown = 5
 	var b = SimState.new()
 	b.load_int_array(a.to_int_array())
@@ -63,7 +66,10 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.players[2].just_receive_event, 11, "ジャストレシーブ演出イベントの復元")
 	check_eq(b.players[2].burnout_ticks, 456, "バーンアウト残りtickの復元")
 	check_eq(b.players[2].quake_stun, 5, "地震硬直残りtickの復元")
+	check_eq(b.players[2].stun_action_held, 1, "気絶連打入力ラッチの復元")
+	check_eq(b.players[2].stun_mash_event, 4, "気絶連打演出イベントの復元")
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
+	check_eq(b.ball_guard_damage, 35, "飛来球の絶対ガード削り値の復元")
 	check_eq(b.tick, 123, "tickの復元")
 	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
 	check_eq(b.ball_flame, 1, "炎状態の復元")

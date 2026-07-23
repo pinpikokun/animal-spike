@@ -99,8 +99,6 @@ static func stat(char_id: int, key: String) -> int:
 			return Profile.speed_pct(Profile.rank(char_id, Profile.ABILITY_SPEED))
 		"slide":
 			return Profile.brake_distance_pct(Profile.rank(char_id, Profile.ABILITY_BRAKE))
-		"guard_max":
-			return Profile.guard_pct(Profile.rank(char_id, Profile.ABILITY_GUARD))
 		"weight":
 			return Profile.weight_pct(char_id)
 	var fallback: int = 0 if key.begins_with("sc_") else 100

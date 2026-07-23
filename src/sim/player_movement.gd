@@ -42,6 +42,7 @@ static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 	return FP.from_int(height_px * 2) / den
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
+	var action_down: int = 1 if (input & IN_ACTION) != 0 else 0
 	if p.burn > 0:
 		p.burn -= 1
 	if p.quake_stun > 0:
@@ -83,7 +84,13 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
 	if p.stun > 0:
 		p.stun -= 1
+		if action_down == 1 and p.stun_action_held == 0:
+			p.stun = maxi(p.stun - cfg.stun_mash_bonus, 0)
+			p.stun_mash_event += 1
+		p.stun_action_held = action_down
 		input = 0
+	else:
+		p.stun_action_held = action_down
 	var in_dir: int = 0
 	if input & IN_LEFT:
 		in_dir -= 1

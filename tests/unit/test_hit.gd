@@ -71,6 +71,9 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	check_eq(s.ball_power, 1, "高所の下+Dはパワーボール")
 	check_eq(s.ball_flame, 1, "高所の下+Dは燃えるアタック")
 
+	check_eq(s.ball_guard_damage, 25,
+		"TOMEのPOWER Cから炎球の基準削り25を記録")
+
 func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
 	var w := _rally_world()
 	var s = w[0]
@@ -113,14 +116,14 @@ func test_flame_receive_deals_double_power_guard_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.guard_dmg_power = 10  # ガードブレイク後の全快を避け、減少量そのものを測る
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 80,
+	check_eq(s.players[0].guard, 50,
 		"燃える球のレシーブは通常パワー球の2倍ダメージ")
 	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
 	check_eq(s.players[0].burn, 60, "炎被弾で60tick炎上")
@@ -130,17 +133,17 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.guard_dmg_power = 10
 	s.players[0].receive_stance = 1
 	s.players[0].drive_gauge = cfg.drive_gauge_max
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 80,
+	check_eq(s.players[0].guard, 50,
 		"炎球は芯でレシーブしても2倍ガードダメージ")
 	check_eq(s.players[0].burn, 60, "芯受けでも60tick炎上")
 	check_eq(s.ball_flame, 0, "芯レシーブでも炎球効果を消費")
@@ -151,19 +154,19 @@ func test_flame_block_deals_double_power_guard_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.guard_dmg_power = 10
 	var p = s.players[0]
 	p.x = cfg.net_x - FP.from_int(30)
 	p.y = cfg.floor_y - FP.from_int(140)
 	p.on_ground = 0
 	s.last_touch_team = 1
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_flame = 1
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(p.guard, 80,
+	check_eq(p.guard, 50,
 		"燃える球のブロックは通常パワー球の2倍ダメージ")
 	check_eq(p.burn, 60, "炎球ブロックでも60tick炎上")
 	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
@@ -172,15 +175,15 @@ func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	cfg.guard_dmg_power = 10
 	var teammate = s.players[1]
 	s.last_touch_team = 0
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_flame = 1
 	s.ball_x = teammate.x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
-	check_eq(teammate.guard, 80, "味方の炎球でも2倍ガードダメージ")
+	check_eq(teammate.guard, 50, "味方の炎球でもPOWER C絶対値25の2倍ダメージ")
 	check_eq(teammate.burn, 60, "味方の炎球でも60tick炎上")
 	check_eq(s.ball_flame, 0, "味方接触で炎球効果を消費")
 
@@ -891,13 +894,14 @@ func test_receiving_power_ball_damages_guard() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
-	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_power, "耐久力が削れる")
+	check_eq(s.players[0].guard, 75, "POWER Cの絶対値25だけ耐久力が削れる")
 	# 芯を外してパワーボールを受けたら必ずよろけ(小スタン)
 	check(s.players[0].flinch > 0, "しりもちリアクションが入る")
 	check(s.players[0].vx < 0, "後ろ(左)へノックバック")
@@ -908,8 +912,9 @@ func test_guard_zero_causes_stun_and_refill() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[0].guard = cfg.guard_dmg_power  # あと1発で尽きる
+	s.players[0].guard = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
@@ -977,6 +982,7 @@ func test_stunned_player_cannot_hit_or_move() -> void:
 	var cfg = w[1]
 	var p = s.players[0]
 	p.stun = 10
+	p.stun_action_held = 1  # 押下済みの保持入力。新規エッジではない
 	var x0: int = p.x
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)

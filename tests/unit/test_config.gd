@@ -29,6 +29,17 @@ func test_drive_gauge_rules_loaded() -> void:
 	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
 	check_eq(cfg.hip_quake_stun_ticks, 6, "ヒップ着地地震の全員硬直は6tick")
 
+func test_absolute_damage_and_stun_mash_rules_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.guard_max_by_rank, [120, 110, 100, 90, 80],
+		"GUARD A-E絶対値")
+	check_eq(cfg.power_guard_damage_by_rank, [35, 30, 25, 20, 15],
+		"POWER A-Eジャスト削り絶対値")
+	check_eq(cfg.stun_mash_bonus, 3, "気絶中の押下エッジは追加3tick短縮")
+	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
+	var raw: Dictionary = JSON.parse_string(file.get_as_text())
+	check(not raw.has("guard_dmg_power"), "旧固定削りキーは撤去")
+
 func test_guard_heal_just_is_removed() -> void:
 	var cfg = SimConfig.new()
 	check(not ("guard_heal_just" in cfg), "回復全廃により設定プロパティを残さない")

@@ -348,6 +348,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_spin = 0
 	s.ball_power = 0
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
+	s.ball_guard_damage = 0
 	s.ball_ghost = 0
 	s.ball_flame = 0
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
@@ -360,6 +361,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	for i in s.players.size():
 		var p = s.players[i]
 		p.stun = 0
+		p.stun_action_held = 0
 		p.burn = 0
 		p.dive = 0
 		p.brake = 0
@@ -401,8 +403,9 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.on_ground = 1
 		p.hit_cooldown = 0
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
-		# 耐久値%: 基準100にキャラ%を掛ける(ゴリラ=高耐久などの器)
-		p.guard_max = 100 * Chars.stat(p.char_id, "guard_max") / 100
+		# GUARDランクをrules.jsonの絶対値表へ直接写像する。
+		p.guard_max = cfg.guard_max_for_rank(
+			Chars.rank(p.char_id, Chars.Profile.ABILITY_GUARD))
 		p.guard = p.guard_max
 		p.drive_gauge = cfg.drive_gauge_max
 		p.drive_recovery_progress = 0
@@ -411,7 +414,10 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.just_receive_event = 0
 		p.burnout_ticks = 0
 		p.quake_stun = 0
+		p.stun_action_held = 0
+		p.stun_mash_event = 0
 	s.hip_quake_event = 0
+	s.ball_guard_damage = 0
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

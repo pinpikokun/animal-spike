@@ -44,6 +44,7 @@ var _prev_vx: Array[int] = [0, 0, 0, 0]
 var _prev_cd: Array[int] = [0, 0, 0, 0]
 var _prev_flinch: Array[int] = [0, 0, 0, 0]  # しりもち検知用(0→>0で砂煙)
 var _prev_stun: Array[int] = [0, 0, 0, 0]
+var _prev_stun_mash_event: Array[int] = [0, 0, 0, 0]
 var _prev_just_receive_event: Array[int] = [0, 0, 0, 0]
 var _prev_hip_quake_event: int = 0
 var _prev_power := 0
@@ -245,6 +246,10 @@ func _detect_fx() -> void:
 	_prune_fx(f)
 	for i in state.players.size():
 		var p = state.players[i]
+		if p.stun_mash_event > _prev_stun_mash_event[i]:
+			_shake_amp = maxf(_shake_amp, 2.2)
+			_flash[i] = maxi(_flash[i], 3)
+		_prev_stun_mash_event[i] = p.stun_mash_event
 		var foot := ViewTransform.pos_of(p) + _depth_offset(i)
 		var pvel := Vector2(ViewTransform.to_px(p.vx), ViewTransform.to_px(p.vy))
 		if _prev_ground[i] == 1 and p.on_ground == 0:

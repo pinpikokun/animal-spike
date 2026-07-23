@@ -4,6 +4,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _rally_world() -> Array:
 	var cfg = SimConfig.new()
@@ -95,9 +96,10 @@ func test_guard_break_flies_to_wall() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.guard = cfg.guard_dmg_power  # 次の一発で0=気絶
+	p.guard = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_x = p.x + FP.from_int(30)  # スイート外
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(600) / cfg.tick_rate

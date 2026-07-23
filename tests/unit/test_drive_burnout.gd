@@ -26,6 +26,7 @@ func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	s.last_touch_team = 1 - SimState.team_of(i)
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_flame = 1 if flame else 0
 	HitResolver._apply_hit(s, i, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
@@ -59,12 +60,11 @@ func test_moving_receive_does_not_trigger_just_receive() -> void:
 func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	cfg.guard_dmg_power = 10
 	p.guard = 100
 	_arm_receive(s, cfg)
 	p.drive_gauge = 3000
 	_incoming_just(s, cfg, 0, true)
-	check_eq(p.guard, 80, "防御不能の炎球はガード削りを通す")
+	check_eq(p.guard, 50, "防御不能の炎球はPOWER C絶対値25の2倍を通す")
 	check_eq(p.drive_gauge, 1000, "防御不能の炎球はドライブ削りも通す")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
 
@@ -129,21 +129,22 @@ func test_drive_reaching_zero_starts_burnout() -> void:
 func test_burnout_guard_damage_is_one_and_half_including_flame() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	cfg.guard_dmg_power = 10
 	p.burnout_ticks = cfg.burnout_recovery_ticks
 	p.guard = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 85, "バーンアウト中の被ガードダメージは10*3/2")
+	check_eq(p.guard, 63, "POWER C絶対値25へバーンアウト*3/2を適用")
 	p.guard = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
 	s.ball_flame = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 70, "炎の必殺ダメージ20にも1.5倍を適用")
+	check_eq(p.guard, 25, "炎の50ダメージにもバーンアウト*3/2を適用")
 
 func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

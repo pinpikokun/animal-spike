@@ -5,18 +5,17 @@ const Chars := preload("res://src/sim/chars.gd")
 
 func test_rank_tables_match_accepted_values() -> void:
 	var expected := {
-		Profile.RANK_A: [150, 155, 120, 60, 150],
-		Profile.RANK_B: [125, 145, 110, 80, 125],
-		Profile.RANK_C: [100, 135, 100, 100, 100],
-		Profile.RANK_D: [75, 120, 90, 125, 75],
-		Profile.RANK_E: [50, 100, 80, 150, 50],
+		Profile.RANK_A: [150, 155, 120, 60],
+		Profile.RANK_B: [125, 145, 110, 80],
+		Profile.RANK_C: [100, 135, 100, 100],
+		Profile.RANK_D: [75, 120, 90, 125],
+		Profile.RANK_E: [50, 100, 80, 150],
 	}
 	for rank in expected:
 		check_eq(Profile.power_pct(rank), expected[rank][0], "パワー%s" % Profile.rank_name(rank))
 		check_eq(Profile.jump_height_px(rank), expected[rank][1], "ジャンプ%s" % Profile.rank_name(rank))
 		check_eq(Profile.speed_pct(rank), expected[rank][2], "スピード%s" % Profile.rank_name(rank))
 		check_eq(Profile.brake_distance_pct(rank), expected[rank][3], "ブレーキ%s" % Profile.rank_name(rank))
-		check_eq(Profile.guard_pct(rank), expected[rank][4], "ガード%s" % Profile.rank_name(rank))
 
 func test_selectable_roster_has_explicit_profile_and_standard_weight() -> void:
 	for cid in Chars.SELECTABLE:

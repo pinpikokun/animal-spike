@@ -21,7 +21,6 @@ const POWER_PCT: Array[int] = [150, 125, 100, 75, 50]
 const JUMP_HEIGHT_PX: Array[int] = [155, 145, 135, 120, 100]
 const SPEED_PCT: Array[int] = [120, 110, 100, 90, 80]
 const BRAKE_DISTANCE_PCT: Array[int] = [60, 80, 100, 125, 150]
-const GUARD_PCT: Array[int] = [150, 125, 100, 75, 50]
 const STANDARD_WEIGHT_PCT := 100
 
 const TRAIT_TOSS_GOOD := 0
@@ -133,9 +132,6 @@ static func speed_pct(value: int) -> int:
 
 static func brake_distance_pct(value: int) -> int:
 	return BRAKE_DISTANCE_PCT[clampi(value, RANK_A, RANK_E)]
-
-static func guard_pct(value: int) -> int:
-	return GUARD_PCT[clampi(value, RANK_A, RANK_E)]
 
 static func weight_pct(char_id: int) -> int:
 	var profile: Dictionary = PROFILES.get(char_id, {})

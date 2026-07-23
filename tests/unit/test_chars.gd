@@ -37,8 +37,6 @@ func test_rank_stats_feed_existing_physics_as_standard_values() -> void:
 			Chars.rank(cid, Chars.Profile.ABILITY_SPEED)), "スピードランクを物理%へ変換")
 		check_eq(Chars.stat(cid, "slide"), Chars.Profile.brake_distance_pct(
 			Chars.rank(cid, Chars.Profile.ABILITY_BRAKE)), "ブレーキランクを物理%へ変換")
-		check_eq(Chars.stat(cid, "guard_max"), Chars.Profile.guard_pct(
-			Chars.rank(cid, Chars.Profile.ABILITY_GUARD)), "ガードランクを物理%へ変換")
 		check_eq(Chars.stat(cid, "weight"), 100, "重量は標準100%")
 
 func test_original_character_ids_defs_names_and_visibility() -> void:

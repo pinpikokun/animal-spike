@@ -280,6 +280,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var intent_kind: int = intent[0]
 	var hdir: int = intent[1]
 	var incoming_attack_kind: int = s.ball_attack_kind
+	var incoming_guard_damage: int = s.ball_guard_damage
 	var opposing_drive_attack: bool = s.last_touch_team >= 0 \
 		and s.last_touch_team != team \
 		and incoming_attack_kind != SimStateScript.BALL_ATTACK_NONE
@@ -340,7 +341,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if sweet:
 			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
 				# 炎球は芯で受けても防ぎ切れず、通常パワー球の2倍を通す。
-				p.guard -= _burnout_guard_damage(p, cfg.guard_dmg_power * 2)
+				p.guard -= _burnout_guard_damage(p, incoming_guard_damage * 2)
 				p.burn = BURN_TICKS
 				flame_received = true
 				if p.guard <= 0:
@@ -353,7 +354,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			mangled = true
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
 			# 耐久力まで尽きたら本スタン(長い方が優先)
-			var guard_damage: int = cfg.guard_dmg_power
+			var guard_damage: int = incoming_guard_damage
 			if incoming_flame and intent_kind != INTENT_AIR_SPIKE:
 				guard_damage *= 2
 				p.burn = BURN_TICKS
@@ -381,6 +382,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				s.hit_freeze = maxi(s.hit_freeze, 3)
 	s.ball_power = 0
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
+	s.ball_guard_damage = 0
 	if flame_received:
 		s.ball_flame = 0
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
@@ -480,7 +482,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		if special == 0 and not is_attack_return:
 			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
 				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
+		s.ball_guard_damage = cfg.power_guard_damage_for_rank(
+			Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER)) if sweet else 0
 	else:
+		s.ball_guard_damage = 0
 		# 空中ニュートラル段は横3種とも敵陣の前面/中央/後面へトスする。
 		var avy: int = -cfg.toss_fwd_vy
 		var avx: int = toss_aim_vx(s.ball_x, s.ball_y, avy,
@@ -559,8 +564,10 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var dy_n: int = (s.ball_y - cy) * rx / ry
 		if dx * dx + dy_n * dy_n > rx * rx:
 			continue
+		var incoming_guard_damage: int = s.ball_guard_damage
 		_spend_drive(p, _drive_damage_for_attack(s.ball_attack_kind, cfg), cfg)
 		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
+		s.ball_guard_damage = 0
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 		if team == 0:
 			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
@@ -573,7 +580,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
 			if s.ball_flame == 1:
-				p.guard -= _burnout_guard_damage(p, cfg.guard_dmg_power * 2)
+				p.guard -= _burnout_guard_damage(p, incoming_guard_damage * 2)
 				p.burn = BURN_TICKS
 				s.ball_flame = 0
 				if p.guard <= 0:

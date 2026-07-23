@@ -54,8 +54,10 @@ var drive_recovery_ticks_per_stock: int
 var burnout_recovery_ticks: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
+var stun_mash_bonus: int
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
-var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
+var guard_max_by_rank: Array[int]
+var power_guard_damage_by_rank: Array[int]
 var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
@@ -160,13 +162,17 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if stun_ticks < 0:
 		_fail("stun_ticksは0以上であること")
 		return
+	stun_mash_bonus = _int_of(raw, "stun_mash_bonus")
+	if stun_mash_bonus < 0:
+		_fail("stun_mash_bonusは0以上であること")
+		return
 	stagger_ticks = _int_of(raw, "stagger_ticks")
 	if stagger_ticks < 0 or stagger_ticks > stun_ticks:
 		_fail("stagger_ticksは0..stun_ticksであること")
 		return
-	guard_dmg_power = _int_of(raw, "guard_dmg_power")
-	if guard_dmg_power < 0:
-		_fail("guard系の値は0以上であること")
+	guard_max_by_rank = _rank_table(raw, "guard_max_by_rank")
+	power_guard_damage_by_rank = _rank_table(raw, "power_guard_damage_by_rank")
+	if not valid:
 		return
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate
 	serve_vy = FP.from_int(_int_of(raw, "serve_vy_px_s")) / tick_rate
@@ -203,6 +209,32 @@ func _int_of(raw: Dictionary, key: String) -> int:
 		_fail("整数でない値がある: " + key)
 		return 0
 	return int(f)  # float-ok: 検証済みの整数値をintへ確定
+
+func _rank_table(raw: Dictionary, key: String) -> Array[int]:
+	var out: Array[int] = []
+	if not raw.has(key) or not (raw[key] is Array) or raw[key].size() != 5:
+		_fail(key + "はA-Eの5整数であること")
+		return out
+	for value in raw[key]:
+		var value_type: int = typeof(value)
+		if value_type == TYPE_INT:
+			out.append(int(value))
+			continue
+		if value_type != TYPE_FLOAT:
+			_fail(key + "はA-Eの5整数であること")
+			return out
+		var f: float = value  # float-ok: JSON数値境界で整数性を検証するため
+		if f != floor(f):  # float-ok: 小数部を持つ値はランク表へ通さない
+			_fail(key + "はA-Eの5整数であること")
+			return out
+		out.append(int(f))  # float-ok: 検証済みの整数値をintへ確定
+	return out
+
+func guard_max_for_rank(rank: int) -> int:
+	return guard_max_by_rank[clampi(rank, 0, 4)]
+
+func power_guard_damage_for_rank(rank: int) -> int:
+	return power_guard_damage_by_rank[clampi(rank, 0, 4)]
 
 func _fail(msg: String) -> void:
 	valid = false

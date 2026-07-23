@@ -35,6 +35,8 @@ func _hit_snapshot(on_ground: int, input: int, d2: int, vx: int, vy: int, power:
 	s.ball_vx = vx
 	s.ball_vy = vy
 	s.ball_power = power
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(
+		Chars.Profile.RANK_C) if power == 1 else 0
 	s.last_touch_team = 1 if power == 1 else -1
 	HitResolver._apply_hit(s, 0, cfg, input | Simulation.IN_ACTION, d2)
 	return [p.hit_kind, p.dive, s.ball_vx, s.ball_vy, s.ball_power, p.guard, p.flinch]
@@ -90,6 +92,7 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 
 func test_output_velocity_snapshot() -> void:
 	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)。2026-07-20設計会仕様
+	# 固定パワー球はPOWER Cの絶対削り25を持つ。2026-07-20設計会仕様
 	var w: Array = _world()
 	var cfg = w[1]
 	var near_d2 := FP.from_int(5) * FP.from_int(5)
@@ -110,7 +113,7 @@ func test_output_velocity_snapshot() -> void:
 		[0, 0, 1549926, 368094, 1, 100, 0],
 		[0, 0, 1500774, 305834, 0, 100, 0],
 		[0, 0, 429202, -749294, 0, 100, 0],
-		[1, 0, 805721, -170393, 0, 50, 24],
+		[1, 0, 805721, -170393, 0, 75, 24],
 	], "固定フィクスチャの整数出力速度")
 
 func test_collision_order_hit_move_net_block() -> void:
@@ -205,13 +208,13 @@ func _chain_hashes() -> Array[int]:
 	return out
 
 func test_hit_chain_second_golden() -> void:
-	# quake_stun/hip_quake_event追加+サーブ空振り失点化+帽子/ヒップのゲージ移行。2026-07-20設計会仕様
+	# ダメージ絶対値化(GUARD A120-E80/POWER削りA35-E15、ball_guard_damage直列化)+気絶連打短縮の意図的変更。2026-07-20設計会仕様
 	check_eq(_chain_hashes(), [
-		-738819714211133531,
-		1436719784522501552,
-		2833266482144677735,
-		7821693537724074451,
-		2619336923166810351,
-		-2685340279472032938,
-		316015267286196609,
+		-773743249995778516,
+		-8910254841086742480,
+		761851281342455623,
+		-7558422758639699053,
+		-9210107997301488593,
+		4968818077429255126,
+		2964129893181986241,
 	], "ジャスト→芯外し→気絶→ブロック→帽子の第2ゴールデン")
