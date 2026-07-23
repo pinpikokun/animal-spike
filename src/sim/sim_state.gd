@@ -59,6 +59,7 @@ class Player:
 	var just_receive_flash: int = 0
 	var just_receive_event: int = 0
 	var burnout_ticks: int = 0
+	var quake_stun: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
 	var cpu: int = 848543938514047
@@ -87,6 +88,7 @@ var hit_freeze: int = 0
 # スローモーションの残りtick。ジャストスマッシュ成立時に立ち、スロー中は3tickに
 # 1回だけ物理を進める(1/3速)。tick/入力は1:1で消費し続けるので決定論・ロールバック安全
 var slow_ticks: int = 0
+var hip_quake_event: int = 0
 var phase: int = PHASE_SERVE
 var serving_team: int = 0
 var score_l: int = 0
@@ -156,6 +158,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.just_receive_flash)
 		out.append(p.just_receive_event)
 		out.append(p.burnout_ticks)
+		out.append(p.quake_stun)
 		out.append(p.cpu)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -173,6 +176,7 @@ func to_int_array() -> Array[int]:
 	out.append(serve_flight)
 	out.append(hit_freeze)
 	out.append(slow_ticks)
+	out.append(hip_quake_event)
 	out.append(phase)
 	out.append(serving_team)
 	out.append(score_l)
@@ -232,6 +236,7 @@ func load_int_array(arr: Array) -> void:
 		p.just_receive_flash = arr[k]; k += 1
 		p.just_receive_event = arr[k]; k += 1
 		p.burnout_ticks = arr[k]; k += 1
+		p.quake_stun = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1
@@ -249,6 +254,7 @@ func load_int_array(arr: Array) -> void:
 	serve_flight = arr[k]; k += 1
 	hit_freeze = arr[k]; k += 1
 	slow_ticks = arr[k]; k += 1
+	hip_quake_event = arr[k]; k += 1
 	phase = arr[k]; k += 1
 	serving_team = arr[k]; k += 1
 	score_l = arr[k]; k += 1

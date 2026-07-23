@@ -44,6 +44,10 @@ static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.burn > 0:
 		p.burn -= 1
+	if p.quake_stun > 0:
+		p.quake_stun -= 1
+		p.vx = 0
+		return
 	# 帽子投げの溜め中: 入力を一切受け付けず、その場で凍結(空中なら浮いたまま)。
 	# 投げは強いがリスク=硬直を負う。溜め終了で_update_hatが帽子を発射する
 	if p.throw > 0:
@@ -177,13 +181,18 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
 	else:
 		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
-	# ヒップアタック(固有技CA_HIP): 空中+下(スペース無し)で発動。空中で静止して回転し、
+	# ヒップアタック(固有技CA_HIP): 空中で下+Dの明示入力により発動。
 	# その後まっすぐ急降下。帽子所持への相乗りは廃止(技として独立)
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \
-			and not (input & IN_ACTION) \
+			and (input & IN_ABILITY1) != 0 \
 			and Chars.has_ability(p.char_id, Chars.CA_HIP) \
-			and p.burnout_ticks == 0
+			and p.burnout_ticks == 0 \
+			and p.drive_gauge >= cfg.drive_gauge_stock * 2
 	if p.hip == 0 and want_hip:
+		p.drive_gauge -= cfg.drive_gauge_stock * 2
+		if p.drive_gauge == 0:
+			p.burnout_ticks = cfg.burnout_recovery_ticks
+			p.drive_recovery_progress = 0
 		p.hip = HIP_HOVER_TICKS
 	if p.hip > 0:
 		p.vx = 0

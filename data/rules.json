@@ -39,6 +39,7 @@
 	"drive_gauge_max": 6000,
 	"drive_recovery_ticks_per_stock": 180,
 	"burnout_recovery_ticks": 600,
+	"hip_quake_stun_ticks": 6,
 	"stun_ticks": 180,
 	"stagger_ticks": 30,
 	"guard_dmg_power": 50,

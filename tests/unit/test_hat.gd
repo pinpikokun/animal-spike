@@ -66,16 +66,23 @@ func test_cap_deflects_ball() -> void:
 func FP_from(v: int) -> int:
 	return v << 16
 
-func test_hat_costs_guard() -> void:
+func test_hat_costs_one_drive_stock_without_guard_cost() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	var g0 = s.players[1].guard
+	var p = s.players[1]
+	var guard0: int = p.guard
+	var drive0: int = p.drive_gauge
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
-	check(s.players[1].guard < g0, "帽子投げで耐久を消費 guard=%d" % s.players[1].guard)
+	check_eq(p.drive_gauge, drive0 - cfg.drive_gauge_stock,
+		"帽子投げはドライブゲージ1本消費")
+	check_eq(p.guard, guard0, "帽子投げで耐久は消費しない")
 
-func test_hat_without_stamina_stuns() -> void:
+func test_hat_without_one_drive_stock_does_nothing() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
-	s.players[1].guard = 5  # スタミナ不足
+	var p = s.players[1]
+	p.drive_gauge = cfg.drive_gauge_stock / 2
+	var guard0: int = p.guard
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
-	check(s.players[1].stun > 0, "スタミナ切れで投げるとスタン stun=%d" % s.players[1].stun)
+	check_eq(p.throw, 0, "ゲージ1本未満では溜めも始まらない")
 	check(_cap(s) == null, "帽子は出ない")
-	check_eq(s.players[1].guard, s.players[1].guard_max, "スタン時に全快")
+	check_eq(p.guard, guard0, "不発時も耐久は変化しない")
+	check_eq(p.stun, 0, "ゲージ不足でスタンしない")

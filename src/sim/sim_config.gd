@@ -52,6 +52,7 @@ var drive_gauge_stock: int
 var drive_gauge_max: int
 var drive_recovery_ticks_per_stock: int
 var burnout_recovery_ticks: int
+var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_dmg_power: int   # パワーボール(ジャストミート)を受けた時のダメージ
@@ -150,6 +151,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	burnout_recovery_ticks = _int_of(raw, "burnout_recovery_ticks")
 	if burnout_recovery_ticks <= 0:
 		_fail("burnout_recovery_ticksは正であること")
+		return
+	hip_quake_stun_ticks = _int_of(raw, "hip_quake_stun_ticks")
+	if hip_quake_stun_ticks <= 0:
+		_fail("hip_quake_stun_ticksは正であること")
 		return
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:

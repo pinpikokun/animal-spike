@@ -27,6 +27,7 @@ func test_drive_gauge_rules_loaded() -> void:
 	check_eq(cfg.drive_gauge_max, 6000, "ドライブゲージ6本満タン")
 	check_eq(cfg.drive_recovery_ticks_per_stock, 180, "自然回復は1本180tick")
 	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
+	check_eq(cfg.hip_quake_stun_ticks, 6, "ヒップ着地地震の全員硬直は6tick")
 
 func test_guard_heal_just_is_removed() -> void:
 	var cfg = SimConfig.new()

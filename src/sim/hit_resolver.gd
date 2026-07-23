@@ -211,7 +211,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			continue
 		if _is_active_block(s, i, input, cfg):
 			continue
-		if p.hit_cooldown > 0 or p.stun > 0:
+		if p.hit_cooldown > 0 or p.stun > 0 or p.quake_stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
@@ -542,7 +542,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not _is_active_block(s, i, input, cfg):
 			continue
-		if p.stun > 0 or p.hit_cooldown > 0:
+		if p.stun > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
 			continue
 		if absi(p.x - cfg.net_x) > zone:
 			continue

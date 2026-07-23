@@ -45,6 +45,7 @@ var _prev_cd: Array[int] = [0, 0, 0, 0]
 var _prev_flinch: Array[int] = [0, 0, 0, 0]  # しりもち検知用(0→>0で砂煙)
 var _prev_stun: Array[int] = [0, 0, 0, 0]
 var _prev_just_receive_event: Array[int] = [0, 0, 0, 0]
+var _prev_hip_quake_event: int = 0
 var _prev_power := 0
 var _prev_bvy := 0
 var _prev_score := Vector2i.ZERO
@@ -237,6 +238,9 @@ func _detect_fx() -> void:
 	var bvel := Vector2(ViewTransform.to_px(state.ball_vx), ViewTransform.to_px(state.ball_vy))
 	var up := -PI / 2.0
 	var just_fired: bool = _prev_power == 0 and state.ball_power == 1
+	if state.hip_quake_event > _prev_hip_quake_event:
+		_shake_amp = maxf(_shake_amp, 7.0)
+		_prev_hip_quake_event = state.hip_quake_event
 	# 期限切れイベントを掃除(粒=KINDS寿命 / kiran=FX_LIFE)
 	_prune_fx(f)
 	for i in state.players.size():

@@ -42,7 +42,6 @@ func test_hat_constants_match_simulation() -> void:
 	check_eq(SimCpu.HAT_HOVER_TICKS, Simulation.CAP_HOVER_TICKS, "滞在時間")
 	check_eq(SimCpu.HAT_RADIUS_PX, Simulation.CAP_RADIUS_PX, "当たり半径")
 	check_eq(SimCpu.HAT_HAND_UP_PX, Simulation.CAP_HAND_UP_PX, "手の高さ")
-	check_eq(SimCpu.HAT_GUARD_COST, Simulation.HAT_GUARD_COST, "スタミナ消費")
 
 func test_hat_roster_is_mario_only() -> void:
 	# 帽子(とヒップアタック)はマリオ専用。slot0=パンダ/敵チームは持たない
@@ -68,14 +67,14 @@ func test_no_throw_without_ability_flag() -> void:
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_ABILITY1), "能力なしは投げない")
 
-func test_no_throw_on_low_guard() -> void:
-	# 投げた後にもう1回ぶんの余力が残らないなら投げない(自滅スタンの構造的回避)
+func test_no_throw_on_low_drive_gauge() -> void:
+	# 投げた後にもう1回ぶんのドライブが残らないなら温存する
 	var w := _hat_scene()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[1].guard = SimCpu.HAT_GUARD_COST * 2 - 1
+	s.players[1].drive_gauge = cfg.drive_gauge_stock * 2 - 1
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(not (input & Simulation.IN_ABILITY1), "スタミナ余力なしは投げない")
+	check(not (input & Simulation.IN_ABILITY1), "ドライブゲージ余力なしは投げない")
 
 func test_no_throw_at_own_team_ball() -> void:
 	# 味方が触った球の間に投げても敵の妨害にならない(自陣の組み立て時間を潰すだけ)

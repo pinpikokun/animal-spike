@@ -35,7 +35,6 @@ const HAT_OUT_TICKS := 24    # = CAP_OUT_TICKS
 const HAT_HOVER_TICKS := 90  # = CAP_HOVER_TICKS
 const HAT_RADIUS_PX := 12    # = CAP_RADIUS_PX
 const HAT_HAND_UP_PX := 6    # = CAP_HAND_UP_PX
-const HAT_GUARD_COST := 25   # = HAT_GUARD_COST
 
 static func _hit_reach(char_id: int, base_reach: int, intent_kind: int) -> int:
 	return HitResolver.reach_for_intent(char_id, base_reach, intent_kind)
@@ -549,10 +548,11 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 	# can(キャラ定義) AND wants(プロファイルAB_HAT)の二段ゲート。canはここで見る
 	if not Chars.has_ability(p.char_id, Chars.CA_HAT):
 		return 0
-	if p.has_hat != 1 or p.throw != 0 or _cap_exists(s) or p.on_ground != 1:
+	if p.has_hat != 1 or p.throw != 0 or _cap_exists(s) or p.on_ground != 1 \
+			or p.burnout_ticks > 0:
 		return 0
-	# 投げた後にもう1回ぶんのスタミナが残らないなら温存(切れて投げるとスタン=自滅)
-	if p.guard < HAT_GUARD_COST * 2:
+	# 投げた後にもう1回ぶんのドライブが残らないなら温存する。
+	if p.drive_gauge < cfg.drive_gauge_stock * 2:
 		return 0
 	# サーブ打球の飛行中は場が動く前=無駄撃ちになるので投げない
 	if s.serve_flight != 0:

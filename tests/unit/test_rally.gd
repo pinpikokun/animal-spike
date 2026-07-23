@@ -96,8 +96,8 @@ func test_serve_strike_starts_rally() -> void:
 	check_eq(s.touches, 1, "サーブ打撃はタッチ1")
 	check_eq(s.last_touch_team, 0, "最終タッチはサーブ側")
 
-func test_serve_toss_floor_resets_to_aim() -> void:
-	# 打ち損ねてトスが床に落ちたら失点せず構え(照準)からやり直す
+func test_serve_toss_floor_scores_for_opponent_and_changes_serve() -> void:
+	# サーブ空振りを点数なし再トスから相手得点+相手ボールへ変更。2026-07-20設計会仕様
 	var w := _serve_world(0)
 	var s = w[0]
 	var cfg = w[1]
@@ -105,12 +105,12 @@ func test_serve_toss_floor_resets_to_aim() -> void:
 	check_eq(s.serve_tossed, 1, "トス済み")
 	for i in 300:
 		Simulation.step(s, [0, 0, 0, 0], cfg)  # 打たずに放置
-		if s.serve_tossed == 0:
+		if s.phase == SimState.PHASE_POINT_PAUSE:
 			break
-	check_eq(s.serve_tossed, 0, "床に落ちたら構えに戻る")
-	check_eq(s.phase, SimState.PHASE_SERVE, "失点にはならない")
-	check_eq(s.score_r, 0, "相手に点は入らない")
-	check_eq(s.players[0].x, cfg.serve_line, "サーバーは白線へ戻る")
+	check_eq(s.phase, SimState.PHASE_POINT_PAUSE, "床に落ちたら得点間インターバル")
+	check_eq(s.score_r, 1, "相手へ1点")
+	check_eq(s.score_l, 0, "サーブ側は無得点")
+	check_eq(s.serving_team, 1, "次のサーブ権は得点した相手")
 
 func test_serve_strike_only_by_server() -> void:
 	# トス済みのボールを打てるのはサーバー本人だけ(相方は不可)

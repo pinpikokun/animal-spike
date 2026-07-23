@@ -38,7 +38,6 @@ const CAP_HAND_UP_PX := 6  # 投げ元の手の高さ(頭より低い=手から�
 const CAP_HAND_FWD_PX := 9 # 投げ元の手の前方オフセット(向いてる方向へ)
 const CAP_BOUNCE_PX := 4   # 反発の最低速度
 const THROW_TICKS := 30    # 帽子投げの溜め(windup)時間。この間は硬直し空中でも浮く
-const HAT_GUARD_COST := 25 # 帽子投げ1回の耐久(スタミナ)消費=25%。足りずに投げるとスタン
 
 # エンティティ種別(sim_state.entitiesのkind)。0=空きスロット
 const KIND_CAP := 1  # 帽子(お邪魔ギミック)
@@ -168,18 +167,8 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			HitResolver._ball_vs_block(state, cfg, inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
 					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
-				# 打ち損ねてトスが床に落ちた: 失点にせず構えからやり直す(再トス)。
-				# サーバーごと白線へ戻す(前へ走り込んだ後でも仕切り直しが明快)
-				state.serve_tossed = 0
-				state.ball_vx = 0
-				state.ball_vy = 0
-				state.timer = cfg.serve_delay_ticks
-				var srv2 = state.players[SimStateScript._server_index(state)]
-				srv2.x = _serve_x(state, cfg)
-				srv2.y = cfg.floor_y
-				srv2.vy = 0
-				srv2.on_ground = 1
-				_hold_ball_on_server(state, cfg)
+				# サーブトス空振りは相手得点となり、次のサーブ権も相手へ移る。
+				_award_point(state, 1 - state.serving_team, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		_step_players_and_hits(state, inputs, cfg)
 		BallPhysics._step_ball(state, cfg, inputs)
@@ -224,9 +213,18 @@ static func _update_drive_recovery(state, cfg) -> void:
 			p.drive_recovery_progress = 0
 
 static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
+	var hip_landed: bool = false
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
-		PlayerMovement._step_player(state.players[i], input, cfg, team_of(i))
+		var p = state.players[i]
+		var was_hip_drop: bool = p.hip == -1
+		PlayerMovement._step_player(p, input, cfg, team_of(i))
+		if was_hip_drop and p.on_ground == 1 and p.hip == 0:
+			hip_landed = true
+	if hip_landed:
+		state.hip_quake_event += 1
+		for p in state.players:
+			p.quake_stun = cfg.hip_quake_stun_ticks
 	var was_serve_strike: bool = state.phase == SimStateScript.PHASE_SERVE \
 		and state.serve_tossed == 1
 	var hit_result: int = HitResolver._resolve_hit(state, inputs, cfg)
@@ -245,7 +243,7 @@ static func _update_receive_stances(state, inputs: Array[int]) -> void:
 		var p = state.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var holding: bool = state.phase == SimStateScript.PHASE_RALLY \
-			and p.on_ground == 1 and p.vx == 0 and p.stun == 0 \
+			and p.on_ground == 1 and p.vx == 0 and p.stun == 0 and p.quake_stun == 0 \
 			and (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0 \
 			and (input & (IN_LEFT | IN_RIGHT)) == 0
 		p.receive_stance = mini(p.receive_stance + 1, 2) if holding else 0
@@ -262,15 +260,14 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
 				and p.stun == 0 and p.flinch == 0 and p.burnout_ticks == 0 \
+				and p.hip == 0 and p.quake_stun == 0 \
 				and ent_find(state, KIND_CAP) < 0:
-			if p.guard >= HAT_GUARD_COST:
-				p.guard -= HAT_GUARD_COST  # 帽子はスタミナを消費
+			if p.drive_gauge >= cfg.drive_gauge_stock:
+				p.drive_gauge -= cfg.drive_gauge_stock
+				if p.drive_gauge == 0:
+					p.burnout_ticks = cfg.burnout_recovery_ticks
+					p.drive_recovery_progress = 0
 				p.throw = THROW_TICKS
-			else:
-				# スタミナ切れで無理に投げるとスタン→全快で復帰(帽子は出ない)
-				p.stun = cfg.stun_ticks
-				p.guard = p.guard_max
-				state.hit_freeze = maxi(state.hit_freeze, 6)
 		if p.throw > 0:
 			p.throw -= 1
 			if p.throw == 0 and p.has_hat == 1 and ent_find(state, KIND_CAP) < 0:
@@ -373,6 +370,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.cling = 0
 		p.receive_stance = 0
 		p.just_receive_flash = 0
+		p.quake_stun = 0
 		# 投げっぱなしの帽子はラリー再開で戻す(帽子を持たないキャラは持たないまま)
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
 	# 飛んでるエンティティ(帽子等)は全て消す(ラリーをまたぐ置き物は今後kind別に判断)
@@ -412,6 +410,8 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.just_receive_flash = 0
 		p.just_receive_event = 0
 		p.burnout_ticks = 0
+		p.quake_stun = 0
+	s.hip_quake_event = 0
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

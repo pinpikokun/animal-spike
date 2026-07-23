@@ -109,7 +109,8 @@ func test_burnout_seals_special_inputs() -> void:
 	Simulation._update_hat(s, [0, Simulation.IN_ABILITY1, 0, 0], cfg)
 	check_eq(p.throw, 0, "バーンアウト中は帽子投げを封印")
 	p.on_ground = 0
-	PlayerMovement._step_player(p, Simulation.IN_DOWN, cfg, 0)
+	PlayerMovement._step_player(
+		p, Simulation.IN_DOWN | Simulation.IN_ABILITY1, cfg, 0)
 	check_eq(p.hip, 0, "バーンアウト中はヒップアタックを封印")
 
 func test_drive_reaching_zero_starts_burnout() -> void:
