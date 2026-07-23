@@ -280,7 +280,9 @@ func test_cpu_jumps_to_block() -> void:
 	var blk = s.players[1]  # 左チームの前衛
 	blk.x = cfg.net_x - FP.from_int(20)  # ネット際ポストに到着済み
 	blk.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_BLOCK)
-	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "ブロックで跳ぶ")
+	var block_input: int = SimCpu.decide(s, 1, cfg)
+	check(block_input & Simulation.IN_JUMP, "ブロックへ跳ぶ")
+	check(block_input & Simulation.IN_UP, "CPUも上入力でブロックを明示する")
 	# 能力なしは跳ばない
 	blk.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")

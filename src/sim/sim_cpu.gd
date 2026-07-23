@@ -242,23 +242,28 @@ static func _decide_serve(s, idx: int, cfg, ab: int) -> int:
 static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 	var dir: int = 1 if team == 0 else -1
 	var target_y: int = cfg.floor_y - cfg.ball_radius
-	# 候補: [入力ビット, vx, vy](速度はsimulation._apply_hitの空中各分岐と同じ式)
+	# 候補: [入力ビット, vx, vy]。後ろ/なし/前を敵陣の前面/中央/後面へ対応させる。
 	var cands: Array = []
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+	var back_key: int = SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
 	if can_spike:
-		# 鋭角(下のみ)=前面へ鋭く、緩角(下+横)=後面へ低く。着弾比較で選ばれる。
-		# スパイクは慣性反射が乗る(simulation._apply_hit)ため、入射速度の反発分を
-		# 候補速度に織り込んで予測する(織り込まないと着弾を読み違える)
 		var rvx: int = s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
 		var rvy: int = s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
-		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN,
-			dir * cfg.spike_steep_vx - rvx, cfg.spike_steep_vy - rvy])
-		cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
-			dir * cfg.spike_vx - rvx, cfg.spike_vy - rvy])
-	# ニュートラル=軟攻フェイント(ネット際ポトリ)。着弾スコアで強打と競わせる
-	# =相手が下がっていれば自然にフェイントを選ぶ(読み合いの発生)
-	cands.append([SimInput.IN_ACTION, dir * cfg.feint_vx, -cfg.feint_vy])
-	cands.append([SimInput.IN_ACTION | fwd_key, dir * cfg.toss_fwd_vx, -cfg.toss_fwd_vy])
+		for row in [[back_key, cfg.spike_steep_vy], [
+			0, (cfg.spike_steep_vy + cfg.spike_vy) / 2], [fwd_key, cfg.spike_vy]]:
+			var spike_vy: int = row[1]
+			var relative: int = 1 if row[0] == fwd_key else (-1 if row[0] == back_key else 0)
+			var spike_vx: int = HitResolver.toss_aim_vx(
+				s.ball_x, s.ball_y, spike_vy,
+				HitResolver.air_target_x(team, relative * dir, cfg), cfg)
+			cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | row[0],
+				spike_vx - rvx, spike_vy - rvy])
+	for key in [back_key, 0, fwd_key]:
+		var toss_vy: int = -cfg.toss_fwd_vy
+		var relative: int = 1 if key == fwd_key else (-1 if key == back_key else 0)
+		var toss_vx: int = HitResolver.toss_aim_vx(s.ball_x, s.ball_y, toss_vy,
+			HitResolver.air_target_x(team, relative * dir, cfg), cfg)
+		cands.append([SimInput.IN_ACTION | key, toss_vx, toss_vy])
 	var best_input: int = SimInput.IN_ACTION
 	var best_score: int = -1
 	for c in cands:
@@ -333,7 +338,7 @@ static func decide(s, idx: int, cfg) -> int:
 	var dy: int = s.ball_y - p.y
 	var planned_hit_input: int = SimInput.IN_ACTION
 	if p.on_ground == 1:
-		planned_hit_input |= _ground_shot_keys(s, idx, cfg, team, prof)
+		planned_hit_input |= _ground_hit_keys(s, idx, cfg, team, prof)
 	var base_dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
 	var base_d2: int = dx * dx + base_dy_n * base_dy_n
 	var intent: Array[int] = HitResolver._classify_intent(
@@ -355,20 +360,26 @@ static func decide(s, idx: int, cfg) -> int:
 			# JUMPも落とす: アクション+上ジャンプは小ホップ化(トス用)のため、
 			# 位置取りで立てたジャンプ意図が地上ヒットと混ざると跳躍が化ける
 			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
-			input |= SimInput.IN_ACTION | _ground_shot_keys(s, idx, cfg, team, prof)
+			input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
 	# 可変ジャンプ対応: 上昇中はジャンプキーを保持し続ける(離すと失速する
 	# 人間向けの仕様でCPUのジャンプアタックが化けないように)
 	if p.on_ground == 0 and p.vy < 0 and not (input & SimInput.IN_ACTION):
 		input |= SimInput.IN_JUMP
 	return input
 
-# 地上ヒット時の方向キー選択(上=セットアップ / ネット方向=前トスで越す)
+# 地上ヒット時の入力選択。相手球は下レシーブ、自チーム球は横3トス。
+static func _ground_hit_keys(s, idx: int, cfg, team: int, prof: int) -> int:
+	if s.last_touch_team >= 0 and s.last_touch_team != team:
+		return SimInput.IN_DOWN
+	return _ground_shot_keys(s, idx, cfg, team, prof)
+
+# 地上トスの方向選択(ニュートラル=自陣前方 / ネット方向=敵陣)
 static func _ground_shot_keys(s, idx: int, cfg, team: int, prof: int) -> int:
 	var mate = s.players[team * 2 + (1 - idx % 2)]
 	var team_ab: int = prof_byte(prof, P_AB) | prof_byte(mate.cpu, P_AB)
 	var touches_after: int = s.touches + 1 if s.last_touch_team == team else 1
 	if (team_ab & AB_ATTACK) and touches_after < cfg.max_touches:
-		return SimInput.IN_UP  # 真上へ高く上げてアタックを呼ぶ(セルフトスも可)
+		return 0  # ニュートラルで自陣前方へ上げてアタックを呼ぶ
 	return SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 
 # 地上での位置取り(レシーブ/支援/ジャンプアタック)。frozenでない時のみ呼ばれる
@@ -516,9 +527,9 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 		var post: int = cfg.net_x - FP.from_int(20) if team == 0 \
 			else cfg.net_x + FP.from_int(20)
 		if absi(p.x - post) <= FP.from_int(24):
-			var toward_net: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-			var block_input: int = SimInput.IN_ACTION | toward_net
-			return block_input | SimInput.IN_JUMP if p.on_ground == 1 else block_input
+			if p.on_ground == 1:
+				return SimInput.IN_JUMP | SimInput.IN_UP
+			return SimInput.IN_ACTION | SimInput.IN_UP
 		return _walk_to(p, post, deadzone / 2)
 	return 0
 
@@ -584,8 +595,7 @@ static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, 
 		return _pick_air_shot(s, p, cfg, team, can_spike)
 	var input: int = SimInput.IN_ACTION
 	if can_spike:
-		# 配球IQなしは緩角スパイク(下+横)固定。鋭角はネット至近でないと
-		# 自陣落ちするため、着弾を計算しない頭脳には持たせない
+		# 配球IQなしは下+前で敵陣後面へのアタック固定。
 		input |= SimInput.IN_DOWN
 		input |= SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	return input

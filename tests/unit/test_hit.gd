@@ -30,13 +30,13 @@ func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 		w[0].players[0].char_id = Chars.CHAR_TOME
 		w[0].ball_x = w[0].players[0].x + FP.from_int(5)
 		w[0].ball_y = w[1].floor_y - FP.from_int(10)
-	Simulation.step(normal[0], [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], normal[1])
+	Simulation.step(normal[0], [Simulation.IN_ACTION, 0, 0, 0], normal[1])
 	Simulation.step(ghost[0], [Simulation.IN_ABILITY1 | Simulation.IN_JUMP |
 		Simulation.IN_UP, 0, 0, 0], ghost[1])
 	check_eq(ghost[0].ball_ghost, 1, "地上の上+Dでゴーストボール")
 	check_eq(ghost[0].players[0].on_ground, 1, "Dを技モディファイアとして押す間は跳ばない")
-	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常上トスと横軌道が同一")
-	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常上トスと縦軌道が同一")
+	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常ニュートラルトスと横軌道が同一")
+	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常ニュートラルトスと縦軌道が同一")
 
 func test_up_without_ability_still_jumps() -> void:
 	var w := _rally_world()
@@ -119,7 +119,7 @@ func test_flame_receive_deals_double_power_guard_damage() -> void:
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 80,
 		"燃える球のレシーブは通常パワー球の2倍ダメージ")
 	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
@@ -136,7 +136,7 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)
 	s.ball_y = cfg.floor_y - FP.from_int(2)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 80,
 		"炎球は芯でレシーブしても2倍ガードダメージ")
 	check_eq(s.players[0].burn, 60, "芯受けでも60tick炎上")
@@ -159,7 +159,7 @@ func test_flame_block_deals_double_power_guard_damage() -> void:
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(p.guard, 80,
 		"燃える球のブロックは通常パワー球の2倍ダメージ")
 	check_eq(p.burn, 60, "炎球ブロックでも60tick炎上")
@@ -242,7 +242,7 @@ func test_bump_on_ground() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = FP.from_int(3)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(s.ball_vy < 0, "バンプでボールが上昇する")
 	check(s.ball_vx > 0, "左チームのバンプは右向き成分")
 	check_eq(s.touches, 1, "タッチ数1")
@@ -259,7 +259,7 @@ func test_neutral_receive_keeps_legacy_bounce() -> void:
 		s.ball_x = s.players[0].x + FP.from_int(30)
 		s.ball_y = cfg.floor_y - FP.from_int(10)
 		s.ball_vy = 0
-		Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 		check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
 			"ニュートラルレシーブはトス技能に関係なく従来の高さで跳ねる")
 
@@ -270,22 +270,20 @@ func test_neutral_receive_reflects_vertical_inertia() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = FP.from_int(12)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(-s.ball_vy > cfg.bump_up_speed - cfg.gravity,
 		"落下球のニュートラルレシーブは縦の勢いも跳ね返す: actual=%d base=%d" % [
 			-s.ball_vy, cfg.bump_up_speed - cfg.gravity])
 
-func test_toss_up_is_vertical() -> void:
-	# 上入力+アクション: 真上トス(横成分ゼロ、高く上がる)
+func test_neutral_ground_toss_targets_own_front() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, 0, "真上トスは横成分ゼロ")
-	# step内で重力が1回乗るため厳密等値は避け、前トスより高い初速であることを見る
-	check(s.ball_vy < -cfg.toss_fwd_vy, "真上トスは前トスより高く上がる")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "ニュートラルトスは自陣前方へ進む")
+	check(s.ball_vy < 0, "ニュートラルトスは上向き")
 
 func test_only_toss_bad_can_produce_low_toss() -> void:
 	var low_count := 0
@@ -298,7 +296,7 @@ func test_only_toss_bad_can_produce_low_toss() -> void:
 		s.ball_x = s.players[0].x + FP.from_int(30)
 		s.ball_y = cfg.floor_y - FP.from_int(10)
 		s.ball_vy = 0
-		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+		Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 		var upward: int = -s.ball_vy
 		check(upward <= cfg.bump_up_speed, "下手なトスでも基準より高くしない")
 		if upward < cfg.bump_up_speed * 90 / 100:
@@ -310,7 +308,7 @@ func test_only_toss_bad_can_produce_low_toss() -> void:
 	s2.players[0].char_id = Chars.CHAR_FOX
 	s2.ball_x = s2.players[0].x + FP.from_int(5)
 	s2.ball_y = cfg2.floor_y - FP.from_int(10)
-	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg2)
+	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg2)
 	check_eq(s2.ball_vy, -cfg2.bump_up_speed + cfg2.gravity,
 		"特性なしは低トス失敗なし")
 
@@ -358,9 +356,16 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 		s.tick = tick
 		var d2: int = 0 if sweet else cfg.player_reach * cfg.player_reach
 		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, d2)
-		var base: int = cfg.spike_steep_vx * (cfg.spike_power_pct if sweet else 100) / 100
-		check_eq(s.ball_vx, base * 150 / 100,
-			"%sアタックへむらっけ最終倍率" % ("ジャスト" if sweet else "通常"))
+		# むらっけは通常/ジャスト共に最終pctへ1回だけ乗る。横速度は着地点から
+		# 逆算される新体系では比例しないため、比例が保存される縦速度で検証する。
+		var pct: int = cfg.spike_power_pct if sweet else 100
+		if sweet:
+			pct = pct * Chars.stat(Chars.CHAR_PANDA, "just_reward") / 100
+		pct = pct * Chars.stat(Chars.CHAR_PANDA, "atk") / 100
+		pct = pct * 150 / 100
+		check_eq(s.ball_vy, (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200,
+			"%sアタックへむらっけ最終倍率を一度だけ適用" %
+			("ジャスト" if sweet else "通常"))
 	var ws := _rally_world()
 	var ss = ws[0]
 	var cfgs = ws[1]
@@ -368,8 +373,11 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	ss.serve_tossed = 1
 	ss.tick = tick
 	ss.players[0].char_id = Chars.CHAR_PANDA
+	var safe_vy: int = -cfgs.bump_up_speed
+	var safe_vx: int = HitResolver.toss_aim_vx(ss.ball_x, ss.ball_y, safe_vy,
+		HitResolver.toss_target_x(0, 1, cfgs), cfgs)
 	HitResolver._apply_hit(ss, 0, cfgs, Simulation.IN_ACTION | Simulation.IN_RIGHT, 0)
-	check_eq(ss.ball_vx, cfgs.serve_vx, "地上安全サーブへむらっけを適用しない")
+	check_eq(ss.ball_vx, safe_vx, "地上安全サーブはトス軌道で、むらっけを適用しない")
 	var wa := _rally_world()
 	var sa = wa[0]
 	var cfga = wa[1]
@@ -380,7 +388,8 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	sa.players[0].on_ground = 0
 	HitResolver._apply_hit(sa, 0, cfga, Simulation.IN_ACTION | Simulation.IN_DOWN,
 		cfga.player_reach * cfga.player_reach)
-	check_eq(sa.ball_vx, cfga.spike_steep_vx * 150 / 100,
+	var serve_pct: int = Chars.stat(Chars.CHAR_PANDA, "atk") * 150 / 100
+	check_eq(sa.ball_vy, (cfga.spike_steep_vy + cfga.spike_vy) * serve_pct / 200,
 		"空中アタックサーブへむらっけ最終倍率を一度だけ適用")
 
 func test_receive_reach_is_trait_aware_only_for_receive_intent() -> void:
@@ -408,7 +417,7 @@ func test_receive_reach_changes_actual_hit_detection() -> void:
 		s.ball_x = p.x + cfg.player_reach * row[1] / 100
 		s.ball_y = p.y
 		var result: int = HitResolver._resolve_hit(s,
-			[Simulation.IN_ACTION, 0, 0, 0], cfg)
+			[Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 		check_eq(1 if result != HitResolver.NO_HIT else 0, row[2],
 			"レシーブ実判定: %s" % [row])
 	var wt := _rally_world()
@@ -418,7 +427,7 @@ func test_receive_reach_changes_actual_hit_detection() -> void:
 	st.ball_x = st.players[0].x + cfgt.player_reach * 110 / 100
 	st.ball_y = st.players[0].y
 	check_eq(HitResolver._resolve_hit(st,
-		[Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfgt), HitResolver.NO_HIT,
+		[Simulation.IN_ACTION, 0, 0, 0], cfgt), HitResolver.NO_HIT,
 		"トス意図はレシーブ上手でもリーチ不変")
 
 func test_toss_good_zone_mapping_mirrors_both_teams() -> void:
@@ -445,8 +454,7 @@ func test_toss_good_aims_ground_and_air_trajectory_at_zone() -> void:
 			cfg.floor_y - cfg.ball_radius, cfg)
 		check(absi(landed - target) <= absi(vx),
 			"地上/空中トスが設定ゾーンへ着地: %d" % start_y)
-	for row in [[0, 1, Simulation.IN_UP], [2, 1, Simulation.IN_UP],
-		[0, 0, Simulation.IN_UP], [2, 0, Simulation.IN_UP]]:
+	for row in [[0, 1, 0], [2, 1, 0], [0, 0, 0], [2, 0, 0]]:
 		var w := _rally_world()
 		var s = w[0]
 		var actual_cfg = w[1]
@@ -458,9 +466,9 @@ func test_toss_good_aims_ground_and_air_trajectory_at_zone() -> void:
 			p.y = actual_cfg.floor_y - FP.from_int(80)
 		s.ball_x = p.x + FP.from_int(5)
 		s.ball_y = p.y - FP.from_int(10)
-		HitResolver._apply_hit(s, actor, actual_cfg,
-			Simulation.IN_ACTION | row[2], 0)
-		var expected_target: int = HitResolver.toss_target_x(actor / 2, 0, actual_cfg)
+		HitResolver._apply_hit(s, actor, actual_cfg, Simulation.IN_ACTION | row[2], 0)
+		var expected_target: int = HitResolver.toss_target_x(actor / 2, 0, actual_cfg) \
+			if p.on_ground == 1 else HitResolver.air_target_x(actor / 2, 0, actual_cfg)
 		var expected_vx: int = HitResolver.toss_aim_vx(
 			p.x + FP.from_int(5), p.y - FP.from_int(10), s.ball_vy,
 			expected_target, actual_cfg)
@@ -492,7 +500,7 @@ func test_toss_bad_is_exactly_30_percent_and_targets_70_percent_apex() -> void:
 	var normal_h: int = HitResolver.apex_height(normal_vy, cfg.gravity)
 	var low_h: int = HitResolver.apex_height(low_vy, cfg.gravity)
 	check(absi(low_h * 100 - normal_h * 70) <= cfg.gravity * 100,
-		"低トスは通常頂点の70%: %d/%d" % [low_h, normal_h])
+		"低トスは通常頂点の70%%: %d/%d" % [low_h, normal_h])
 
 func test_toss_bad_normal_roll_keeps_unskilled_air_toss_inertia() -> void:
 	var w := _rally_world()
@@ -516,7 +524,7 @@ func test_toss_bad_normal_roll_keeps_unskilled_air_toss_inertia() -> void:
 		state.ball_y = p.y
 		state.ball_vy = FP.from_int(700) / sample_cfg.tick_rate
 		HitResolver._apply_hit(state, 0, sample_cfg,
-			Simulation.IN_ACTION | Simulation.IN_UP,
+			Simulation.IN_ACTION,
 			sample_cfg.player_reach * sample_cfg.player_reach)
 		outputs.append(state.ball_vy)
 	check_eq(outputs[0], outputs[1],
@@ -529,7 +537,7 @@ func test_fast_incoming_ball_does_not_launch_toss_offscreen() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = FP.from_int(700) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(-s.ball_vy <= cfg.bump_up_speed, "強い入射でもトスを基準より高くしない")
 
 func test_toss_forward_goes_far() -> void:
@@ -540,7 +548,7 @@ func test_toss_forward_goes_far() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, cfg.toss_fwd_vx, "前トスは入力方向(右)へ遠く")
+	check(s.ball_vx > 0, "前トスは敵陣方向へ進む")
 	check(s.ball_vx > cfg.bump_fwd_speed, "前トスは素レシーブより横に速い")
 
 func test_toss_backward_follows_input() -> void:
@@ -554,16 +562,17 @@ func test_toss_backward_follows_input() -> void:
 	check(s.ball_vx < 0, "左入力なら左チームでも後ろ向きに返せる")
 
 func test_toss_mid_is_between() -> void:
-	# 上+横: 中間トス(高さは真上トス級、横は前トスより小さい)
+	# ニュートラル: 自陣前方トス。前入力より手前を狙う。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check(s.ball_vy < -cfg.toss_fwd_vy, "中間トスの高さは前トスより高い(真上トス級)")
-	check_eq(s.ball_vx, cfg.toss_mid_vx, "中間トスの横は中程度")
-	check(s.ball_vx < cfg.toss_fwd_vx, "中間トスは前トスより横が小さい")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var neutral_target := HitResolver.toss_target_x(0, 0, cfg)
+	var forward_target := HitResolver.toss_target_x(0, 1, cfg)
+	check(neutral_target < forward_target, "ニュートラルトスは前トスより手前を狙う")
+	check(s.ball_vx > 0, "ニュートラルトスは自陣前方へ進む")
 
 func test_receive_reflects_incoming_inertia() -> void:
 	# 相手の強打(横入射)を真上狙いで受けても、慣性が反発して前へ逸れる
@@ -573,19 +582,19 @@ func test_receive_reflects_incoming_inertia() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(8)  # 右から左へ来る強打
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "真上狙いでも入射の反発で前(右)へ逸れる")
 
 func test_no_incoming_toss_stays_on_aim() -> void:
-	# 入射速度ゼロなら慣性成分ゼロ=狙いどおり真上(横成分ゼロ)
+	# 入射速度ゼロなら慣性成分ゼロ=ニュートラルの自陣前方狙いどおり。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = 0
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, 0, "入射ゼロなら真上狙いは横ゼロのまま")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "入射ゼロならニュートラル狙いどおり前へ進む")
 
 func test_no_hit_out_of_reach() -> void:
 	var w := _rally_world()
@@ -628,7 +637,7 @@ func test_spike_in_air() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "スパイク(空中+下)は下向き")
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
-	check(s.ball_vx >= cfg.spike_steep_vx, "鋭角スパイクの横速度")
+	check(HitResolver.air_target_x(0, 0, cfg) > cfg.net_x, "中央入力は敵陣中央を狙う")
 	# 「急角度」は緩角との比較で定義する(縦/横の比が緩角より大きい)。
 	# 整数のまま比較: steep_vy*flat_vx > flat_vy*steep_vx
 	check(cfg.spike_steep_vy * cfg.spike_vx > cfg.spike_vy * cfg.spike_steep_vx,
@@ -647,8 +656,9 @@ func test_flat_spike_goes_farther() -> void:
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "緩角スパイクも下向き")
-	check(s.ball_vx >= cfg.spike_vx, "緩角は横に速い(遠くへ届く)")
-	check(s.ball_vx > cfg.spike_steep_vx, "緩角の横速度は鋭角より大きい")
+	check_eq(HitResolver.air_target_x(0, 1, cfg),
+		cfg.court_width - FP.from_int(cfg.toss_zone_back_px), "前入力は敵陣後面を狙う")
+	check(s.ball_vx > 0, "後面アタックも敵陣方向へ飛ぶ")
 	check(s.ball_vy < cfg.spike_steep_vy, "緩角の縦速度は鋭角より浅い")
 
 func test_flat_spike_direction_is_always_net() -> void:
@@ -679,7 +689,7 @@ func test_perfect_spike_boosts_power() -> void:
 	check_eq(s.ball_power, 1, "ジャストミートはパワーボールになる")
 	# 同step内の重力1tick分を考慮して通常スパイクより明確に速いことを見る
 	check(s.ball_vy > cfg.spike_steep_vy + cfg.gravity, "ジャストミートは通常鋭角より速い")
-	check(s.ball_vx > cfg.spike_steep_vx, "横速度もボーナスが乗る")
+	check(s.ball_vx > 0, "横速度も敵陣方向へ出る")
 
 func test_edge_spike_is_normal() -> void:
 	# スイートスポットの外(リーチ内ギリギリ)のスパイクは通常威力
@@ -710,7 +720,7 @@ func test_spike_reflects_incoming_inertia() -> void:
 	s.ball_y = p.y
 	s.ball_vy = -FP.from_int(8)  # 上昇中
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	var expect: int = cfg.spike_steep_vy \
+	var expect: int = (cfg.spike_steep_vy + cfg.spike_vy) / 2 \
 		+ FP.from_int(8) * cfg.hit_inertia_num / cfg.hit_inertia_den + cfg.gravity
 	check_eq(s.ball_vy, expect, "上がり際の反発が縦速度に乗る")
 
@@ -726,7 +736,8 @@ func test_just_meet_cuts_inertia() -> void:
 	s.ball_y = p.y - FP.from_int(2)
 	s.ball_vy = -FP.from_int(8)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	var expect: int = cfg.spike_steep_vy * cfg.spike_power_pct / 100 \
+	var expect: int = (cfg.spike_steep_vy + cfg.spike_vy) \
+		* cfg.spike_power_pct / 200 \
 		+ FP.from_int(8) * cfg.hit_inertia_just_num / cfg.hit_inertia_den + cfg.gravity
 	check_eq(s.ball_vy, expect, "芯なら慣性がjust値まで落ちる")
 
@@ -738,12 +749,14 @@ func test_just_receive_holds_aim() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = s.players[0].y - FP.from_int(2)
 	s.ball_vx = -FP.from_int(20)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	var expect: int = FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den
-	check_eq(s.ball_vx, expect, "真上トスの横ブレがjust慣性分だけに収まる")
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	# 下レシーブは狙い不能の既定前方成分を持ち、そこへjust慣性分が加わる。
+	var expect: int = cfg.bump_fwd_speed \
+		+ FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den
+	check_eq(s.ball_vx, expect, "下レシーブは既定前方成分+just慣性分になる")
 
 func test_block_reflects_opponent_shot() -> void:
-	# 原作どおり、ネット際でネット方向+アクションを押した時だけブロックする。
+	# 空中上+アクションの明示入力だけでブロックする。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -756,7 +769,7 @@ func test_block_reflects_opponent_shot() -> void:
 	s.ball_y = p.y - cfg.player_reach_up  # 手のひらゾーン
 	s.ball_vx = -FP.from_int(8)  # 左(自陣)へ向かう強打
 	s.ball_vy = FP.from_int(6)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "ブロックで打球が跳ね返る")
 	check_eq(s.last_touch_team, 0, "跳ね返した球はブロッカー側の球になる")
 	check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
@@ -776,7 +789,7 @@ func test_jump_alone_does_not_block() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(s.ball_vx < 0, "ネット際でジャンプしただけではブロックしない")
 
-func test_block_requires_net_direction() -> void:
+func test_block_requires_up_direction() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -788,10 +801,10 @@ func test_block_requires_net_direction() -> void:
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_LEFT, 0, 0, 0], cfg)
-	check(s.ball_vx < 0, "ネットと逆方向+アクションではブロックしない")
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check(s.ball_vx < 0, "上なしの横+アクションではブロックしない")
 
-func test_ground_block_works_with_original_input() -> void:
+func test_ground_action_without_up_does_not_block() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -800,11 +813,9 @@ func test_ground_block_works_with_original_input() -> void:
 	p.y = cfg.floor_y
 	p.on_ground = 1
 	s.last_touch_team = 1
-	s.ball_x = p.x
-	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check(s.ball_vx > 0, "原作どおり地上でもネット方向+アクションでブロックできる")
+	check(not HitResolver._is_active_block(s, 0, Simulation.IN_ACTION, cfg),
+		"地上ボタンだけではブロックしない")
 
 func test_own_shot_is_not_blocked() -> void:
 	# 自チームの打球は自分たちの空中の体に当たらない(空中戦の自滅防止)
@@ -851,7 +862,7 @@ func test_receiving_power_ball_damages_guard() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
 	check_eq(s.players[0].guard, 100 - cfg.guard_dmg_power, "耐久力が削れる")
 	# 芯を外してパワーボールを受けたら必ずよろけ(小スタン)
@@ -869,7 +880,7 @@ func test_guard_zero_causes_stun_and_refill() -> void:
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].stun, cfg.stun_ticks, "耐久力が尽きてスタン")
 	check_eq(s.players[0].guard, s.players[0].guard_max, "スタン後は満タンへ戻る")
 
@@ -882,7 +893,7 @@ func test_normal_spike_receive_no_damage() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(9)  # スパイク級の入射でも
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 100, "通常スパイク受けはノーダメージ")
 
 func test_just_receive_of_power_ball_heals() -> void:
@@ -895,7 +906,7 @@ func test_just_receive_of_power_ball_heals() -> void:
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = cfg.floor_y - FP.from_int(2)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 40 + cfg.guard_heal_just, "ジャスト受けで回復")
 	check_eq(s.players[0].stun, 0, "ダメージは受けない")
 	# 上限は満タンまで
@@ -906,7 +917,7 @@ func test_just_receive_of_power_ball_heals() -> void:
 	s2.last_touch_team = 1
 	s2.ball_x = s2.players[0].x + FP.from_int(2)
 	s2.ball_y = cfg.floor_y - FP.from_int(2)
-	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s2.players[0].guard, 100, "回復は満タンで頭打ち")
 
 func test_plain_toss_does_not_heal() -> void:
@@ -918,7 +929,7 @@ func test_plain_toss_does_not_heal() -> void:
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内・パワーなし
 	s.ball_y = cfg.floor_y - FP.from_int(2)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "ヒットは成立")
 	check_eq(s.players[0].guard, 40, "普通のボールは回復しない")
 
@@ -965,10 +976,9 @@ func test_air_side_tosses_far_arc() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	# 同step内で重力が1tick分加わるため厳密一致ではなく範囲で見る
 	check(s.ball_vy <= -cfg.toss_fwd_vy + cfg.gravity, "山なりの上向き成分")
-	check_eq(s.ball_vx, cfg.toss_fwd_vx, "入力方向へ遠くへ")
+	check(s.ball_vx > 0, "前入力で敵陣後面方向へ進む")
 
-func test_jump_toss_lifts_instead_of_spike() -> void:
-	# 空中でも上入力ならスパイク(下向き)でなくジャンプトス(上向き)になる
+func test_air_neutral_toss_lifts_instead_of_spike() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -977,12 +987,10 @@ func test_jump_toss_lifts_instead_of_spike() -> void:
 	p.y = cfg.floor_y - FP.from_int(60)
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - FP.from_int(5)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check(s.ball_vy < 0, "ジャンプトスは上向き(スパイクの下向きと逆)")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vy < 0, "空中ニュートラルトスは上向き")
 
-func test_up_toss_stays_grounded() -> void:
-	# ↑+アクション(横なし): 真上トス。simでは跳ばない(ホップは表示層の演出のみ)。
-	# 実ジャンプにすると空中ヒット扱いになり地上トス表(慣性込み)から外れるため
+func test_up_action_jumps_instead_of_ground_toss() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -991,12 +999,10 @@ func test_up_toss_stays_grounded() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(p.on_ground, 1, "トス構えでは跳ばない(地上ヒット扱い)")
-	check_eq(s.ball_vx, 0, "真上トスは横成分ゼロ")
-	check(s.ball_vy < 0, "ボールは上へトスされる")
+	check_eq(p.on_ground, 0, "上+ボタンでも上キーはジャンプ専用")
+	check_eq(s.touches, 0, "上入力を地上トス照準には使わない")
 
-func test_toss_stance_locks_movement() -> void:
-	# ↑+横+アクション: 移動はしない(横キーはトス方向指定専用)。跳びもしない
+func test_up_action_does_not_create_toss_stance() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -1006,10 +1012,9 @@ func test_toss_stance_locks_movement() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_JUMP
 		| Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check_eq(p.x, x0, "トス構え中は横キーで移動しない")
-	check_eq(p.on_ground, 1, "トス構えでは跳ばない(地上ヒット扱い)")
-	check_eq(s.touches, 1, "トスが成立する")
-	check_eq(s.ball_vx, cfg.toss_mid_vx, "上+横=中間トス(緩やかな前目)")
+	check(p.x > x0, "上+横+ボタンでも横移動は抑制しない")
+	check_eq(p.on_ground, 0, "上入力でジャンプする")
+	check_eq(s.touches, 0, "旧トス構えは撤去される")
 
 func test_jump_cut_on_release() -> void:
 	# 可変ジャンプ: 上昇中に上キーを離すと失速し、押し続けより早く落下に転じる
@@ -1063,7 +1068,7 @@ func test_near_toss_is_not_jumping_toss() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(p.dive, 0, "近距離トスは飛びつかない")
-	check_eq(s.ball_vx, cfg.toss_fwd_vx, "通常の前トスのまま")
+	check(s.ball_vx > 0, "通常の前トスは敵陣方向へ進む")
 
 func test_cooldown_blocks_double_hit() -> void:
 	var w := _rally_world()

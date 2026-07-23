@@ -66,9 +66,8 @@ func test_power_ball_touch_loses_control() -> void:
 	var vin_x: int = FP.from_int(600) / cfg.tick_rate  # 右向きの強い入射
 	s.ball_vx = vin_x
 	s.ball_vy = FP.from_int(300) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	# 真上トスを狙ったのに、横は入射の全反射でほぼ-vin_x(左へ弾け飛ぶ)
-	check(s.ball_vx < -vin_x / 2, "狙いは真上なのに大きく左へ弾かれる(制御喪失)")
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check(s.ball_vx < -vin_x / 2, "下レシーブでも大きく左へ弾かれる(制御喪失)")
 	check(p.flinch > 0 or p.stun > 0, "被弾リアクションも発生")
 
 func test_just_receive_keeps_control() -> void:
@@ -84,7 +83,7 @@ func test_just_receive_keeps_control() -> void:
 	var vin_x: int = FP.from_int(600) / cfg.tick_rate
 	s.ball_vx = vin_x
 	s.ball_vy = FP.from_int(300) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(absi(s.ball_vx) < vin_x / 2, "ジャスト受けは流されずほぼ狙い通り")
 	check_eq(p.flinch, 0, "ジャスト受けは被弾しない")
 
@@ -122,7 +121,7 @@ func test_power_ball_block_pushes_blocker() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(400) / cfg.tick_rate  # 右へ=右チームへ向かう
 	s.ball_vy = 0
-	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
+	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0], cfg)
 	check_eq(s.last_touch_team, 1, "ブロック成立の前提確認")
 	check(p.push > 0, "右チームのブロッカーは右(後ろ)へ押し込まれる")
 
@@ -140,6 +139,6 @@ func test_normal_ball_block_no_push() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(400) / cfg.tick_rate
 	s.ball_vy = 0
-	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
+	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0], cfg)
 	check_eq(s.last_touch_team, 1, "ブロック成立の前提確認")
 	check_eq(p.push, 0, "通常球のブロックは無反動")

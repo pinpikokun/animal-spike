@@ -72,7 +72,7 @@ func test_traitless_toss_keeps_direct_output_without_global_toggle() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = 0
 	s.ball_vy = 0
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_vx, cfg.bump_fwd_speed, "OFFなら従来の素レシーブ横速度")
 
 func test_player_stops_before_net_face() -> void:
@@ -92,8 +92,8 @@ func test_player_stops_before_net_face() -> void:
 	var face_r: int = cfg.net_x + cfg.net_half_w + FP.from_int(8)
 	check_eq(s.players[2].x, face_r, "右チームも対称に停止")
 
-func _air_up_toss_vy(vin_px: int) -> int:
-	# 空中上トスを1回行い、直後のボール縦速度を返す(入射速度を変えて比較する用)
+func _air_toss_vy(vin_px: int) -> int:
+	# 空中ニュートラルトスを1回行い、直後のボール縦速度を返す。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -105,14 +105,14 @@ func _air_up_toss_vy(vin_px: int) -> int:
 	s.ball_y = p.y
 	s.ball_vy = FP.from_int(vin_px) / cfg.tick_rate
 	s.ball_vx = 0
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	return s.ball_vy
 
 func test_air_toss_reflects_inertia() -> void:
 	# 空中トスにも地上と同じ慣性反射が乗る(不整合の解消)。
-	# 強く落ちてくる球を空中上トスするほど高く上がる(=入射の反発が乗る)
-	var soft: int = _air_up_toss_vy(100)
-	var hard: int = _air_up_toss_vy(700)
+	# 強く落ちてくる球を空中トスするほど高く上がる(=入射の反発が乗る)
+	var soft: int = _air_toss_vy(100)
+	var hard: int = _air_toss_vy(700)
 	check(soft < 0 and hard < 0, "どちらも上向きに打ち上がる")
 	check(hard < soft, "強い落下球を受けた方が高く上がる(慣性反射)")
 
@@ -125,8 +125,8 @@ func test_soft_ball_gives_full_control() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = FP.from_int(100) / cfg.tick_rate  # 緩い球(閾値400未満)
 	s.ball_vy = FP.from_int(200) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, 0, "緩い球の真上トスは横成分ゼロ(流されない)")
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check(s.ball_vx > 0, "緩い球のニュートラルトスは自陣前方へ進む")
 	check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
 		"特性なしの緩球トスは通常高度")
 
@@ -139,7 +139,7 @@ func test_fast_ball_still_pushes_through() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = 0
 	s.ball_vy = FP.from_int(700) / cfg.tick_rate  # 強い落下球
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(s.ball_vy >= -cfg.bump_up_speed + cfg.gravity,
 		"強い球でも基準より高いトスにしない")
 

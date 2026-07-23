@@ -16,9 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# プレイヤーburn追加による状態配列拡張。
-# 物理挙動の変更ではなくハッシュ構造の変化。
-const GOLDEN_COMBINED_HASH := -3091032304254230571
+# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
+const GOLDEN_COMBINED_HASH := 6816390711390536239
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

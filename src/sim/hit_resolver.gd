@@ -33,9 +33,12 @@ const INTENT_GROUND_RECEIVE := 0
 const INTENT_GROUND_TOSS := 1
 const INTENT_GROUND_FORWARD := 2
 const INTENT_AIR_SPIKE := 3
-const INTENT_AIR_TOSS_UP := 4
-const INTENT_AIR_TOSS_SIDE := 5
-const INTENT_AIR_FEINT := 6
+const INTENT_AIR_TOSS := 4
+const INTENT_AIR_BLOCK := 5
+# 旧名は既存の表示・特性テストとの互換用。同じ空中トス分類へ統合した。
+const INTENT_AIR_TOSS_UP := INTENT_AIR_TOSS
+const INTENT_AIR_TOSS_SIDE := INTENT_AIR_TOSS
+const INTENT_AIR_FEINT := INTENT_AIR_TOSS
 
 static func team_of(i: int) -> int:
 	return SimStateScript.team_of(i)
@@ -49,22 +52,18 @@ static func _classify_intent(on_ground: int, input: int, d2: int,
 		hdir += 1
 	var up: int = 1 if input & IN_UP else 0
 	if on_ground == 1:
-		if hdir != 0 and up == 0:
-			var dive_dir: int = 0
-			var edge: int = player_reach * 3 / 4
-			if not serve_strike and d2 >= 0 and d2 > edge * edge:
-				dive_dir = hdir
-			return [INTENT_GROUND_FORWARD, hdir, up, dive_dir]
-		if up == 1:
-			return [INTENT_GROUND_TOSS, hdir, up, 0]
-		return [INTENT_GROUND_RECEIVE, hdir, up, 0]
+		if input & IN_DOWN:
+			return [INTENT_GROUND_RECEIVE, hdir, 0, 0]
+		var dive_dir: int = 0
+		var edge: int = player_reach * 3 / 4
+		if hdir != 0 and not serve_strike and d2 >= 0 and d2 > edge * edge:
+			dive_dir = hdir
+		return [INTENT_GROUND_TOSS, hdir, 0, dive_dir]
+	if up == 1:
+		return [INTENT_AIR_BLOCK, hdir, up, 0]
 	if input & IN_DOWN:
 		return [INTENT_AIR_SPIKE, hdir, up, 0]
-	if up == 1:
-		return [INTENT_AIR_TOSS_UP, hdir, up, 0]
-	if hdir != 0:
-		return [INTENT_AIR_TOSS_SIDE, hdir, up, 0]
-	return [INTENT_AIR_FEINT, hdir, up, 0]
+	return [INTENT_AIR_TOSS, hdir, up, 0]
 
 static func _mura_power_pct(s, actor: int, char_id: int) -> int:
 	if not Chars.has_trait(char_id, Chars.Profile.TRAIT_MURA):
@@ -127,6 +126,18 @@ static func toss_target_x(team: int, hdir: int, cfg) -> int:
 	if hdir == toward_net:
 		return opponent_front
 	return own_front
+
+static func air_target_x(team: int, hdir: int, cfg) -> int:
+	var toward_net: int = 1 if team == 0 else -1
+	var enemy_front: int = cfg.court_width - FP.from_int(cfg.toss_zone_front_px) \
+		if team == 0 else FP.from_int(cfg.toss_zone_front_px)
+	var enemy_back: int = cfg.court_width - FP.from_int(cfg.toss_zone_back_px) \
+		if team == 0 else FP.from_int(cfg.toss_zone_back_px)
+	if hdir == -toward_net:
+		return enemy_front
+	if hdir == toward_net:
+		return enemy_back
+	return (enemy_front + enemy_back) / 2
 
 static func _flight_ticks(start_y: int, launch_vy: int, target_y: int, gravity: int) -> int:
 	var y: int = start_y
@@ -194,6 +205,8 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		var p = s.players[i]
 		if not (input & IN_ACTION) and _special_for_input(p, input, cfg) == 0:
 			continue
+		if _is_block_input(p, input):
+			continue
 		if _is_active_block(s, i, input, cfg):
 			continue
 		if p.hit_cooldown > 0 or p.stun > 0:
@@ -222,16 +235,17 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		return 1 - team_of(best_i) if s.touches > cfg.max_touches else HIT_NO_POINT
 	return NO_HIT
 
+static func _is_block_input(p, input: int) -> bool:
+	return p.on_ground == 0 and (input & IN_ACTION) != 0 and (input & IN_UP) != 0
+
 static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
 		return false
 	var team: int = team_of(i)
-	if s.last_touch_team != 1 - team or not (input & IN_ACTION):
+	var p = s.players[i]
+	if s.last_touch_team != 1 - team or not _is_block_input(p, input):
 		return false
-	var toward_net: int = IN_RIGHT if team == 0 else IN_LEFT
-	if not (input & toward_net):
-		return false
-	if absi(s.players[i].x - cfg.net_x) > FP.from_int(60):
+	if absi(p.x - cfg.net_x) > FP.from_int(60):
 		return false
 	var incoming_dir: int = -1 if team == 0 else 1
 	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
@@ -336,39 +350,22 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
 	var toss_bad: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_BAD)
 	if p.on_ground == 1:
-		# 地上ヒット=トス/レシーブ。押している方向で狙いを打ち分ける。
-		# 横成分は入力方向(相方へ返す後ろ向きも可)、無ければ真上。
+		# 地上は下+ボタンだけがレシーブ。それ以外は横3種のトス。
 		var desired_vx: int = 0
 		var desired_vy: int = 0
-		if intent_kind == INTENT_GROUND_FORWARD:
-			# 横のみ: 前へ低く遠く。ただしボールがリーチの縁ギリギリなら
-			# ジャンピングトス(飛びついて片手で拾う救済)になり、緩めの軌道に化ける。
-			# 入力は同じで状況が挙動を変える(演出は表示層がヒット距離から導出する)
+		if intent_kind == INTENT_GROUND_TOSS:
+			desired_vy = -cfg.bump_up_speed
+			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
+				toss_target_x(team, hdir, cfg), cfg)
 			if intent[3] != 0:
-				desired_vy = -cfg.bump_up_speed
-				desired_vx = hdir * cfg.toss_mid_vx
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
-			else:
-				desired_vy = -cfg.serve_vy if serve_strike else -cfg.toss_fwd_vy
-				desired_vx = hdir * (cfg.serve_vx if serve_strike else cfg.toss_fwd_vx)
-			p.hit_kind = 2  # 前トス(横のみ)
-		elif intent_kind == INTENT_GROUND_TOSS and hdir != 0:
-			# 上+横: 中間(高く+そこそこ前)
-			desired_vy = -cfg.bump_up_speed
-			desired_vx = hdir * cfg.toss_mid_vx
-			p.hit_kind = 1  # トス
-		elif intent_kind == INTENT_GROUND_TOSS:
-			# 上のみ: 真上へ高く
-			desired_vy = -cfg.bump_up_speed
-			desired_vx = 0
-			p.hit_kind = 1  # トス
+			p.hit_kind = 1
 		else:
-			# ニュートラル: 少し前へ=素レシーブ
+			# 下レシーブは既存どおり制御不能になり得る受け軌道。
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = dir * cfg.bump_fwd_speed
-			p.hit_kind = 0  # レシーブ
-		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS \
-			or (intent_kind == INTENT_GROUND_FORWARD and not serve_strike)
+			p.hit_kind = 0
+		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS
 		if is_ground_toss:
 			if toss_bad:
 				desired_vy = toss_vy_for_apex_pct(desired_vy, cfg.gravity,
@@ -419,12 +416,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		pct = pct * _mura_power_pct(s, i, p.char_id) / 100
 		var svx: int
 		var svy: int
-		if hdir != 0:
-			svy = cfg.spike_vy * pct / 100
-			svx = dir * cfg.spike_vx * pct / 100
-		else:
+		var relative_hdir: int = hdir * dir
+		if relative_hdir < 0:
 			svy = cfg.spike_steep_vy * pct / 100
-			svx = dir * cfg.spike_steep_vx * pct / 100
+		elif relative_hdir > 0:
+			svy = cfg.spike_vy * pct / 100
+		else:
+			svy = (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200
+		svx = toss_aim_vx(s.ball_x, s.ball_y, svy,
+			air_target_x(team, hdir, cfg), cfg)
 		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		if special == Chars.SUPER_FLAME_ATTACK:
@@ -434,25 +434,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			s.ball_flame = 0
 			s.ball_power = 0
 	else:
-		# 空中トス3種(上/横/フェイント)。地上・スパイクと同じ慣性反射で統一する
-		# (以前は直接代入で慣性が乗らない不整合があった)
-		var avx: int
-		var avy: int
-		if intent_kind == INTENT_AIR_TOSS_UP:
-			# 空中+上: 斜め上へトス(セルフセット/相方へ)。横入力方向、無ければ真上
-			avy = -cfg.bump_up_speed
-			avx = hdir * cfg.toss_mid_vx
-		elif intent_kind == INTENT_AIR_TOSS_SIDE:
-			# 空中+横: きつめの角度の山なりで遠くへトス
-			avy = -cfg.toss_fwd_vy
-			avx = hdir * cfg.toss_fwd_vx
-		else:
-			# 空中ニュートラル: 軟攻(フェイント)。ふわっとネット越しにポトリと落とす
-			# チョン当て。強打(下)との読み合いを作る。ネット際でないと自陣に落ちる
-			avy = -cfg.feint_vy
-			avx = dir * cfg.feint_vx
-		var is_air_toss: bool = intent_kind == INTENT_AIR_TOSS_UP \
-			or intent_kind == INTENT_AIR_TOSS_SIDE
+		# 空中ニュートラル段は横3種とも敵陣の前面/中央/後面へトスする。
+		var avy: int = -cfg.toss_fwd_vy
+		var avx: int = toss_aim_vx(s.ball_x, s.ball_y, avy,
+			air_target_x(team, hdir, cfg), cfg)
+		var is_air_toss := true
 		var toss_bad_low: bool = false
 		if is_air_toss:
 			if toss_bad:
@@ -462,7 +448,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 					avy = toss_vy_for_apex_pct(avy, cfg.gravity, apex_pct)
 			if toss_good:
 				avx = toss_aim_vx(s.ball_x, s.ball_y, avy,
-					toss_target_x(team, hdir, cfg), cfg)
+					air_target_x(team, hdir, cfg), cfg)
 		s.ball_vx = avx * aim_pct / 100 if toss_good and is_air_toss \
 			else avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = avy * aim_pct / 100 if is_air_toss and (toss_good or toss_bad_low) \
@@ -489,8 +475,8 @@ static func _scatter(s, actor: int, salt: int) -> int:
 static func _trait_roll_pct(s, actor: int, salt: int) -> int:
 	return _keyed_hash(s, actor, salt) % 100
 
-# ブロック: 原作どおりネット際でネット方向+アクションを押した時だけ成立する。
-# 地上・空中どちらでも可能。位置取りに加えて入力タイミングを要求する。
+# ブロック: ネット際の空中で上+アクションを押した時だけ成立する。
+# 横方向は問わず、位置取りに加えて明示入力のタイミングを要求する。
 # 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
 # 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
 # サーブは飛行中ブロック不可(バレーのルール準拠)。ボールのパワーは

@@ -80,15 +80,11 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.stun > 0:
 		p.stun -= 1
 		input = 0
-	# トス構え(上+アクション): その場で小ホップして手を伸ばす。横キーは
-	# トスの方向指定専用になり移動には使わない(「トスだけする」ユーザー指定)
-	var toss_stance: bool = (input & IN_ACTION) != 0 and (input & IN_JUMP) != 0
 	var in_dir: int = 0
-	if not toss_stance:
-		if input & IN_LEFT:
-			in_dir -= 1
-		if input & IN_RIGHT:
-			in_dir += 1
+	if input & IN_LEFT:
+		in_dir -= 1
+	if input & IN_RIGHT:
+		in_dir += 1
 	# 急ブレーキ(スキッド): 一定時間"走り続けた"後に逆方向を入れたときだけ、すぐ反転せず
 	# 数tick旧方向へ滑って減速してから向きが変わる(マリオの"キキーッ"の間)。
 	# 追尾の細かい左右振り(オシレーション)ではrunが溜まらず発動しない=制御を壊さない。
@@ -149,12 +145,9 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.push != 0:
 		p.vx += signi(p.push) * FP.from_int(PUSH_UNIT_PX) * absi(p.push) / PUSH_DECAY
 		p.push -= signi(p.push)
-	if (input & IN_JUMP) and p.on_ground == 1 and not toss_stance \
-			and not (input & IN_ABILITY1):
-		# トス構え(上+アクション)は跳ばない: ホップは表示層の演出のみ。
-		# Dは必殺技の方向モディファイア。上+Dも地上技判定まで接地を維持する。
-		# simで跳ぶと上トスが「空中ヒット」扱いになり地上トス表(慣性込み)から
-		# 外れてしまうバグがあった(実ジャンプ化は意図しない実装だった)
+	if (input & IN_JUMP) and p.on_ground == 1 and not (input & IN_ABILITY1):
+		# 上はジャンプ専用。Dは必殺技の方向モディファイアなので、
+		# 上+Dだけは地上技判定まで接地を維持する。
 		var height_px := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
 		var rise_ticks := _jump_ticks(true)
 		p.vy = -_jump_gravity(height_px, rise_ticks, true) * rise_ticks

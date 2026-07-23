@@ -40,20 +40,21 @@ func _hit_snapshot(on_ground: int, input: int, d2: int, vx: int, vy: int, power:
 	return [p.hit_kind, p.dive, s.ball_vx, s.ball_vy, s.ball_power, p.guard, p.flinch]
 
 func test_intent_classification_table() -> void:
+	# 操作原作回帰後の論理ベースライン:
+	# 地上は下だけレシーブ、それ以外は横3トス。空中は下=攻撃、なし=トス、上=ブロック。
 	var w: Array = _world()
 	var cfg = w[1]
 	var near_d2 := FP.from_int(5) * FP.from_int(5)
 	var edge: int = cfg.player_reach * 4 / 5
 	var edge_d2: int = edge * edge
 	var rows := [
-		[1, 0, near_d2, 0, 0],
+		[1, 0, near_d2, 1, 0],
 		[1, Simulation.IN_UP, near_d2, 1, 0],
-		[1, Simulation.IN_RIGHT, near_d2, 2, 0],
-		[1, Simulation.IN_RIGHT, edge_d2, 2, 1],
+		[1, Simulation.IN_RIGHT, near_d2, 1, 0],
+		[1, Simulation.IN_RIGHT, edge_d2, 1, 1],
 		[1, Simulation.IN_UP | Simulation.IN_RIGHT, near_d2, 1, 0],
 		[0, Simulation.IN_DOWN, near_d2, 0, 0],
 		[0, Simulation.IN_RIGHT, near_d2, 0, 0],
-		[0, Simulation.IN_UP, near_d2, 0, 0],
 		[0, 0, near_d2, 0, 0],
 	]
 	for row in rows:
@@ -62,22 +63,25 @@ func test_intent_classification_table() -> void:
 		check_eq(1 if out[1] != 0 else 0, row[4], "意図分類 dive: %s" % [row])
 
 func test_intent_classifier_is_pure_and_complete() -> void:
+	# 値はHitResolverの公開意図定数に対応する新体系の確定値。速度スナップショットと
+	# 異なり実測不要で、地上ニュートラル=[トス,横なし,上照準なし,diveなし]が正しい。
 	var cfg = SimConfig.new()
 	var near_d2 := FP.from_int(5) * FP.from_int(5)
 	var edge: int = cfg.player_reach * 4 / 5
 	var edge_d2: int = edge * edge
 	var rows := [
-		[1, 0, near_d2, false, [0, 0, 0, 0]],
-		[1, Simulation.IN_UP, near_d2, false, [1, 0, 1, 0]],
-		[1, Simulation.IN_RIGHT, near_d2, false, [2, 1, 0, 0]],
-		[1, Simulation.IN_RIGHT, edge_d2, false, [2, 1, 0, 1]],
-		[1, Simulation.IN_RIGHT, edge_d2, true, [2, 1, 0, 0]],
-		[1, Simulation.IN_LEFT | Simulation.IN_UP, near_d2, false, [1, -1, 1, 0]],
+		[1, 0, near_d2, false, [1, 0, 0, 0]],
+		[1, Simulation.IN_DOWN, near_d2, false, [0, 0, 0, 0]],
+		[1, Simulation.IN_UP, near_d2, false, [1, 0, 0, 0]],
+		[1, Simulation.IN_RIGHT, near_d2, false, [1, 1, 0, 0]],
+		[1, Simulation.IN_RIGHT, edge_d2, false, [1, 1, 0, 1]],
+		[1, Simulation.IN_RIGHT, edge_d2, true, [1, 1, 0, 0]],
+		[1, Simulation.IN_LEFT | Simulation.IN_UP, near_d2, false, [1, -1, 0, 0]],
 		[0, Simulation.IN_DOWN, near_d2, false, [3, 0, 0, 0]],
 		[0, Simulation.IN_DOWN | Simulation.IN_RIGHT, near_d2, false, [3, 1, 0, 0]],
-		[0, Simulation.IN_UP, near_d2, false, [4, 0, 1, 0]],
-		[0, Simulation.IN_RIGHT, near_d2, false, [5, 1, 0, 0]],
-		[0, 0, near_d2, false, [6, 0, 0, 0]],
+		[0, Simulation.IN_UP, near_d2, false, [5, 0, 1, 0]],
+		[0, Simulation.IN_RIGHT, near_d2, false, [4, 1, 0, 0]],
+		[0, 0, near_d2, false, [4, 0, 0, 0]],
 	]
 	for row in rows:
 		var actual: Array[int] = HitResolver._classify_intent(
@@ -85,6 +89,7 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 		check_eq(actual, row[4], "純粋意図分類: %s" % [row])
 
 func test_output_velocity_snapshot() -> void:
+	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
 	var w: Array = _world()
 	var cfg = w[1]
 	var near_d2 := FP.from_int(5) * FP.from_int(5)
@@ -95,17 +100,17 @@ func test_output_velocity_snapshot() -> void:
 		_hit_snapshot(1, Simulation.IN_RIGHT, outside_sweet, -FP.from_int(8), FP.from_int(12)),
 		_hit_snapshot(0, Simulation.IN_DOWN, near_d2, 0, FP.from_int(8)),
 		_hit_snapshot(0, Simulation.IN_DOWN | Simulation.IN_RIGHT, outside_sweet, -FP.from_int(8), -FP.from_int(4)),
-		_hit_snapshot(0, Simulation.IN_UP, outside_sweet, -FP.from_int(8), FP.from_int(12)),
+		_hit_snapshot(0, 0, outside_sweet, -FP.from_int(8), FP.from_int(12)),
 		_hit_snapshot(1, 0, outside_sweet, -FP.from_int(12), FP.from_int(8), 1),
 	]
 	check_eq(cases, [
-		[0, 0, 43690, -567978, 0, 100, 0],
-		[1, 0, 157286, -567978, 0, 100, 0],
-		[2, 14, 321126, -567978, 0, 100, 0],
-		[0, 0, 753663, 668467, 1, 100, 0],
-		[0, 0, 900027, 362632, 0, 100, 0],
-		[0, 0, 157286, -803907, 0, 100, 0],
-		[0, 0, 799539, -694681, 0, 50, 24],
+		[1, 0, 64299, -567978, 0, 100, 0],
+		[1, 0, 221585, -567978, 0, 100, 0],
+		[1, 14, 387280, -567978, 0, 100, 0],
+		[0, 0, 1937408, 521011, 1, 100, 0],
+		[0, 0, 1724688, 362632, 0, 100, 0],
+		[0, 0, 429202, -749294, 0, 100, 0],
+		[1, 0, 805721, -170393, 0, 50, 24],
 	], "固定フィクスチャの整数出力速度")
 
 func test_collision_order_hit_move_net_block() -> void:
@@ -125,10 +130,11 @@ func test_collision_order_hit_move_net_block() -> void:
 	s.ball_vx = FP.from_int(2)
 	s.ball_vy = 0
 	Simulation.step(s, [0, Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
-		0, Simulation.IN_ACTION | Simulation.IN_LEFT], cfg)
+		0, Simulation.IN_ACTION | Simulation.IN_UP], cfg)
+	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
 	check_eq([s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, s.last_touch_team,
 		s.touches, attacker.hit_cooldown, blocker.hit_cooldown],
-		[15400959, 14209478, -869006, 446918, 1, 1, 14, 14],
+		[15237120, 14209478, -741212, 446918, 1, 1, 14, 14],
 		"同tickのヒット→移動→ネット→ブロック順")
 
 func test_scatter_stream_snapshot() -> void:
@@ -166,7 +172,7 @@ func _chain_hashes() -> Array[int]:
 	s.players[2].guard = 1
 	s.ball_power = 1
 	s.last_touch_team = 0
-	HitResolver._apply_hit(s, 2, cfg, Simulation.IN_ACTION, miss_d2)
+	HitResolver._apply_hit(s, 2, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, miss_d2)
 	out.append(s.state_hash())
 
 	# 別のパワーボールをネット際でブロックする。
@@ -181,7 +187,7 @@ func _chain_hashes() -> Array[int]:
 	s.ball_vy = FP.from_int(5)
 	s.ball_power = 1
 	s.last_touch_team = 0
-	HitResolver._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT])
+	HitResolver._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_UP])
 	out.append(s.state_hash())
 
 	# 帽子投げの溜めから発射まで進める。
@@ -198,11 +204,10 @@ func _chain_hashes() -> Array[int]:
 	return out
 
 func test_hit_chain_second_golden() -> void:
-	# プレイヤーburn追加による状態配列拡張。
-	# 物理挙動の変更ではなくハッシュ構造の変化。
+	# 操作体系の原作回帰(地上トス3種/下レシーブ/空中9マス/ブロック明示入力化)による意図的な挙動変更。2026-07-20設計会仕様
 	check_eq(_chain_hashes(), [
-		-3225912992280518491,
-		5934354525773039121,
+		6272102908485989474,
+		8591929783393520418,
 		919436620370763387,
 		-4916841278586804129,
 		-7454915879545196849,
