@@ -319,7 +319,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		sweet = false
 	var just_receive: bool = opposing_attack \
 		and intent_kind == INTENT_GROUND_RECEIVE \
-		and sweet and p.receive_stance > 0 \
+		and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
 		and p.burnout_ticks == 0 and not incoming_unblockable
 	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE \
@@ -329,6 +329,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		p.just_receive_flash = 30
 		p.just_receive_event += 1
 		s.hit_freeze = maxi(s.hit_freeze, 10)
+		# タイミング成功は芯受けと同じ制御報酬を得る。
+		# 慣性カットに加え、パワー球のmangled化・よろけ・吹き飛びを防ぐ。
+		sweet = true
 	if intent_kind == INTENT_GROUND_RECEIVE and not just_receive \
 			and not incoming_flame:
 		sweet = false

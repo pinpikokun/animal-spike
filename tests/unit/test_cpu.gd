@@ -417,6 +417,93 @@ func test_cpu_returns_to_spawn() -> void:
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=157)へ戻る")
 
+func test_sweet_jump_plan_returns_two_values_when_plan_exists() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[1]
+	p.x = FP.from_int(176)
+	s.ball_x = p.x + FP.from_int(40)
+	s.ball_y = cfg.floor_y - FP.from_int(160)
+	s.ball_vy = 0
+	var plan: Array[int] = SimCpu._sweet_jump_plan(
+		s, p, cfg, cfg.player_reach)
+	check_eq(plan.size(), 2, "sweet jump plan has delay and target")
+	check(plan[0] > 0, "high reachable toss waits before launch")
+	check(plan[0] < 180, "launch delay stays inside the search horizon")
+
+func test_sweet_jump_plan_returns_two_values_when_no_plan_exists() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[1]
+	s.ball_x = p.x
+	s.ball_y = cfg.floor_y
+	s.ball_vy = 0
+	var plan: Array[int] = SimCpu._sweet_jump_plan(s, p, cfg, 0)
+	check_eq(plan.size(), 2, "missing sweet jump plan has sentinel and target")
+	check_eq(plan[0], -1, "unreachable toss produces the sentinel")
+
+func test_jump_serve_holds_jump_while_rising() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_SERVE
+	s.serving_team = 0
+	s.controlled_l = 1
+	s.serve_tossed = 1
+	var p = s.players[0]
+	p.cpu = _prof(SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+	p.on_ground = 0
+	p.vy = -FP.from_int(4)
+	s.ball_x = p.x + cfg.player_reach * 2
+	s.ball_y = p.y - cfg.player_reach_up * 2
+	var input: int = SimCpu.decide(s, 0, cfg)
+	check(input & Simulation.IN_JUMP, "jump serve holds jump while rising")
+
+func test_rally_attack_holds_jump_while_rising() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 0
+	s.touches = 1
+	s.serve_flight = 0
+	var p = s.players[1]
+	p.cpu = SimCpu.PRESET_MAX
+	p.on_ground = 0
+	p.vy = -FP.from_int(4)
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.ball_vx = 0
+	s.ball_vy = 0
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_ACTION, "rally attacker swings while rising")
+	check(input & Simulation.IN_JUMP, "rally attack holds jump while rising")
+
+func test_air_attack_uses_position_after_this_tick_movement() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 0
+	s.touches = 1
+	s.serve_flight = 0
+	var p = s.players[1]
+	p.cpu = SimCpu.PRESET_MAX
+	p.on_ground = 0
+	p.y = FP.from_int(220)
+	p.vy = -FP.from_int(5)
+	s.ball_x = p.x
+	s.ball_y = p.y - FP.from_int(18)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_ACTION,
+		"air attacker swings when this tick movement enters the sweet window")
+	check(input & Simulation.IN_JUMP,
+		"predicted air attack keeps variable jump held")
+
 func test_landing_prediction_uses_wall_reflection_not_floor_bounce() -> void:
 	var cfg := {
 		"ball_radius": 10,

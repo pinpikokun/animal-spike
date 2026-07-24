@@ -19,9 +19,10 @@ func test_skid_triggers_after_sustained_run() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	for t in 30:
-		Sim.tick(s, [Sim.IN_RIGHT, 0], cfg)
+		# 人間入力の移動だけを検証し、味方CPUの打球・ヒットストップを混ぜない。
+		Sim.step(s, [Sim.IN_RIGHT, 0, 0, 0], cfg)
 	check(s.players[0].run >= 12, "30tick右走行でrunが溜まる run=%d" % s.players[0].run)
-	Sim.tick(s, [Sim.IN_LEFT, 0], cfg)
+	Sim.step(s, [Sim.IN_LEFT, 0, 0, 0], cfg)
 	check(s.players[0].brake != 0, "逆入力でスキッド発動 brake=%d" % s.players[0].brake)
 
 func test_no_skid_on_oscillation() -> void:
@@ -38,8 +39,9 @@ func test_skid_survives_short_neutral_gap() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	for t in 30:
-		Sim.tick(s, [Sim.IN_RIGHT, 0], cfg)
+		# 人間入力の移動だけを検証し、味方CPUの打球・ヒットストップを混ぜない。
+		Sim.step(s, [Sim.IN_RIGHT, 0, 0, 0], cfg)
 	for t in 3:
-		Sim.tick(s, [0, 0], cfg)  # 一瞬離す
-	Sim.tick(s, [Sim.IN_LEFT, 0], cfg)
+		Sim.step(s, [0, 0, 0, 0], cfg)  # 一瞬離す
+	Sim.step(s, [Sim.IN_LEFT, 0, 0, 0], cfg)
 	check(s.players[0].brake != 0, "短いニュートラルを挟んだ反転でもスキッド brake=%d" % s.players[0].brake)

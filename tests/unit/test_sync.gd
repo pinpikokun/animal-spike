@@ -16,8 +16,16 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# drive_recovery_delay追加(消費/被削り後180tickは自然回復停止)による状態拡張+挙動変更。2026-07-23
-const GOLDEN_COMBINED_HASH := -5989456738714378581
+# 2026-07-25 CPU入力列の変化により更新。実測値(代行環境で全スイート実行)。
+# 変更の内訳:
+#  1. sim_cpu.gd の三項式型エラー解消。_sweet_jump_plan が常に空配列を返して
+#     _decide_positioning が中断していたのが、初めて正常動作するようになった
+#  2. サーブ経路での IN_JUMP 保持。ジャンプが18pxのホップから135pxへ戻った
+#  3. 打撃tickでの IN_JUMP 保持。打つ瞬間に可変ジャンプが失速していたのを止めた
+#  4. 空中打撃の芯判定をこのtickの移動後の位置で行う先読み。
+#     simulationは 入力→プレイヤー移動→ヒット判定 の順なので、移動前の座標で
+#     判断すると常に1tick遅れて芯を通り過ぎていた
+const GOLDEN_COMBINED_HASH := -6483920571793232169
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

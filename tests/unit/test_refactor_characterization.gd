@@ -208,6 +208,7 @@ func _chain_hashes() -> Array[int]:
 	return out
 
 func test_hit_chain_second_golden() -> void:
+	# TODO(実測待ち): タイミング式ジャストレシーブ/CPU攻撃変更後の値を代行環境で確定する。
 	# drive_recovery_delay追加(消費/被削り後180tickは自然回復停止)による状態拡張+挙動変更。2026-07-23
 	check_eq(_chain_hashes(), [
 		3473862460420816044,

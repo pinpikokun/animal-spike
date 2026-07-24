@@ -842,13 +842,15 @@ func test_just_receive_holds_aim() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[0].receive_stance = 1
+	# タイミング式の正規手順: 静止中の下+ボタン押下エッジで有効窓を開く。
+	var receive_input: int = Simulation.IN_ACTION | Simulation.IN_DOWN
+	Simulation._update_receive_stances(s, [receive_input, 0, 0, 0], cfg)
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = s.players[0].y - FP.from_int(2)
 	s.ball_vx = -FP.from_int(20)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	Simulation.step(s, [receive_input, 0, 0, 0], cfg)
 	# 下レシーブは狙い不能の既定前方成分を持ち、そこへjust慣性分が加わる。
 	var expect: int = cfg.bump_fwd_speed \
 		+ FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den

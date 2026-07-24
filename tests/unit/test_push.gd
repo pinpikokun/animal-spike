@@ -77,7 +77,9 @@ func test_just_receive_keeps_control() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.receive_stance = 1
+	# タイミング式の正規手順: 静止中の下+ボタン押下エッジで有効窓を開く。
+	var receive_input: int = Simulation.IN_ACTION | Simulation.IN_DOWN
+	Simulation._update_receive_stances(s, [receive_input, 0, 0, 0], cfg)
 	s.last_touch_team = 1
 	s.ball_power = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
@@ -86,7 +88,7 @@ func test_just_receive_keeps_control() -> void:
 	var vin_x: int = FP.from_int(600) / cfg.tick_rate
 	s.ball_vx = vin_x
 	s.ball_vy = FP.from_int(300) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	Simulation.step(s, [receive_input, 0, 0, 0], cfg)
 	check(absi(s.ball_vx) < vin_x / 2, "ジャスト受けは流されずほぼ狙い通り")
 	check_eq(p.flinch, 0, "ジャスト受けは被弾しない")
 

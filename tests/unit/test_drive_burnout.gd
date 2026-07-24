@@ -15,11 +15,12 @@ func _world() -> Array:
 	s.phase = SimState.PHASE_RALLY
 	return [s, cfg]
 
-func _arm_receive(s, cfg, i: int = 0) -> void:
-	s.ball_x = cfg.net_x
-	s.ball_y = 0
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check(s.players[i].receive_stance > 0, "下レシーブ構えを経由")
+func _press_receive(s, cfg, i: int = 0) -> void:
+	var inputs: Array[int] = [0, 0, 0, 0]
+	inputs[i] = Simulation.IN_ACTION | Simulation.IN_DOWN
+	Simulation._update_receive_stances(s, inputs, cfg)
+	check_eq(s.players[i].receive_stance, cfg.just_receive_window_ticks,
+		"下+ボタンの押下エッジで10tick窓を開く")
 
 func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	var p = s.players[i]
@@ -33,13 +34,19 @@ func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	HitResolver._apply_hit(s, i, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 
-func test_just_receive_from_stance_nullifies_drive_and_guard_without_healing() -> void:
+func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_healing() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.guard = 40
-	_arm_receive(s, cfg)
+	_press_receive(s, cfg)
 	p.drive_gauge = 3000
-	_incoming_just(s, cfg)
+	# 位置の芯判定は撤去。リーチ端相当でもタイミング窓だけで成立する。
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+	s.ball_power = 1
+	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
 	check_eq(p.guard, 40, "ジャストレシーブはガード削りを無効化し回復もしない")
 	check_eq(p.drive_gauge, 3000, "ジャストレシーブはドライブ削りを無効化し回復もしない")
 	check_eq(p.just_receive_flash, 30, "JUST表示と本体発光を約30tick維持")
@@ -51,25 +58,51 @@ func test_moving_receive_does_not_trigger_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.drive_gauge = 3000
-	p.receive_stance = 1
+	p.vx = 1
+	Simulation._update_receive_stances(s,
+		[Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_power = 1
 	HitResolver._apply_hit(s, 0, cfg,
-		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT, 0)
-	check_eq(p.drive_gauge, 1000, "構え後でも横移動入力なら2本削りを受ける")
+		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(p.drive_gauge, 1000, "移動中の押下では窓が開かず2本削りを受ける")
 	check_eq(p.just_receive_event, 0, "移動レシーブでは専用演出なし")
 
 func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.guard = 100
-	_arm_receive(s, cfg)
+	_press_receive(s, cfg)
 	p.drive_gauge = 3000
 	_incoming_just(s, cfg, 0, true)
 	check_eq(p.guard, 60, "防御不能系はカタログ固定40を通す")
 	check_eq(p.drive_gauge, 1000, "人工的なジャスト属性分だけドライブを削る")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
+
+func test_held_receive_after_window_expires_is_normal_receive() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 3000
+	_press_receive(s, cfg)
+	var held: Array[int] = [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0]
+	for i in cfg.just_receive_window_ticks:
+		Simulation._update_receive_stances(s, held, cfg)
+	check(p.receive_stance < 0, "押しっぱなしでは窓切れ後に再発動しない")
+	_incoming_just(s, cfg)
+	check_eq(p.drive_gauge, 1000, "窓切れ後は通常どおり2本削られる")
+	check_eq(p.just_receive_event, 0, "窓切れ後はジャスト演出なし")
+
+func test_releasing_and_pressing_again_opens_new_window() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	_press_receive(s, cfg)
+	var held: Array[int] = [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0]
+	for i in cfg.just_receive_window_ticks:
+		Simulation._update_receive_stances(s, held, cfg)
+	Simulation._update_receive_stances(s, [0, 0, 0, 0], cfg)
+	Simulation._update_receive_stances(s, held, cfg)
+	check_eq(s.players[0].receive_stance, cfg.just_receive_window_ticks,
+		"離して押し直すと新しい窓を開く")
 
 func test_just_toss_does_not_heal_guard() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
@@ -92,7 +125,7 @@ func test_burnout_seals_just_attack_and_just_receive() -> void:
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
 		"バーンアウト中は芯でも通常アタック")
 	p.on_ground = 1
-	p.receive_stance = 1
+	p.receive_stance = cfg.just_receive_window_ticks
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	HitResolver._apply_hit(s, 0, cfg,

@@ -240,6 +240,7 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 			p.quake_stun = cfg.hip_quake_stun_ticks
 	var was_serve_strike: bool = state.phase == SimStateScript.PHASE_SERVE \
 		and state.serve_tossed == 1
+	_update_receive_stances(state, inputs, cfg)
 	var hit_result: int = HitResolver._resolve_hit(state, inputs, cfg)
 	if hit_result == 0 or hit_result == 1:
 		_award_point(state, hit_result, cfg)
@@ -248,18 +249,25 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		state.phase = SimStateScript.PHASE_RALLY
 		state.serve_tossed = 0
 		state.serve_flight = 1
-	_update_receive_stances(state, inputs)
 	_update_hat(state, inputs, cfg)
 
-static func _update_receive_stances(state, inputs: Array[int]) -> void:
+static func _update_receive_stances(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var p = state.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
-		var holding: bool = state.phase == SimStateScript.PHASE_RALLY \
-			and p.on_ground == 1 and p.vx == 0 and p.stun == 0 and p.quake_stun == 0 \
-			and (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0 \
-			and (input & (IN_LEFT | IN_RIGHT)) == 0
-		p.receive_stance = mini(p.receive_stance + 1, 2) if holding else 0
+		var chord: bool = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
+		if not chord or state.phase != SimStateScript.PHASE_RALLY:
+			p.receive_stance = 0
+			continue
+		if p.receive_stance == 0:
+			var valid_edge: bool = p.on_ground == 1 and p.vx == 0 \
+				and p.stun == 0 and p.quake_stun == 0 \
+				and (input & (IN_LEFT | IN_RIGHT)) == 0
+			p.receive_stance = cfg.just_receive_window_ticks if valid_edge else -1
+		elif p.receive_stance > 1:
+			p.receive_stance -= 1
+		elif p.receive_stance == 1:
+			p.receive_stance = -1
 
 # 帽子投げ(お邪魔ギミック): Dキーで前方へ投げ、飛行→滞在→高速帰還→キャッチ。
 # 飛んでる間ボールと当たり判定を持ち、触れると弾く。一度に1個だけ

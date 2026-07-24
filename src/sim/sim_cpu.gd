@@ -16,6 +16,7 @@ const SimStateScript := preload("res://src/sim/sim_state.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
+const PlayerMovement := preload("res://src/sim/player_movement.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -105,6 +106,24 @@ static func _walk_to(p, target_x: int, deadzone: int) -> int:
 		return SimInput.IN_LEFT
 	return 0
 
+# 相手の見えているトスには打球後の反応遅延を掛けず、後衛だけが自陣中央を先回りする。
+static func _is_pre_attack_receiver(s, idx: int, cfg, team: int) -> bool:
+	if s.last_touch_team != 1 - team or s.ball_attack_kind != SimStateScript.BALL_ATTACK_NONE:
+		return false
+	var ball_on_opponent_side: bool = (s.ball_x < cfg.net_x) != (team == 0)
+	if not ball_on_opponent_side or s.ball_vy > 0:
+		return false
+	var p = s.players[idx]
+	var mate = s.players[team * 2 + (1 - idx % 2)]
+	var my_net_distance: int = absi(p.x - cfg.net_x)
+	var mate_net_distance: int = absi(mate.x - cfg.net_x)
+	return my_net_distance > mate_net_distance \
+		or (my_net_distance == mate_net_distance and idx % 2 == 0)
+
+static func _pre_attack_cover_x(cfg, team: int) -> int:
+	return cfg.net_x / 2 if team == 0 \
+		else cfg.net_x + (cfg.court_width - cfg.net_x) / 2
+
 # 非レシーバー時の守備ホーム。自チームの2定位置(後衛/前衛)のうち、相棒(操作キャラ)
 # に対して自分が今いる側のホームを選ぶ=相棒とボールを横切らず反対側を埋める。
 # 交差しないのでボール落下点へ吸い寄せられて再び相棒へ張り付くのを防ぐ。決定論・読み取りのみ
@@ -179,20 +198,143 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 	var bvx: int = s.ball_vx
 	var bvy: int = s.ball_vy
 	var py: int = p.y
-	var pvy: int = -cfg.jump_speed
+	# player_movementのランク別・上昇下降別ジャンプ物理と同じ軌道で会合を予測する。
+	# 旧cfg.jump_speedでは実際の跳躍と予測がずれ、45%芯へ到達しなかった。
+	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
+	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
+	var up_ticks: int = PlayerMovement._jump_ticks(true)
+	var up_gravity: int = PlayerMovement._jump_gravity(jump_height, up_ticks, true)
+	var down_ticks: int = PlayerMovement._jump_ticks(false)
+	var down_gravity: int = PlayerMovement._jump_gravity(
+		jump_height, down_ticks, false)
+	var pvy: int = -up_gravity * up_ticks
 	for t in 48:
-		bvy += cfg.gravity
-		bx += bvx
-		by += bvy
-		pvy += cfg.gravity
+		pvy += up_gravity if pvy < 0 else down_gravity
 		py += pvy
 		if py >= cfg.floor_y and pvy > 0:
 			break
+		# simulationはプレイヤー移動→ヒット判定→ボール移動の順。
 		var dx: int = bx - p.x
 		var dy: int = by - py
 		var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
 		if dx * dx + dy_n * dy_n <= limit * limit:
 			return true
+		bvy += cfg.gravity
+		bx += bvx
+		by += bvy
+	return false
+
+# 地上の現在位置から、未来の球位置へ芯距離で会合できる離陸待ちtickと会合xを返す。
+# 戻り値[0]が0なら今跳ぶ。-1なら現在の球筋では芯会合を作れない。
+static func _sweet_jump_plan(s, p, cfg, sweet_r: int) -> Array[int]:
+	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
+	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
+	var up_ticks: int = PlayerMovement._jump_ticks(true)
+	var up_gravity: int = PlayerMovement._jump_gravity(jump_height, up_ticks, true)
+	var down_ticks: int = PlayerMovement._jump_ticks(false)
+	var down_gravity: int = PlayerMovement._jump_gravity(
+		jump_height, down_ticks, false)
+	var jump_y: Array[int] = []
+	var py: int = cfg.floor_y
+	var pvy: int = -up_gravity * up_ticks
+	for age in 48:
+		pvy += up_gravity if pvy < 0 else down_gravity
+		py += pvy
+		if py >= cfg.floor_y and pvy > 0:
+			break
+		jump_y.append(py)
+	var bx: int = s.ball_x
+	var by: int = s.ball_y
+	var bvx: int = s.ball_vx
+	var bvy: int = s.ball_vy
+	var speed: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
+	var best_delay: int = 999
+	var best_x: int = p.x
+	# 高い味方トスは頂点から接触まで80tickを超えるため、着地まで十分に探索する。
+	for future in 180:
+		var contact_tick: int = future + 1
+		for age_index in jump_y.size():
+			var jump_age: int = age_index + 1
+			if jump_age > contact_tick:
+				break
+			var launch_delay: int = contact_tick - jump_age
+			var dy_n: int = (by - jump_y[age_index]) \
+				* cfg.player_reach / cfg.player_reach_up
+			if dy_n * dy_n > sweet_r * sweet_r:
+				continue
+			var remaining_dx: int = maxi(absi(bx - p.x) - speed * launch_delay, 0)
+			if remaining_dx * remaining_dx + dy_n * dy_n > sweet_r * sweet_r:
+				continue
+			if launch_delay < best_delay:
+				best_delay = launch_delay
+				best_x = bx
+		if best_delay == 0:
+			break
+		bvy += cfg.gravity
+		bx += bvx
+		by += bvy
+		if bx < cfg.ball_radius:
+			bx = cfg.ball_radius + (cfg.ball_radius - bx)
+			bvx = BallPhysics.wall_reflect_vx(bvx, cfg)
+		elif bx > cfg.court_width - cfg.ball_radius:
+			var right: int = cfg.court_width - cfg.ball_radius
+			bx = right - (bx - right)
+			bvx = BallPhysics.wall_reflect_vx(bvx, cfg)
+		if by >= cfg.floor_y - cfg.ball_radius:
+			break
+	if best_delay == 999:
+		return [-1, p.x]
+	return [best_delay, best_x]
+
+static func _receive_target_x(s, cfg, prof: int) -> int:
+	var ab: int = prof_byte(prof, P_AB)
+	if not (ab & AB_PREDICT):
+		return s.ball_x
+	var depth: int = prof_byte(prof, P_DEPTH)
+	var max_bounce: int = 240 if depth >= 3 else depth
+	return _predict_landing_x(
+		s, cfg, cfg.floor_y - cfg.player_reach_up / 2, max_bounce)
+
+static func _can_prepare_just_receive(s, p, cfg, receive_reach: int,
+		target_x: int, ready_zone: int) -> bool:
+	var contact_ticks: int = _ticks_until_receive_at(
+		s, p, cfg, receive_reach, target_x)
+	if contact_ticks > 180:
+		return false
+	var speed: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
+	# 落下点とのピクセル一致は不要。受けリーチ内へ入れば成立する。
+	var travel: int = maxi(absi(target_x - p.x) - ready_zone, 0)
+	var ready_ticks: int = (travel + speed - 1) / speed if travel > 0 else 0
+	if travel > 0 or p.vx != 0:
+		ready_ticks += 1  # 到着後に入力を離して静止するtick
+	if p.receive_stance < 0:
+		ready_ticks += 1  # 押しっぱなしラッチを解除して次のエッジを作るtick
+	var press_tick: int = maxi(contact_ticks - 5, 0)
+	return ready_ticks <= press_tick
+
+static func _air_will_meet_sweet(s, p, cfg, sweet_r: int) -> bool:
+	var bx: int = s.ball_x
+	var by: int = s.ball_y
+	var bvx: int = s.ball_vx
+	var bvy: int = s.ball_vy
+	var py: int = p.y
+	var pvy: int = p.vy
+	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
+	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
+	for tick in 48:
+		var gravity: int = PlayerMovement._jump_gravity(
+			jump_height, PlayerMovement._jump_ticks(pvy < 0), pvy < 0)
+		pvy += gravity
+		py += pvy
+		if py >= cfg.floor_y:
+			break
+		var dx: int = bx - p.x
+		var dy_n: int = (by - py) * cfg.player_reach / cfg.player_reach_up
+		if dx * dx + dy_n * dy_n <= sweet_r * sweet_r:
+			return true
+		bvy += cfg.gravity
+		bx += bvx
+		by += bvy
 	return false
 
 # サーブトスの狙い(角度/高さ)をスコアから決定論的に散らす。
@@ -200,12 +342,16 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 # 追いつける限界がある。安全域8..24度/100..125%(24度超は走っても間に合わず
 # 同じ狙いの再トスが無限ループする=決定論の膠着、実測で確認済み)
 static func _serve_target(s, idx: int) -> Array[int]:
-	var h: int = absi((s.score_l * 73856093) ^ (s.score_r * 19349663) ^ (idx * 83492791))
+	# 左右チームの同じスロットは鏡像の狙いになるよう、絶対indexではなくslotを使う。
+	var slot: int = idx % 2
+	var h: int = absi((s.score_l * 73856093) ^ (s.score_r * 19349663) \
+		^ (slot * 83492791))
 	var aim: int = 8 + h % 17
 	var pow_pct: int = 100 + (h / 97) % 26
 	return [aim, pow_pct]
 
-static func _decide_serve(s, idx: int, cfg, ab: int) -> int:
+static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
+	var ab: int = prof_byte(prof, P_AB)
 	# サーブ遅延タイマーはsimulation.gdのstep()が減算する(ここは読むだけ)
 	if idx != SimStateScript._server_index(s):
 		return 0
@@ -218,7 +364,16 @@ static func _decide_serve(s, idx: int, cfg, ab: int) -> int:
 		var dy: int = s.ball_y - p.y
 		var dy_n: int = dy * reach / cfg.player_reach_up
 		var fwd: int = SimInput.IN_RIGHT if s.serving_team == 0 else SimInput.IN_LEFT
+		var attack_serve: bool = prof_byte(prof, P_TIQ) >= 2 \
+			and _attack_ok(s, idx, prof)
+		if attack_serve and p.on_ground == 1 and _jump_will_meet(s, p, cfg, reach):
+			var attack_land: int = _land_x_from(
+				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
+				cfg.floor_y - cfg.player_reach_up / 2, 0)
+			return _walk_to(p, attack_land, cfg.player_reach / 4) | SimInput.IN_JUMP
 		if dx * dx + dy_n * dy_n <= reach * reach:
+			if attack_serve and p.on_ground == 0:
+				return SimInput.IN_ACTION | SimInput.IN_DOWN | fwd
 			return SimInput.IN_ACTION | fwd
 		var land: int = _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
 			cfg.floor_y - cfg.player_reach_up / 2, 0)
@@ -299,7 +454,10 @@ static func decide(s, idx: int, cfg) -> int:
 	var ab: int = prof_byte(prof, P_AB)
 	var deadzone: int = cfg.player_reach / 2
 	if s.phase == SimStateScript.PHASE_SERVE:
-		var serve_in: int = _decide_serve(s, idx, cfg, ab)
+		var serve_in: int = _decide_serve(s, idx, cfg, prof)
+		if p.on_ground == 0 and p.vy < 0 \
+				and not (serve_in & SimInput.IN_ACTION):
+			serve_in |= SimInput.IN_JUMP
 		if serve_in != 0:
 			return serve_in
 		# サーブ準備中でも棒立ちしない: 受け手チームの味方CPUは相棒(人間)と反対側へ
@@ -325,6 +483,25 @@ static func decide(s, idx: int, cfg) -> int:
 		and s.tick - s.last_hit_tick < delay
 	var on_own_side: bool = (s.ball_x < cfg.net_x) == (team == 0)
 	var input: int = 0
+	if p.on_ground == 1 and _is_pre_attack_receiver(s, idx, cfg, team):
+		# 予備動作へのコートカバーは打球後反応ではないため、frozenより先に処理する。
+		return _walk_to(p, _pre_attack_cover_x(cfg, team), deadzone / 2)
+	if frozen and on_own_side and p.on_ground == 1 and p.vx == 0 \
+			and _plans_just_receive(s, idx, p, team, prof):
+		var frozen_receive_reach: int = _hit_reach(
+			p.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+		var frozen_target: int = _receive_target_x(s, cfg, prof)
+		var frozen_contact_ticks: int = _ticks_until_receive_at(
+			s, p, cfg, frozen_receive_reach, frozen_target)
+		var already_in_receive_position: bool = \
+			absi(frozen_target - p.x) <= frozen_receive_reach
+		if already_in_receive_position \
+				and frozen_contact_ticks <= cfg.just_receive_window_ticks:
+			# 反応遅延中も移動はしない。読めていた球への静止押下だけを許可する。
+			# 期限切れラッチは1tick離し、次の押下エッジを作る。
+			if p.receive_stance < 0:
+				return 0
+			return SimInput.IN_ACTION | SimInput.IN_DOWN
 	if not frozen:
 		# 帽子投げ: 敵球がネット際(帽子の滞在位置)へ落ちてくる軌道なら、
 		# 溜め+飛行の後に滞在窓へボールが入るタイミングで投げる(妨害ギミックの活用)
@@ -342,7 +519,18 @@ static func decide(s, idx: int, cfg) -> int:
 			input = _decide_positioning(s, idx, p, cfg, team, prof, deadzone)
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
 	var dx: int = s.ball_x - p.x
-	var dy: int = s.ball_y - p.y
+	var hit_y: int = p.y
+	if p.on_ground == 0:
+		# simulationは入力決定後にプレイヤー移動、それからヒット判定を行う。
+		# 上昇中のCPUはIN_JUMPを保持するため失速させず、同じ重力でyだけ先読みする。
+		var hit_vy: int = p.vy
+		var jump_height: int = PlayerMovement._jump_height_px(
+			Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
+		var jump_ticks: int = PlayerMovement._jump_ticks(hit_vy < 0)
+		hit_vy += PlayerMovement._jump_gravity(
+			jump_height, jump_ticks, hit_vy < 0)
+		hit_y += hit_vy
+	var dy: int = s.ball_y - hit_y
 	var planned_hit_input: int = SimInput.IN_ACTION
 	if p.on_ground == 1:
 		planned_hit_input |= _ground_hit_keys(s, idx, cfg, team, prof)
@@ -367,10 +555,30 @@ static func decide(s, idx: int, cfg) -> int:
 			# JUMPも落とす: アクション+上ジャンプは小ホップ化(トス用)のため、
 			# 位置取りで立てたジャンプ意図が地上ヒットと混ざると跳躍が化ける
 			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
-			input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
-	# 可変ジャンプ対応: 上昇中はジャンプキーを保持し続ける(離すと失速する
-	# 人間向けの仕様でCPUのジャンプアタックが化けないように)
-	if p.on_ground == 0 and p.vy < 0 and not (input & SimInput.IN_ACTION):
+			var receive_target: int = _receive_target_x(s, cfg, prof)
+			var receive_aim_margin: int = reach * cfg.spike_sweet_pct / 200
+			var receive_ready_zone: int = maxi(
+				reach - receive_aim_margin, receive_aim_margin)
+			var timing_receive: bool = not frozen \
+				and _plans_just_receive(s, idx, p, team, prof) \
+				and _can_prepare_just_receive(
+					s, p, cfg, reach, receive_target, receive_ready_zone)
+			var timing_chord: bool = (input & SimInput.IN_ACTION) != 0 \
+				and (input & SimInput.IN_DOWN) != 0
+			if timing_receive and not timing_chord:
+				# 精密計画中は位置取り側が作った5tick前エッジだけを採用する。
+				input &= ~(SimInput.IN_ACTION | SimInput.IN_DOWN)
+			else:
+				input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
+	# 精密ジャンプは固定xで会合予測しているため、打撃入力を出すまでは空中横移動を止める。
+	# 打撃時の横キーは配球方向なので保持する。
+	if p.on_ground == 0 and not (input & SimInput.IN_ACTION) \
+			and s.last_touch_team == team and (ab & AB_ATTACK) and (ab & AB_SWEET) \
+			and _sweet_ok(s, idx, prof):
+		input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
+	# 可変ジャンプ対応: 打撃tickも含め、上昇中はジャンプキーを保持し続ける。
+	# 空中では再ジャンプせず、打ち分けもIN_JUMPを読まない。
+	if p.on_ground == 0 and p.vy < 0:
 		input |= SimInput.IN_JUMP
 	return input
 
@@ -393,13 +601,18 @@ static func _ground_shot_keys(s, idx: int, cfg, team: int, prof: int) -> int:
 static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadzone: int) -> int:
 	var ab: int = prof_byte(prof, P_AB)
 	var reach: int = cfg.player_reach
-	# 落下点予測(能力なしは現在のボールxを追う=最弱挙動)。深度=壁反射を読む数
-	var land_x: int = s.ball_x
-	if ab & AB_PREDICT:
-		var depth: int = prof_byte(prof, P_DEPTH)
-		var max_bounce: int = 240 if depth >= 3 else depth
-		land_x = _predict_landing_x(s, cfg, cfg.floor_y - cfg.player_reach_up / 2, max_bounce)
-	var just_receive_plan: bool = _plans_just_receive(s, idx, p, team, prof)
+	# 落下点予測(能力なしは現在のボールxを追う=最弱挙動)。
+	var land_x: int = _receive_target_x(s, cfg, prof)
+	var stance_deadzone: int = reach * cfg.spike_sweet_pct / 200
+	var receive_reach: int = _hit_reach(
+		p.char_id, reach, HitResolver.INTENT_GROUND_RECEIVE)
+	var receive_ready_zone: int = maxi(
+		receive_reach - stance_deadzone, stance_deadzone)
+	# 精密待ちは、反応遅延後の残り時間で「到着→静止→5tick前押下」が
+	# 実現できる時だけ選ぶ。間に合わない球は通常レシーブへ即フォールバック。
+	var just_receive_plan: bool = _plans_just_receive(s, idx, p, team, prof) \
+		and _can_prepare_just_receive(
+			s, p, cfg, receive_reach, land_x, receive_ready_zone)
 	# 狙い誤差: 正確に計算した落下点をタッチ毎に1回だけ汚す(tick毎だと震える)。
 	# 「読み違えたが本人は確信している」人間らしさが出る
 	var aim_err: int = prof_byte(prof, P_AIM)
@@ -446,16 +659,20 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var mate_is_human: bool = (mate_slot == controlled)
 	var input: int
 	if receiver:
-		var stance_deadzone: int = reach * cfg.spike_sweet_pct / 200
-		var receive_reach: int = _hit_reach(
-			p.char_id, reach, HitResolver.INTENT_GROUND_RECEIVE)
-		var receive_dx: int = s.ball_x - p.x
-		var receive_dy_n: int = (s.ball_y - p.y) * reach / cfg.player_reach_up
-		var outside_receive: bool = receive_dx * receive_dx \
-			+ receive_dy_n * receive_dy_n > receive_reach * receive_reach
-		if just_receive_plan and (p.receive_stance > 0 or outside_receive) \
-				and absi(p.x - land_x) <= stance_deadzone and p.vx == 0:
-			return SimInput.IN_ACTION | SimInput.IN_DOWN
+		if just_receive_plan:
+			# 1) 落下点へ移動。
+			if absi(p.x - land_x) > receive_ready_zone:
+				return _walk_to(p, land_x, receive_ready_zone)
+			# 2) 到着後は必ず入力を離して静止。移動中の押下ラッチを作らない。
+			if p.vx != 0 or p.receive_stance < 0:
+				return 0
+			var receive_ticks: int = _ticks_until_receive_at(
+				s, p, cfg, receive_reach, land_x)
+			# 3) 接触予測の5tick前に押下エッジを作り、成立まで保持する。
+			if p.receive_stance > 0 \
+					or (p.receive_stance == 0 and receive_ticks <= 5):
+				return SimInput.IN_ACTION | SimInput.IN_DOWN
+			return 0
 		# レシーバーは球を取る側=最短で落下点へ(スペーシングは掛けない)
 		input = _walk_to(p, land_x, stance_deadzone if just_receive_plan else deadzone)
 	elif mate_is_human:
@@ -485,10 +702,28 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 			and p.on_ground == 1 and p.stun == 0 and not miss_roll \
 			and s.serve_flight == 0 \
 			and s.last_touch_team == team and s.touches < cfg.max_touches:
-		var meet_limit: int = reach
-		if (ab & AB_SWEET) and _sweet_ok(s, idx, prof):
-			meet_limit = reach * cfg.spike_sweet_pct / 100
-		if _jump_will_meet(s, p, cfg, meet_limit):
+		var precision_jump: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)
+		var precision_committed := false
+		if precision_jump:
+			var sweet_r: int = reach * cfg.spike_sweet_pct \
+				* Chars.stat(p.char_id, "just_window") / (100 * 100)
+			var plan: Array[int] = _sweet_jump_plan(s, p, cfg, sweet_r)
+			# 実ジャンプの上昇時間内に離陸できる確実な計画は保持する。
+			# 旧12tick上限は高いトスの離陸前に通常ジャンプへ落としていた。
+			# 高いトスは頂点前から会合を予約する。上昇中だけでなく着地までの
+			# ジャンプ弧内なら通常ジャンプへ落とさず、芯会合tickまで地上で待つ。
+			var precision_horizon: int = PlayerMovement._jump_ticks(true) \
+				+ PlayerMovement._jump_ticks(false)
+			if plan[0] >= 0 and plan[0] <= precision_horizon:
+				precision_committed = true
+				input = _walk_to(p, plan[1], sweet_r / 2)
+				if plan[0] == 0:
+					# 未来の芯接触tickから逆算した離陸tick。ここで初めて跳ぶ。
+					input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
+					input |= SimInput.IN_JUMP
+		if not precision_committed and _jump_will_meet(s, p, cfg, reach):
+			# 芯会合を作れない球は従来の通常ジャンプへ即フォールバック。
+			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
 			input |= SimInput.IN_JUMP
 	return input
 
@@ -600,6 +835,9 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 	return SimInput.IN_ABILITY1 | fwd
 
 static func _sweet_ok(s, idx: int, prof: int) -> bool:
+	# 最強(TIQ3)は精密行動を確実に選ぶ。確率ゲートで一試合すべて通常化するのを防ぐ。
+	if prof_byte(prof, P_TIQ) >= 3:
+		return true
 	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)
 
 static func _attack_ok(s, idx: int, prof: int) -> bool:
@@ -617,7 +855,38 @@ static func _plans_just_receive(s, idx: int, p, team: int, prof: int) -> bool:
 	if s.last_touch_team < 0 or s.last_touch_team == team \
 			or s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE:
 		return false
-	return _roll(SALT_RECEIVE, s, idx) % 256 < prof_byte(prof, P_SWEET)
+	return _sweet_ok(s, idx, prof)
+
+static func _ticks_until_receive_at(s, p, cfg, receive_reach: int,
+		target_x: int) -> int:
+	var x: int = s.ball_x
+	var y: int = s.ball_y
+	var vx: int = s.ball_vx
+	var vy: int = s.ball_vy
+	for tick in 180:
+		var dx: int = x - target_x
+		var dy_n: int = (y - p.y) * cfg.player_reach / cfg.player_reach_up
+		if dx * dx + dy_n * dy_n <= receive_reach * receive_reach:
+			return tick
+		vy += cfg.gravity
+		x += vx
+		y += vy
+		if x < cfg.ball_radius:
+			x = cfg.ball_radius + (cfg.ball_radius - x)
+			vx = BallPhysics.wall_reflect_vx(vx, cfg)
+		elif x > cfg.court_width - cfg.ball_radius:
+			var right: int = cfg.court_width - cfg.ball_radius
+			x = right - (x - right)
+			vx = BallPhysics.wall_reflect_vx(vx, cfg)
+		# 高速の下降球は1tickでリーチ境界から床まで進む。
+		# 床breakより先に移動後の最後の位置を検査しないと、落下点上でも181になる。
+		dx = x - target_x
+		dy_n = (y - p.y) * cfg.player_reach / cfg.player_reach_up
+		if dx * dx + dy_n * dy_n <= receive_reach * receive_reach:
+			return tick + 1
+		if y >= cfg.floor_y - cfg.ball_radius:
+			break
+	return 181
 
 static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
 	var ab: int = prof_byte(prof, P_AB)
@@ -640,10 +909,12 @@ static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, 
 		and absi(p.x - cfg.net_x) < FP.from_int(120)
 	if can_spike and _should_use_flame(s, idx, p, cfg, prof):
 		return SimInput.IN_ABILITY1 | SimInput.IN_DOWN
-	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct / 100
+	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
+		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var use_sweet: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)
-	# ジャストミート狙い: スイート外でボールがまだ上にある間は1tick待つ
-	if use_sweet and d2 > sweet_r * sweet_r and dy < 0:
+	# 芯へ入る見込みが残る時だけ待つ。見込みが消えた球は通常打撃して強さを保つ。
+	if use_sweet and d2 > sweet_r * sweet_r \
+			and _air_will_meet_sweet(s, p, cfg, sweet_r):
 		return 0
 	if prof_byte(prof, P_TIQ) >= 2:
 		return _pick_air_shot(s, p, cfg, team, can_spike)
