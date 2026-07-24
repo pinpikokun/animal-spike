@@ -52,6 +52,9 @@ const P_TIQ := 48    # 配球知能(0=そのまま返す..3=相手から遠い�
 const SALT_AIM := 1
 const SALT_MISS := 2
 const SALT_SWEET := 3
+const SALT_RECEIVE := 4
+const SALT_SUPER := 5
+const SALT_ATTACK := 6
 
 # 難易度プリセット(2026-07-13「人間化」改訂)。方針:
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
@@ -62,7 +65,7 @@ const SALT_SWEET := 3
 const PRESET_WEAK := (24 << P_DELAY) | (40 << P_AIM) | (64 << P_MISS) | (26 << P_SWEET)
 const PRESET_NORMAL := (AB_PREDICT | AB_ATTACK) | (16 << P_DELAY) | (25 << P_AIM) \
 	| (13 << P_MISS) | (0 << P_SWEET) | (1 << P_TIQ)
-const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
+const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
 const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
 	| (12 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
@@ -257,16 +260,19 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 				s.ball_x, s.ball_y, spike_vy,
 				HitResolver.air_target_x(team, relative * dir, cfg), cfg)
 			cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | row[0],
-				spike_vx - rvx, spike_vy - rvy])
+				spike_vx - rvx, spike_vy - rvy, true])
 	for key in [back_key, 0, fwd_key]:
 		var toss_vy: int = -cfg.toss_fwd_vy
 		var relative: int = 1 if key == fwd_key else (-1 if key == back_key else 0)
 		var toss_vx: int = HitResolver.toss_aim_vx(s.ball_x, s.ball_y, toss_vy,
 			HitResolver.air_target_x(team, relative * dir, cfg), cfg)
-		cands.append([SimInput.IN_ACTION | key, toss_vx, toss_vy])
+		cands.append([SimInput.IN_ACTION | key, toss_vx, toss_vy, false])
 	var best_input: int = SimInput.IN_ACTION
 	var best_score: int = -1
+	var best_is_attack := false
 	for c in cands:
+		if best_is_attack and not c[3]:
+			continue
 		var land: int = _land_x_from(s.ball_x, s.ball_y, c[1], c[2], cfg, target_y, 3)
 		# 相手コートに落ちない打ち方・ネットに掛かる打ち方は選ばない
 		var in_opp: bool = land > cfg.net_x if team == 0 else land < cfg.net_x
@@ -283,6 +289,7 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 		if score > best_score:
 			best_score = score
 			best_input = c[0]
+			best_is_attack = c[3]
 	return best_input
 
 static func decide(s, idx: int, cfg) -> int:
@@ -392,10 +399,11 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		var depth: int = prof_byte(prof, P_DEPTH)
 		var max_bounce: int = 240 if depth >= 3 else depth
 		land_x = _predict_landing_x(s, cfg, cfg.floor_y - cfg.player_reach_up / 2, max_bounce)
+	var just_receive_plan: bool = _plans_just_receive(s, idx, p, team, prof)
 	# 狙い誤差: 正確に計算した落下点をタッチ毎に1回だけ汚す(tick毎だと震える)。
 	# 「読み違えたが本人は確信している」人間らしさが出る
 	var aim_err: int = prof_byte(prof, P_AIM)
-	if aim_err > 0:
+	if aim_err > 0 and not just_receive_plan:
 		var half: int = reach * aim_err / 100
 		if half > 0:
 			land_x += _roll(SALT_AIM, s, idx) % (2 * half + 1) - half
@@ -404,7 +412,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var receiving: bool = s.last_touch_team >= 0 and s.last_touch_team != team
 	var miss_roll: bool = receiving \
 		and _roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS)
-	if miss_roll:
+	if miss_roll and not just_receive_plan:
 		land_x += -reach * 3 / 4 if team == 0 else reach * 3 / 4
 	var mate_slot: int = 1 - idx % 2
 	var mate = s.players[team * 2 + mate_slot]
@@ -438,8 +446,18 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var mate_is_human: bool = (mate_slot == controlled)
 	var input: int
 	if receiver:
+		var stance_deadzone: int = reach * cfg.spike_sweet_pct / 200
+		var receive_reach: int = _hit_reach(
+			p.char_id, reach, HitResolver.INTENT_GROUND_RECEIVE)
+		var receive_dx: int = s.ball_x - p.x
+		var receive_dy_n: int = (s.ball_y - p.y) * reach / cfg.player_reach_up
+		var outside_receive: bool = receive_dx * receive_dx \
+			+ receive_dy_n * receive_dy_n > receive_reach * receive_reach
+		if just_receive_plan and (p.receive_stance > 0 or outside_receive) \
+				and absi(p.x - land_x) <= stance_deadzone and p.vx == 0:
+			return SimInput.IN_ACTION | SimInput.IN_DOWN
 		# レシーバーは球を取る側=最短で落下点へ(スペーシングは掛けない)
-		input = _walk_to(p, land_x, deadzone)
+		input = _walk_to(p, land_x, stance_deadzone if just_receive_plan else deadzone)
 	elif mate_is_human:
 		# 非レシーバー×相棒が人間: 相棒と反対側のホームへ回り、空きコートを埋める。
 		# ボールを横切らないので張り付きが起きない(相棒が前へ出れば自分は下がる)
@@ -463,7 +481,8 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	# タッチでは跳ばない(=1拍遅れる、という惜しい失敗)。
 	# サーブ打球が飛行中(serve_flight)は「上げ球」ではないので跳ばない
 	# (味方がサーブに跳びついてトスし返す誤反応の抑止)
-	if (ab & AB_ATTACK) and p.on_ground == 1 and p.stun == 0 and not miss_roll \
+	if (ab & AB_ATTACK) and _attack_ok(s, idx, prof) \
+			and p.on_ground == 1 and p.stun == 0 and not miss_roll \
 			and s.serve_flight == 0 \
 			and s.last_touch_team == team and s.touches < cfg.max_touches:
 		var meet_limit: int = reach
@@ -583,10 +602,44 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 static func _sweet_ok(s, idx: int, prof: int) -> bool:
 	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)
 
+static func _attack_ok(s, idx: int, prof: int) -> bool:
+	if not (prof_byte(prof, P_AB) & AB_ATTACK):
+		return false
+	var tiq: int = prof_byte(prof, P_TIQ)
+	if tiq >= 3:
+		return true
+	return _roll(SALT_ATTACK, s, idx) % 256 < tiq * 64
+
+static func _plans_just_receive(s, idx: int, p, team: int, prof: int) -> bool:
+	var ab: int = prof_byte(prof, P_AB)
+	if not (ab & AB_SWEET) or p.on_ground == 0 or p.burnout_ticks > 0:
+		return false
+	if s.last_touch_team < 0 or s.last_touch_team == team \
+			or s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE:
+		return false
+	return _roll(SALT_RECEIVE, s, idx) % 256 < prof_byte(prof, P_SWEET)
+
+static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
+	var ab: int = prof_byte(prof, P_AB)
+	if not (ab & AB_ATTACK) or not (ab & AB_SWEET):
+		return false
+	if not Chars.has_super(p.char_id, Chars.SUPER_FLAME_ATTACK):
+		return false
+	var flame: Dictionary = Chars.super_def(Chars.SUPER_FLAME_ATTACK)
+	if p.drive_gauge < int(flame.gauge_cost) or p.burnout_ticks > 0:
+		return false
+	if p.on_ground == 1 or p.y >= cfg.net_top_y:
+		return false
+	return prof_byte(prof, P_TIQ) >= 3 \
+		or _roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
+
 # 空中ヒットの打ち分け。ネット遠方のスパイクは自陣に落ちて自滅するため打たない
 static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, dy: int) -> int:
 	var ab: int = prof_byte(prof, P_AB)
-	var can_spike: bool = absi(p.x - cfg.net_x) < FP.from_int(120)
+	var can_spike: bool = _attack_ok(s, idx, prof) \
+		and absi(p.x - cfg.net_x) < FP.from_int(120)
+	if can_spike and _should_use_flame(s, idx, p, cfg, prof):
+		return SimInput.IN_ABILITY1 | SimInput.IN_DOWN
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct / 100
 	var use_sweet: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)
 	# ジャストミート狙い: スイート外でボールがまだ上にある間は1tick待つ

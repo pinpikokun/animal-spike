@@ -144,8 +144,8 @@ func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, t
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(117, 13, 15, 13, 153, 2, 2)
-	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 117, "能力")
+	var prof: int = SimCpu.make_profile(125, 13, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 125, "能力")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 13, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
@@ -166,6 +166,8 @@ func test_upper_presets_keep_jump_attack() -> void:
 		"強CPUはジャンプアタックを維持")
 	check(SimCpu.prof_byte(SimCpu.PRESET_MAX, SimCpu.P_AB) & SimCpu.AB_ATTACK,
 		"最強CPUはジャンプアタックを維持")
+	check(SimCpu.prof_byte(SimCpu.PRESET_STRONG, SimCpu.P_AB) & SimCpu.AB_SWEET,
+		"強CPUは設定済みジャスト率を実際の芯狙いに使う")
 
 func test_state_default_profile_is_max() -> void:
 	# sim_state.gdの既定リテラルがsim_cpu.PRESET_MAXからずれない番人
@@ -231,7 +233,7 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)  # 頭上高くから落ちてくる
 	s.ball_vy = 0
-	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK)
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "会合可能な球へジャンプする")
 	# アタック能力なしなら跳ばない
 	p.cpu = _prof(SimCpu.AB_PREDICT)
@@ -301,7 +303,7 @@ func test_no_jump_at_serve_in_flight() -> void:
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)
 	s.ball_vy = 0
-	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK)
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
 	s.serve_flight = 1
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "サーブ飛行中は跳ばない")
 	s.serve_flight = 0
