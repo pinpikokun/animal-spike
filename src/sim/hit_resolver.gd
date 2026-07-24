@@ -268,7 +268,10 @@ static func _drive_damage_for_attack(attack_kind: int, cfg) -> int:
 	return 0
 
 static func _spend_drive(p, amount: int, cfg) -> void:
+	var before: int = p.drive_gauge
 	p.drive_gauge = maxi(p.drive_gauge - amount, 0)
+	if p.drive_gauge < before:
+		p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
 	if amount > 0 and p.drive_gauge == 0 and p.burnout_ticks == 0:
 		p.burnout_ticks = cfg.burnout_recovery_ticks
 		p.drive_recovery_progress = 0

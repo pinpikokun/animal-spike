@@ -51,6 +51,7 @@ var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
 var drive_gauge_stock: int
 var drive_gauge_max: int
 var drive_recovery_ticks_per_stock: int
+var drive_recovery_delay_ticks: int
 var burnout_recovery_ticks: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
@@ -144,11 +145,15 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	drive_gauge_stock = _int_of(raw, "drive_gauge_stock")
 	drive_gauge_max = _int_of(raw, "drive_gauge_max")
 	drive_recovery_ticks_per_stock = _int_of(raw, "drive_recovery_ticks_per_stock")
+	drive_recovery_delay_ticks = _int_of(raw, "drive_recovery_delay_ticks")
 	if drive_gauge_stock <= 0 or drive_gauge_max != drive_gauge_stock * 6:
 		_fail("drive_gauge_maxはdrive_gauge_stockの6本分であること")
 		return
 	if drive_recovery_ticks_per_stock <= 0:
 		_fail("drive_recovery_ticks_per_stockは正であること")
+		return
+	if drive_recovery_delay_ticks <= 0:
+		_fail("drive_recovery_delay_ticksは正であること")
 		return
 	burnout_recovery_ticks = _int_of(raw, "burnout_recovery_ticks")
 	if burnout_recovery_ticks <= 0:

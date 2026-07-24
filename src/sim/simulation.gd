@@ -207,6 +207,10 @@ static func _update_drive_recovery(state, cfg) -> void:
 			if p.burnout_ticks == 0:
 				p.drive_gauge = cfg.drive_gauge_max
 				p.drive_recovery_progress = 0
+				p.drive_recovery_delay = 0
+			continue
+		if p.drive_recovery_delay > 0:
+			p.drive_recovery_delay -= 1
 			continue
 		if p.drive_gauge >= cfg.drive_gauge_max:
 			p.drive_gauge = cfg.drive_gauge_max
@@ -273,6 +277,7 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 				and ent_find(state, KIND_CAP) < 0:
 			if p.drive_gauge > 0:
 				p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock, 0)
+				p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
 				if p.drive_gauge == 0:
 					p.burnout_ticks = cfg.burnout_recovery_ticks
 					p.drive_recovery_progress = 0
@@ -419,6 +424,7 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 		p.guard = p.guard_max
 		p.drive_gauge = cfg.drive_gauge_max
 		p.drive_recovery_progress = 0
+		p.drive_recovery_delay = 0
 		p.receive_stance = 0
 		p.just_receive_flash = 0
 		p.just_receive_event = 0

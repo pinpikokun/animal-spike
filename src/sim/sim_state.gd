@@ -57,6 +57,7 @@ class Player:
 	var guard_max: int = 100
 	var drive_gauge: int = 0
 	var drive_recovery_progress: int = 0
+	var drive_recovery_delay: int = 0
 	var receive_stance: int = 0
 	var just_receive_flash: int = 0
 	var just_receive_event: int = 0
@@ -160,6 +161,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.guard_max)
 		out.append(p.drive_gauge)
 		out.append(p.drive_recovery_progress)
+		out.append(p.drive_recovery_delay)
 		out.append(p.receive_stance)
 		out.append(p.just_receive_flash)
 		out.append(p.just_receive_event)
@@ -242,6 +244,7 @@ func load_int_array(arr: Array) -> void:
 		p.guard_max = arr[k]; k += 1
 		p.drive_gauge = arr[k]; k += 1
 		p.drive_recovery_progress = arr[k]; k += 1
+		p.drive_recovery_delay = arr[k]; k += 1
 		p.receive_stance = arr[k]; k += 1
 		p.just_receive_flash = arr[k]; k += 1
 		p.just_receive_event = arr[k]; k += 1

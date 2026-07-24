@@ -155,6 +155,7 @@ func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var p = s.players[0]
 	p.drive_gauge = 0
 	p.burnout_ticks = cfg.burnout_recovery_ticks
+	p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
 	s.phase = SimState.PHASE_POINT_PAUSE
 	for i in 100:
 		Simulation._update_drive_recovery(s, cfg)
@@ -165,3 +166,5 @@ func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 		Simulation._update_drive_recovery(s, cfg)
 	check_eq(p.burnout_ticks, 0, "600ラリーtickでバーンアウト解除")
 	check_eq(p.drive_gauge, cfg.drive_gauge_max, "解除時に6本全回復")
+	check_eq(p.drive_recovery_delay, 0,
+		"バーンアウト復帰は通常回復ディレイに阻害されない")

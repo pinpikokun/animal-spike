@@ -26,12 +26,43 @@ func test_drive_gauge_starts_full_and_survives_rally_reset() -> void:
 	var cfg = w[1]
 	for p in s.players:
 		check_eq(p.drive_gauge, cfg.drive_gauge_max, "試合開始は6本満タン")
+		check_eq(p.drive_recovery_delay, 0, "試合開始は回復ディレイなし")
 	s.players[0].drive_gauge = cfg.drive_gauge_max - cfg.drive_gauge_stock
 	s.players[0].drive_recovery_progress = 73
+	s.players[0].drive_recovery_delay = 91
 	Simulation.reset_rally(s, cfg, 1)
 	check_eq(s.players[0].drive_gauge,
 		cfg.drive_gauge_max - cfg.drive_gauge_stock, "得点を跨いでも残量を維持")
 	check_eq(s.players[0].drive_recovery_progress, 73, "得点を跨いでも回復端数を維持")
+	check_eq(s.players[0].drive_recovery_delay, 91, "得点を跨いでも回復ディレイを維持")
+
+func test_drive_recovery_delay_counts_only_in_rally_and_freezes_progress() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = cfg.drive_gauge_max - cfg.drive_gauge_stock
+	p.drive_recovery_progress = 73
+	p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
+	s.phase = SimState.PHASE_SERVE
+	for i in cfg.drive_recovery_delay_ticks:
+		Simulation._update_drive_recovery(s, cfg)
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"サーブ保持中は回復ディレイも停止")
+	s.phase = SimState.PHASE_POINT_PAUSE
+	Simulation._update_drive_recovery(s, cfg)
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"得点間インターバル中も回復ディレイ停止")
+	s.phase = SimState.PHASE_RALLY
+	for i in cfg.drive_recovery_delay_ticks:
+		Simulation._update_drive_recovery(s, cfg)
+	check_eq(p.drive_recovery_delay, 0, "180ラリーtickで回復ディレイ終了")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.drive_gauge_stock,
+		"ディレイ終了tickまでは自然回復しない")
+	check_eq(p.drive_recovery_progress, 73, "ディレイ中は回復端数を進めない")
+	Simulation._update_drive_recovery(s, cfg)
+	check(p.drive_gauge > cfg.drive_gauge_max - cfg.drive_gauge_stock,
+		"ディレイ終了の次tickから自然回復を再開")
 
 func test_drive_gauge_recovers_only_during_rally() -> void:
 	var w := _world()
@@ -82,11 +113,15 @@ func test_just_attack_costs_half_and_shaves_receiver_two_stocks() -> void:
 	check_eq(s.players[0].drive_gauge,
 		cfg.drive_gauge_max - cfg.drive_gauge_stock / 2, "ジャスト打撃は0.5本消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_JUST, "ジャストアタック属性を保持")
+	check_eq(s.players[0].drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"ジャストアタック消費で打ち手の回復ディレイ開始")
 	s.players[2].on_ground = 1
 	HitResolver._apply_hit(s, 2, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
 	check_eq(s.players[2].drive_gauge,
 		cfg.drive_gauge_max - cfg.drive_gauge_stock * 2, "ジャストのレシーブで2本削り")
+	check_eq(s.players[2].drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"被弾削りで受け手の回復ディレイ開始")
 
 func test_toss_and_attack_return_do_not_take_incoming_drive_damage() -> void:
 	var w := _world()
@@ -125,9 +160,12 @@ func test_blocker_takes_incoming_damage_but_reflection_loses_attack_kind() -> vo
 		[0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0])
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.drive_gauge_stock,
 		"通常アタックを受けたブロッカー本人は1本削られる")
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"ブロック被弾でも回復ディレイ開始")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"ブロック反射球は攻撃属性を持たない")
 	p.hit_cooldown = 0
+	p.drive_recovery_delay = 7
 	s.last_touch_team = 0
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_x = p.x
@@ -137,6 +175,8 @@ func test_blocker_takes_incoming_damage_but_reflection_loses_attack_kind() -> vo
 		[0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0])
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.drive_gauge_stock * 3,
 		"続けてジャストを受けたブロッカー本人は2本削られる")
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"追加で削られた瞬間に回復ディレイを180tickへ戻す")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"ジャストのブロック反射球も攻撃属性を持たない")
 	s.players[0].on_ground = 1
@@ -159,10 +199,12 @@ func test_drive_gauge_serialization_roundtrip() -> void:
 	var a = w[0]
 	a.players[1].drive_gauge = 2345
 	a.players[1].drive_recovery_progress = 67
+	a.players[1].drive_recovery_delay = 123
 	a.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
 	var b = SimState.new()
 	b.load_int_array(a.to_int_array())
 	check_eq(b.players[1].drive_gauge, 2345, "ゲージ残量を復元")
 	check_eq(b.players[1].drive_recovery_progress, 67, "回復端数を復元")
+	check_eq(b.players[1].drive_recovery_delay, 123, "回復ディレイを復元")
 	check_eq(b.ball_attack_kind, SimState.BALL_ATTACK_NORMAL, "飛来アタック属性を復元")
 	check_eq(b.state_hash(), a.state_hash(), "ドライブ状態を含めた直列化往復")

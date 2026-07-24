@@ -74,6 +74,8 @@ func test_hat_costs_one_drive_stock_without_guard_cost() -> void:
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
 	check_eq(p.drive_gauge, drive0 - cfg.drive_gauge_stock,
 		"帽子投げはドライブゲージ1本消費")
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"帽子消費で回復ディレイ開始")
 	check_eq(p.guard, guard0, "帽子投げで耐久は消費しない")
 
 func test_hat_spends_partial_stock_and_starts_burnout() -> void:

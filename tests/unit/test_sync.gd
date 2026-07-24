@@ -16,8 +16,8 @@ const TICKS := 3600
 # 最終ハッシュのみだとreset_rallyの状態正規化で途中の物理変化を見逃すため
 # 物理を意図的に変更した場合はGOLDEN_COMBINED_HASHを新しい値に更新すること
 
-# 実機FB反映(回復240tick/ジャスト45%/スト6式使い切りバーンアウト)の意図的変更。2026-07-23
-const GOLDEN_COMBINED_HASH := -4135803296905477011
+# drive_recovery_delay追加(消費/被削り後180tickは自然回復停止)による状態拡張+挙動変更。2026-07-23
+const GOLDEN_COMBINED_HASH := -5989456738714378581
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

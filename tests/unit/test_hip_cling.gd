@@ -74,6 +74,8 @@ func test_hip_spends_last_stock_and_starts_burnout() -> void:
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
 	check(p.hip > 0, "残量が1以上なら2本未満でもヒップアタック発動")
 	check_eq(p.drive_gauge, 0, "ヒップで残量を全消費")
+	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+		"ヒップ消費で回復ディレイ開始")
 	check(p.burnout_ticks > 0, "使い切ってバーンアウト突入")
 
 func test_hip_at_zero_drive_does_nothing() -> void:
