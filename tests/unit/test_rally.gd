@@ -21,6 +21,20 @@ func test_reset_match_positions() -> void:
 	check_eq(s.players[0].x, cfg.serve_line, "サーバーはサービスライン")
 	check_eq(s.players[2].x, cfg.court_width - FP.from_int(cfg.spawn_back_px), "右後衛の初期位置")
 	check_eq(s.touches, 0, "タッチ0")
+	check_eq(s.human_team_mask, 0, "試合初期化時は人間チームなし")
+	check_eq(s.rally_seq, 0, "試合開始直後のラリー番号は0")
+	check_eq(s.last_touch_idx, -1, "試合開始直後は打球者なし")
+
+func test_reset_match_clears_cpu_positioning_state() -> void:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	s.human_team_mask = 3
+	s.rally_seq = 99
+	s.last_touch_idx = 2
+	Simulation.reset_match(s, cfg, 0)
+	check_eq(s.human_team_mask, 0, "試合初期化で人間チームを消す")
+	check_eq(s.rally_seq, 0, "試合初期化でラリー番号を0に戻す")
+	check_eq(s.last_touch_idx, -1, "試合初期化で打球者を消す")
 
 func test_reset_rally_keeps_player_positions() -> void:
 	# ラリー再開でキャラをワープさせない(気持ちよさ優先、ユーザー決定)。
@@ -32,12 +46,18 @@ func test_reset_rally_keeps_player_positions() -> void:
 	s.players[0].x = moved_x
 	s.players[0].burn = 30
 	s.serve_ball = 1
+	s.human_team_mask = 1
+	s.last_touch_idx = 3
+	var rally_seq_before: int = s.rally_seq
 	Simulation.reset_rally(s, cfg, 1)
 	check_eq(s.players[0].x, moved_x, "reset_rallyでキャラ位置が変わらない")
 	check_eq(s.players[0].burn, 0, "reset_rallyで炎上を解除")
 	check_eq(s.phase, SimState.PHASE_SERVE, "フェーズはSERVEに戻る")
 	check_eq(s.touches, 0, "タッチはリセット")
 	check_eq(s.serve_ball, 0, "新ラリーではサーブ由来球状態をリセット")
+	check_eq(s.human_team_mask, 1, "ラリー初期化は人間チームを維持")
+	check_eq(s.rally_seq, rally_seq_before + 1, "ラリー初期化ごとに通し番号を増やす")
+	check_eq(s.last_touch_idx, -1, "ラリー初期化で打球者を消す")
 
 func test_ball_held_by_server() -> void:
 	var w := _serve_world(0)
@@ -97,6 +117,9 @@ func test_serve_strike_starts_rally() -> void:
 	check(struck, "トスを打ってラリーが始まる")
 	check_eq(s.touches, 1, "サーブ打撃はタッチ1")
 	check_eq(s.last_touch_team, 0, "最終タッチはサーブ側")
+	check_eq(s.last_touch_idx, 0, "サーブ打撃者は左後衛")
+	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
+		"サーブ打撃者と最終タッチチームが一致")
 
 func test_serve_toss_floor_scores_for_opponent_and_changes_serve() -> void:
 	# サーブ空振りを点数なし再トスから相手得点+相手ボールへ変更。2026-07-20設計会仕様

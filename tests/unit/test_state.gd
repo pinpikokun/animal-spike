@@ -28,9 +28,9 @@ func test_hash_changes_on_diff() -> void:
 
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x36(回復ディレイを含む)
-	# + 全体32(serve_ballを含む) + エンティティ8スロットx8欄
-	# 1 + 4x36 + 32 + 8x8 = 241
-	check_eq(SimState.new().to_int_array().size(), 241,
+	# + 全体35(人間チーム/ラリー/最終打球者を含む) + エンティティ8スロットx8欄
+	# 1 + 4x36 + 35 + 8x8 = 244
+	check_eq(SimState.new().to_int_array().size(), 244,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -59,6 +59,9 @@ func test_load_int_array_roundtrip() -> void:
 	a.hip_quake_event = 9
 	a.ball_guard_damage = 35
 	a.ball_defense_class = 2
+	a.human_team_mask = 3
+	a.rally_seq = 17
+	a.last_touch_idx = 2
 	a.players[3].hit_cooldown = 5
 	var b = SimState.new()
 	b.load_int_array(a.to_int_array())
@@ -78,6 +81,9 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
 	check_eq(b.ball_guard_damage, 35, "飛来球の絶対ガード削り値の復元")
 	check_eq(b.ball_defense_class, 2, "飛来球の防御分類の復元")
+	check_eq(b.human_team_mask, 3, "人間チームマスクの復元")
+	check_eq(b.rally_seq, 17, "ラリー通し番号の復元")
+	check_eq(b.last_touch_idx, 2, "最終打球者の復元")
 	check_eq(b.tick, 123, "tickの復元")
 	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
 	check_eq(b.ball_flame, 1, "炎状態の復元")

@@ -103,6 +103,9 @@ var score_l: int = 0
 var score_r: int = 0
 var touches: int = 0
 var last_touch_team: int = -1
+var human_team_mask: int = 0  # bit0=team0、bit1=team1に人間がいる
+var rally_seq: int = 0  # 試合内のラリー通し番号
+var last_touch_idx: int = -1  # 最後に打球したplayer index。未接触は-1
 var timer: int = 0
 var controlled_l: int = 0
 var controlled_r: int = 0
@@ -197,6 +200,9 @@ func to_int_array() -> Array[int]:
 	out.append(score_r)
 	out.append(touches)
 	out.append(last_touch_team)
+	out.append(human_team_mask)
+	out.append(rally_seq)
+	out.append(last_touch_idx)
 	out.append(timer)
 	out.append(controlled_l)
 	out.append(controlled_r)
@@ -281,6 +287,9 @@ func load_int_array(arr: Array) -> void:
 	score_r = arr[k]; k += 1
 	touches = arr[k]; k += 1
 	last_touch_team = arr[k]; k += 1
+	human_team_mask = arr[k]; k += 1
+	rally_seq = arr[k]; k += 1
+	last_touch_idx = arr[k]; k += 1
 	timer = arr[k]; k += 1
 	controlled_l = arr[k]; k += 1
 	controlled_r = arr[k]; k += 1

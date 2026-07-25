@@ -962,6 +962,9 @@ func test_block_reflects_opponent_shot() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "ブロックで打球が跳ね返る")
 	check_eq(s.last_touch_team, 0, "跳ね返した球はブロッカー側の球になる")
+	check_eq(s.last_touch_idx, 0, "最後に触ったのは左後衛ブロッカー")
+	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
+		"ブロッカーと最終タッチチームが一致")
 	check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
 
 func test_jump_alone_does_not_block() -> void:
@@ -1371,6 +1374,9 @@ func test_same_tick_closest_teammate_wins() -> void:
 	check_eq(s.touches, 1, "同チーム同時タッチでも1タッチ")
 	check(s.players[0].hit_cooldown > 0, "近い方がヒットする")
 	check_eq(s.players[1].hit_cooldown, 0, "負けた側は硬直しない")
+	check_eq(s.last_touch_idx, 0, "最後に打ったのは近い左後衛")
+	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
+		"通常打球者と最終タッチチームが一致")
 
 func test_same_tick_tie_ball_side_team_wins() -> void:
 	# 距離が同点なら、ボールがある側のチームが優先(ネット際ジョストの公平化)
@@ -1385,6 +1391,9 @@ func test_same_tick_tie_ball_side_team_wins() -> void:
 	check_eq(s.last_touch_team, 1, "ボール側(右)のチームが同距離タイを制す")
 	check(s.players[2].hit_cooldown > 0, "右前衛がヒットする")
 	check_eq(s.players[1].hit_cooldown, 0, "左前衛は硬直しない")
+	check_eq(s.last_touch_idx, 2, "最後に打ったのは右後衛")
+	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
+		"同距離打球者と最終タッチチームが一致")
 
 func test_touch_count_resets_on_team_change() -> void:
 	var w := _rally_world()

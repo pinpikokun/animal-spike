@@ -380,6 +380,8 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.serving_team = serving_team
 	s.touches = 0
 	s.last_touch_team = -1
+	s.rally_seq += 1
+	s.last_touch_idx = -1
 	s.timer = cfg.serve_delay_ticks
 	s.ball_vx = 0
 	s.ball_vy = 0
@@ -460,6 +462,10 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 	s.hip_quake_event = 0
 	s.ball_guard_damage = 0
 	s.ball_defense_class = Chars.DEFENSE_NONE
+	s.human_team_mask = 0
+	# reset_rallyが開始ラリーを1つ進めるため、試合直後を0にする起点は-1。
+	s.rally_seq = -1
+	s.last_touch_idx = -1
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

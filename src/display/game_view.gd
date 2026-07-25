@@ -101,6 +101,7 @@ func _ready() -> void:
 		state = SimState.new()
 		var r: Array = roster if not roster.is_empty() else Chars.ROSTER
 		Simulation.reset_match(state, cfg, 0, r)
+		state.human_team_mask = 1
 	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
 	# コートが画面より狭いぶん中央寄せ。縦は上へ寄せて下端の顔HUD帯(y=332..356)と
 	# コート床(floor_y=320)・キャラの足元が重ならないようにする

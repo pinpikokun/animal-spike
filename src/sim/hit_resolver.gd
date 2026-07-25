@@ -593,6 +593,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	else:
 		s.touches = 1
 	s.last_touch_team = team
+	s.last_touch_idx = i
 
 # ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
 # キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
@@ -674,6 +675,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 					p.push = back_dir * PUSH_STUN_TICKS
 					s.hit_freeze = maxi(s.hit_freeze, 10)
 		s.last_touch_team = team
+		s.last_touch_idx = i
 		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick
 		p.hit_cooldown = cfg.hit_cooldown_ticks

@@ -258,6 +258,7 @@ func test_yields_to_human_mate() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
+	s.human_team_mask = 1  # 左チームに人間がいる前提を明示する
 	s.ball_x = FP.from_int(90)
 	s.ball_y = FP.from_int(100)
 	s.controlled_l = 0           # slot0=人間
@@ -266,6 +267,25 @@ func test_yields_to_human_mate() -> void:
 	s.players[1].cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ROLES)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_LEFT), "人間が取れる球にCPUは突っ込まない")
+
+func test_cpu_only_team_does_not_treat_controlled_slot_as_human() -> void:
+	var s = SimState.new()
+	s.human_team_mask = 0
+	s.controlled_l = 0
+	check(not SimCpu._mate_is_human(s, 0, 0),
+		"人間なしなら左CPUは操作スロットを人間と誤認しない")
+	s.controlled_l = 1
+	check(not SimCpu._mate_is_human(s, 0, 1),
+		"人間なしなら相方側CPUも操作スロットを人間と誤認しない")
+
+func test_human_team_mask_keeps_human_mate_rule() -> void:
+	var s = SimState.new()
+	s.human_team_mask = 1
+	s.controlled_l = 0
+	check(SimCpu._mate_is_human(s, 0, 0),
+		"左チームのビットがあれば操作スロットを人間として扱う")
+	check(not SimCpu._mate_is_human(s, 0, 1),
+		"操作スロットでない相方は人間として扱わない")
 
 func test_attack_cpu_jumps_to_meet_toss() -> void:
 	# 味方が上げた球に対し、会合できるならジャンプする(アタック準備)
@@ -293,6 +313,7 @@ func test_support_zone_complements_human_mate() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
+	s.human_team_mask = 1  # 左チームに人間がいる前提を明示する
 	s.controlled_l = 0
 	var cpu = s.players[1]
 	cpu.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ROLES | SimCpu.AB_ATTACK)

@@ -20,6 +20,7 @@ func _ready() -> void:
 		return
 	state = SimState.new()
 	Simulation.reset_match(state, cfg, 0)
+	state.human_team_mask = 1
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	label = Label.new()
 	label.position = Vector2(4, 4)

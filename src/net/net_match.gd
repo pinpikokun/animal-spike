@@ -33,6 +33,8 @@ func _ready() -> void:
 	_sim_root = SimRootScript.new()
 	_sim_root.name = "SimRoot"
 	_sim_root.setup()
+	# 通常対戦は左右両チームに人間が1人ずついる。botソークは両方CPU。
+	_sim_root.state.human_team_mask = 0 if _is_bot else 3
 	Engine.physics_ticks_per_second = _sim_root.cfg.tick_rate
 
 	var input_l = NetInputScript.new()

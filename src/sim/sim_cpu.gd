@@ -157,6 +157,10 @@ static func _is_cpu_mate_receiver(s, idx: int, team: int, target_x: int) -> bool
 	var mate_d: int = absi(s.players[mate_idx].x - target_x)
 	return my_d < mate_d or (my_d == mate_d and idx < mate_idx)
 
+static func _mate_is_human(s, team: int, mate_slot: int) -> bool:
+	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
+	return mate_slot == controlled and (s.human_team_mask & (1 << team)) != 0
+
 static func _should_yield_hit_to_cpu_mate(
 		s, idx: int, cfg, team: int, prof: int) -> bool:
 	if not (prof_byte(prof, P_AB) & AB_ROLES):
@@ -164,8 +168,7 @@ static func _should_yield_hit_to_cpu_mate(
 	if s.last_touch_team < 0 or s.last_touch_team == team:
 		return false
 	var mate_slot: int = 1 - idx % 2
-	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
-	if mate_slot == controlled:
+	if _mate_is_human(s, team, mate_slot):
 		return false
 	var p = s.players[idx]
 	var mate = s.players[team * 2 + mate_slot]
@@ -495,8 +498,7 @@ static func decide(s, idx: int, cfg) -> int:
 		# 陣取り直す(相棒が前に出れば下がる)。サーブ側は照準/トスに専念=そのまま
 		if team != s.serving_team:
 			var mslot: int = 1 - idx % 2
-			var ctrl: int = s.controlled_l if team == 0 else s.controlled_r
-			if mslot == ctrl:
+			if _mate_is_human(s, team, mslot):
 				var m = s.players[team * 2 + mslot]
 				return _walk_to(p, _cover_target(p, m, idx, cfg), deadzone / 2)
 		return 0
@@ -663,7 +665,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var mate_slot: int = 1 - idx % 2
 	var mate = s.players[team * 2 + mate_slot]
 	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
-	var mate_is_human: bool = mate_slot == controlled
+	var mate_is_human: bool = _mate_is_human(s, team, mate_slot)
 	# 役割分担: 落下点に近い方がレシーバー。人間の相方が同じ球を追えるなら譲る
 	# (人間とのお見合い衝突は事故なのでCPU側が広めに退く)
 	var receiver := true
@@ -765,8 +767,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 # 後衛担当(相方が前)=ボールの動きを鏡写しに追って落下に先回りする(人間っぽさの核)
 static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: int) -> int:
 	var mate_slot: int = 1 - idx % 2
-	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
-	if mate_slot != controlled:
+	if not _mate_is_human(s, team, mate_slot):
 		return _walk_to(p, _spawn_x(idx, cfg), deadzone)
 	var mate = s.players[team * 2 + mate_slot]
 	var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
