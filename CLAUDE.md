@@ -10,8 +10,9 @@ Before starting work, read `docs/project-memory.md` and the relevant files in
 - Delegate implementation to Codex through the Codex plugin (`/codex:rescue`,
   or the `codex:codex-rescue` subagent). Do not hand-write implementation code
   that can be delegated.
-- Always pass `--effort low` when invoking Codex. Low effort is the default for
-  cost reasons. Raise it only when the user explicitly asks for it.
+- Always pass `--effort medium` when invoking Codex (updated 2026-07-25: the
+  user moved to the Pro plan, so the earlier cost-driven `low` default no
+  longer applies). Change it only when the user explicitly asks.
 
 ## Writing the task contract
 

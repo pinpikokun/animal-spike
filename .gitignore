@@ -29,3 +29,6 @@ istockphoto-*.jpg
 # レビュー用スクショ(コミットしない)
 select_preview.png
 match_preview_*.png
+
+# 使い捨ての計測用スクリプト(tests/unit の外なのでテストランナーは拾わない)
+tests/zz_*.gd
