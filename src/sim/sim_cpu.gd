@@ -328,14 +328,14 @@ static func _receive_target_x(s, cfg, prof: int) -> int:
 		s, cfg, cfg.floor_y - cfg.player_reach_up / 2, max_bounce)
 
 static func _can_prepare_just_receive(s, p, cfg, receive_reach: int,
-		target_x: int, ready_zone: int) -> bool:
+		target_x: int, stance_deadzone: int) -> bool:
 	var contact_ticks: int = _ticks_until_receive_at(
 		s, p, cfg, receive_reach, target_x)
 	if contact_ticks > 180:
 		return false
 	var speed: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
-	# 落下点とのピクセル一致は不要。受けリーチ内へ入れば成立する。
-	var travel: int = maxi(absi(target_x - p.x) - ready_zone, 0)
+	# 構え経路と同じ狭いデッドゾーンまで移動する時間を見積もる。
+	var travel: int = maxi(absi(target_x - p.x) - stance_deadzone, 0)
 	var ready_ticks: int = (travel + speed - 1) / speed if travel > 0 else 0
 	if travel > 0 or p.vx != 0:
 		ready_ticks += 1  # 到着後に入力を離して静止するtick
@@ -588,12 +588,10 @@ static func decide(s, idx: int, cfg) -> int:
 			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
 			var receive_target: int = _receive_target_x(s, cfg, prof)
 			var receive_aim_margin: int = reach * cfg.spike_sweet_pct / 200
-			var receive_ready_zone: int = maxi(
-				reach - receive_aim_margin, receive_aim_margin)
 			var timing_receive: bool = not frozen \
 				and _plans_just_receive(s, idx, p, team, prof) \
 				and _can_prepare_just_receive(
-					s, p, cfg, reach, receive_target, receive_ready_zone)
+					s, p, cfg, reach, receive_target, receive_aim_margin)
 			var timing_chord: bool = (input & SimInput.IN_ACTION) != 0 \
 				and (input & SimInput.IN_DOWN) != 0
 			if timing_receive and not timing_chord:
@@ -643,13 +641,11 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var stance_deadzone: int = reach * cfg.spike_sweet_pct / 200
 	var receive_reach: int = _hit_reach(
 		p.char_id, reach, HitResolver.INTENT_GROUND_RECEIVE)
-	var receive_ready_zone: int = maxi(
-		receive_reach - stance_deadzone, stance_deadzone)
 	# 精密待ちは、反応遅延後の残り時間で「到着→静止→5tick前押下」が
 	# 実現できる時だけ選ぶ。間に合わない球は通常レシーブへ即フォールバック。
 	var just_receive_plan: bool = _plans_just_receive(s, idx, p, team, prof) \
 		and _can_prepare_just_receive(
-			s, p, cfg, receive_reach, land_x, receive_ready_zone)
+			s, p, cfg, receive_reach, land_x, stance_deadzone)
 	# 狙い誤差: 正確に計算した落下点をタッチ毎に1回だけ汚す(tick毎だと震える)。
 	# 「読み違えたが本人は確信している」人間らしさが出る
 	var aim_err: int = prof_byte(prof, P_AIM)
@@ -700,14 +696,14 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var input: int
 	if receiver:
 		if just_receive_plan:
-			# 1) 落下点へ移動。
-			if absi(p.x - land_x) > receive_ready_zone:
-				return _walk_to(p, land_x, receive_ready_zone)
+			# 1) 現在位置から楕円リーチへ入れない間は落下点へ移動。
+			if not _can_receive_from_stand_x(s, p, cfg, receive_reach, p.x):
+				return _walk_to(p, land_x, stance_deadzone)
 			# 2) 到着後は必ず入力を離して静止。移動中の押下ラッチを作らない。
 			if p.vx != 0 or p.receive_stance < 0:
 				return 0
 			var receive_ticks: int = _ticks_until_receive_at(
-				s, p, cfg, receive_reach, land_x)
+				s, p, cfg, receive_reach, p.x)
 			# 3) 接触予測の5tick前に押下エッジを作り、成立まで保持する。
 			if p.receive_stance > 0 \
 					or (p.receive_stance == 0 and receive_ticks <= 5):
@@ -892,6 +888,10 @@ static func _plans_just_receive(s, idx: int, p, team: int, prof: int) -> bool:
 			or s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE:
 		return false
 	return _sweet_ok(s, idx, prof)
+
+static func _can_receive_from_stand_x(
+		s, p, cfg, receive_reach: int, stand_x: int) -> bool:
+	return _ticks_until_receive_at(s, p, cfg, receive_reach, stand_x) < 181
 
 static func _ticks_until_receive_at(s, p, cfg, receive_reach: int,
 		target_x: int) -> int:

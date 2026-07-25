@@ -119,6 +119,63 @@ func test_max_cpu_just_receive_actually_fires() -> void:
 	check_eq(s.players[1].just_receive_event, 1,
 		"事前構えからCPUのジャストレシーブが実際に成立する")
 
+func test_max_cpu_keeps_walking_when_horizontal_range_hides_ellipse_miss() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.tick = 1000
+	s.last_touch_team = 0
+	s.touches = 1
+	s.serve_flight = 0
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_x = cfg.net_x + FP.from_int(20)
+	s.ball_y = cfg.floor_y - FP.from_int(120)
+	s.ball_vx = FP.from_int(80)
+	s.ball_vy = FP.from_int(50)
+	var receiver_idx := 2
+	var receiver = s.players[receiver_idx]
+	receiver.cpu = SimCpu.PRESET_MAX
+	receiver.y = cfg.floor_y
+	receiver.vx = 0
+	receiver.vy = 0
+	receiver.on_ground = 1
+	_select_successful_roll(s, receiver_idx, SimCpu.SALT_RECEIVE,
+		SimCpu.prof_byte(receiver.cpu, SimCpu.P_SWEET))
+	var land_x: int = SimCpu._receive_target_x(s, cfg, receiver.cpu)
+	var receive_reach: int = SimCpu._hit_reach(
+		receiver.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+	var stance_deadzone: int = cfg.player_reach * cfg.spike_sweet_pct / 200
+	var old_ready_zone: int = maxi(
+		receive_reach - stance_deadzone, stance_deadzone)
+	receiver.x = land_x - FP.from_int(24)
+	check(absi(receiver.x - land_x) <= old_ready_zone,
+		"テスト配置は旧水平判定の構え帯に入る")
+	check_eq(SimCpu._ticks_until_receive_at(
+		s, receiver, cfg, receive_reach, receiver.x), 181,
+		"テスト配置は現在位置の楕円リーチに180tick以内に入らない")
+	var input: int = SimCpu.decide(s, receiver_idx, cfg)
+	check(input & (Simulation.IN_LEFT | Simulation.IN_RIGHT),
+		"水平では構え帯でも楕円リーチ外なら落下点へ歩き続ける")
+	check_eq(input & Simulation.IN_ACTION, 0,
+		"楕円リーチ外ではその場で構えて空振りしない")
+
+func test_max_cpu_still_holds_receive_chord_when_current_x_can_reach() -> void:
+	var w := _incoming_attack_world(SimCpu.PRESET_MAX)
+	var s = w[0]
+	var cfg = w[1]
+	var receiver = s.players[1]
+	var receive_reach: int = SimCpu._hit_reach(
+		receiver.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+	check(SimCpu._ticks_until_receive_at(
+		s, receiver, cfg, receive_reach, receiver.x) < 181,
+		"テスト配置は現在位置から楕円リーチへ入る")
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_ACTION,
+		"現在位置から届くCPUは従来どおり構えのアクションを出す")
+	check(input & Simulation.IN_DOWN,
+		"現在位置から届くCPUは従来どおり構えの下入力を出す")
+
 func test_receive_contact_prediction_checks_last_position_before_floor() -> void:
 	var w := _world()
 	var s = w[0]
