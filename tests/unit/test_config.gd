@@ -18,8 +18,8 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.floor_y, FP.from_int(320), "floor_y")
 	check_eq(cfg.points_to_win, 11, "11点先取(原作準拠)")
 	check_eq(cfg.deuce, true, "デュース有")
-	check_eq(cfg.spike_normal_pct, 33, "通常アタック速度33%(A=49%が旧50%相当)")
-	check_eq(cfg.spike_power_pct, 53, "ジャストアタック速度53%(A=79%が旧80%相当)")
+	check_eq(cfg.spike_normal_pct, 25, "通常アタック速度25%(パワーC基準)")
+	check_eq(cfg.spike_power_pct, 40, "ジャストアタック速度40%(パワーC基準)")
 	check_eq(cfg.spike_sweet_pct, 45, "ジャスト判定はリーチ45%以内")
 
 func test_receive_rules_loaded() -> void:
