@@ -258,11 +258,16 @@ func test_flame_ball_wall_contact_consumes_flame_without_damage() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_flame = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+	s.ball_guard_damage = 25
 	s.ball_x = cfg.ball_radius + FP.from_int(1)
 	s.ball_y = cfg.net_top_y - FP.from_int(30)
 	s.ball_vx = -FP.from_int(5)
 	BallPhysics._step_ball(s, cfg)
 	check_eq(s.ball_flame, 0, "壁接触で炎球効果を消費")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
+		"壁接触でアタック種別を消去")
+	check_eq(s.ball_guard_damage, 0, "壁接触でアタックのガード削り値を消去")
 	for p in s.players:
 		check_eq(p.guard, 100, "壁接触ではガードダメージなし")
 
@@ -271,22 +276,63 @@ func test_flame_ball_net_contact_consumes_flame() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_flame = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+	s.ball_guard_damage = 25
 	s.ball_x = cfg.net_x - cfg.net_half_w - cfg.ball_radius - FP.from_int(1)
 	s.ball_y = cfg.net_top_y + FP.from_int(20)
 	s.ball_vx = FP.from_int(4)
 	BallPhysics._step_ball(s, cfg)
 	check_eq(s.ball_flame, 0, "ネット側面接触で炎球効果を消費")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
+		"ネット側面接触でアタック種別を消去")
+	check_eq(s.ball_guard_damage, 0, "ネット側面接触でガード削り値を消去")
 
 func test_flame_ball_net_top_contact_consumes_flame() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_flame = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+	s.ball_guard_damage = 25
 	s.ball_x = cfg.net_x
 	s.ball_y = cfg.net_top_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(4)
 	BallPhysics._step_ball(s, cfg)
 	check_eq(s.ball_flame, 0, "ネット上端接触で炎球効果を消費")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
+		"ネット上端接触でアタック種別を消去")
+	check_eq(s.ball_guard_damage, 0, "ネット上端接触でガード削り値を消去")
+
+func test_wall_softened_attack_neither_drains_drive_nor_triggers_just_receive() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 3000
+	p.receive_stance = cfg.just_receive_window_ticks
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+	s.ball_guard_damage = 25
+	s.ball_x = cfg.ball_radius + FP.from_int(1)
+	s.ball_y = cfg.net_top_y - FP.from_int(30)
+	s.ball_vx = -FP.from_int(5)
+	BallPhysics._step_ball(s, cfg)
+	HitResolver._apply_hit(
+		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(p.drive_gauge, 3000, "壁で弱った球のレシーブはドライブを削らない")
+	check_eq(p.just_receive_event, 0, "壁で弱った球にはジャストレシーブが成立しない")
+
+func test_unimpeded_attack_still_drains_drive_on_receive() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 3000
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	HitResolver._apply_hit(
+		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(p.drive_gauge, 2000, "何にも当たっていない通常アタックは従来どおり1本削る")
 
 func test_bump_on_ground() -> void:
 	var w := _rally_world()

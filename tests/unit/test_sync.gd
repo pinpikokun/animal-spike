@@ -41,7 +41,9 @@ const TICKS := 3600
 #  9. サーブ球を受け手の初接触までブロック不可にする serve_ball フィールドを
 #     SimState へ追加。state_hash が全intフィールドを畳むため、値が0でも
 #     フィールドが増えれば全ハッシュがずれる
-const GOLDEN_COMBINED_HASH := -1832291589848812455
+# 10. 壁反射とネット衝突で ball_attack_kind / ball_guard_damage をクリア。
+#     勢いを失った球がアタック球の印を持ち続けなくなった
+const GOLDEN_COMBINED_HASH := 7835043629505178395
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

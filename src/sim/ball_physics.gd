@@ -1,10 +1,15 @@
 # int演算のみ。球単体の移動、壁、ネット、自由球減衰を扱う。
 extends RefCounted
 
+const SimStateScript := preload("res://src/sim/sim_state.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
 static func wall_reflect_vx(vx: int, cfg) -> int:
 	return -vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+
+static func _clear_attack_effect(s) -> void:
+	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
+	s.ball_guard_damage = 0
 
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x
@@ -30,8 +35,8 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 		s.ball_power = 0
 	if hit_wall:
 		s.ball_flame = 0
+		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
-			s.ball_guard_damage = 0
 			s.ball_defense_class = 0
 	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
@@ -90,8 +95,8 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 	if hits_net_side:
 		# ネット下部は壁。来た側へ押し返す
 		s.ball_flame = 0
+		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
-			s.ball_guard_damage = 0
 			s.ball_defense_class = 0
 		# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
 		if was_left:
@@ -111,8 +116,8 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 		# ネットから離れる向きへ押し出される=ポトリと落ちる緊張感
 		s.ball_y = cfg.net_top_y - cfg.ball_radius
 		s.ball_flame = 0
+		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
-			s.ball_guard_damage = 0
 			s.ball_defense_class = 0
 		s.ball_vy = -s.ball_vy / 2
 		var out_dir: int = -1 if is_left else 1
