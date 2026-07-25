@@ -28,9 +28,9 @@ func test_hash_changes_on_diff() -> void:
 
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x36(回復ディレイを含む)
-	# + 全体35(人間チーム/ラリー/最終打球者を含む) + エンティティ8スロットx8欄
-	# 1 + 4x36 + 35 + 8x8 = 244
-	check_eq(SimState.new().to_int_array().size(), 244,
+	# + 全体37(CPU打球回数/後衛役を含む) + エンティティ8スロットx8欄
+	# 1 + 4x36 + 37 + 8x8 = 246
+	check_eq(SimState.new().to_int_array().size(), 246,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -62,6 +62,8 @@ func test_load_int_array_roundtrip() -> void:
 	a.human_team_mask = 3
 	a.rally_seq = 17
 	a.last_touch_idx = 2
+	a.cpu_hit_count = 23
+	a.cpu_back_role_mask = 6
 	a.players[3].hit_cooldown = 5
 	var b = SimState.new()
 	b.load_int_array(a.to_int_array())
@@ -84,6 +86,8 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.human_team_mask, 3, "人間チームマスクの復元")
 	check_eq(b.rally_seq, 17, "ラリー通し番号の復元")
 	check_eq(b.last_touch_idx, 2, "最終打球者の復元")
+	check_eq(b.cpu_hit_count, 23, "CPU位置取り用の打球回数の復元")
+	check_eq(b.cpu_back_role_mask, 6, "CPU前衛後衛役の復元")
 	check_eq(b.tick, 123, "tickの復元")
 	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
 	check_eq(b.ball_flame, 1, "炎状態の復元")

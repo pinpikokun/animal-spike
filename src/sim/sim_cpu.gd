@@ -58,6 +58,18 @@ const SALT_SUPER := 5
 const SALT_ATTACK := 6
 const SALT_ROLE := 7
 
+const WAIT_PHASE_COUNT := 9
+# 原作0x8406〜0x85CFの相方動作中待機位置表。原作の目盛り(40/64/16)×4。1目盛り=画面4ドット
+const WAIT_ACTIVE_OFFSETS: Array[int] = [160, 160, 160, 160, 160, 256, 256, 64, 64]
+# 原作0x8406〜0x85CFの前衛待機位置表。原作の目盛り(20/35/15)×4。1目盛り=画面4ドット
+const WAIT_FRONT_OFFSETS: Array[int] = [80, 80, 80, 80, 140, 140, 60, 60, 80]
+# 原作0x8406〜0x85CFの後衛待機位置表。原作の目盛り(60/70/40)×4。1目盛り=画面4ドット
+const WAIT_BACK_OFFSETS: Array[int] = [240, 240, 240, 240, 280, 280, 160, 160, 240]
+# 原作0x7E31の前衛/後衛判定の偏り。原作の目盛り16×4。1目盛り=画面4ドット
+const BACK_ROLE_HYSTERESIS_PX := 64
+# 原作0x8372の非レシーバー退避先。原作の目盛り16×4。1目盛り=画面4ドット
+const RECEIVER_YIELD_OFFSET_PX := 64
+
 # 難易度プリセット(2026-07-13「人間化」改訂)。方針:
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
 #   読み(予測深度)・技(ブロック/ジャスト)・判断(配球IQ)で出す
@@ -124,6 +136,29 @@ static func _spawn_x(idx: int, cfg) -> int:
 	var positions: Array[int] = [back, front, cfg.court_width - back, cfg.court_width - front]
 	return positions[idx]
 
+static func _team_dir(team: int) -> int:
+	return 1 if team == 0 else -1
+
+static func _back_role_mask_from_positions(s) -> int:
+	var mask: int = 0
+	var hysteresis: int = FP.from_int(BACK_ROLE_HYSTERESIS_PX)
+	for team in 2:
+		var first_idx: int = team * 2
+		var mate_idx: int = first_idx + 1
+		var direction: int = _team_dir(team)
+		var threshold: int = s.players[mate_idx].x + direction * hysteresis
+		var first_is_back: bool
+		if direction > 0:
+			first_is_back = s.players[first_idx].x < threshold
+		else:
+			first_is_back = s.players[first_idx].x > threshold
+		var back_idx: int = first_idx if first_is_back else mate_idx
+		mask |= 1 << back_idx
+	return mask
+
+static func _is_back_role(s, idx: int) -> bool:
+	return (s.cpu_back_role_mask & (1 << idx)) != 0
+
 static func _walk_to(p, target_x: int, deadzone: int) -> int:
 	if p.x < target_x - deadzone:
 		return SimInput.IN_RIGHT
@@ -149,10 +184,10 @@ static func _pre_attack_cover_x(cfg, team: int) -> int:
 	return cfg.net_x / 2 if team == 0 \
 		else cfg.net_x + (cfg.court_width - cfg.net_x) / 2
 
-# 非レシーバー時の守備ホーム。自チームの2定位置(後衛/前衛)のうち、相棒(操作キャラ)
+# 人間相方チーム専用の守備ホーム。自チームの2定位置(後衛/前衛)のうち、相棒(操作キャラ)
 # に対して自分が今いる側のホームを選ぶ=相棒とボールを横切らず反対側を埋める。
 # 交差しないのでボール落下点へ吸い寄せられて再び相棒へ張り付くのを防ぐ。決定論・読み取りのみ
-static func _cover_home(p, mate, idx: int, cfg) -> int:
+static func _human_mate_cover_home(p, mate, idx: int, cfg) -> int:
 	var team: int = idx / 2
 	var home_a: int = _spawn_x(team * 2, cfg)      # 後衛(壁寄り)
 	var home_b: int = _spawn_x(team * 2 + 1, cfg)  # 前衛(ネット寄り)
@@ -160,10 +195,9 @@ static func _cover_home(p, mate, idx: int, cfg) -> int:
 	var hi: int = maxi(home_a, home_b)
 	return hi if p.x >= mate.x else lo
 
-# 非レシーバーの守備目標: 相棒と反対側のホームへ回り、最低sep(リーチ1.5倍)離す。
-# 相棒(人間)が前に出たら自分は下がる、という追従がこの1関数で決まる
-static func _cover_target(p, mate, idx: int, cfg) -> int:
-	var tx: int = _cover_home(p, mate, idx, cfg)
+# 人間相方チーム専用: 相棒と反対側のホームへ回り、最低sep離す。
+static func _human_mate_cover_target(p, mate, idx: int, cfg) -> int:
+	var tx: int = _human_mate_cover_home(p, mate, idx, cfg)
 	var sep: int = cfg.cpu_mate_spacing
 	if absi(tx - mate.x) < sep:
 		tx = mate.x + sep if tx >= mate.x else mate.x - sep
@@ -174,6 +208,30 @@ static func _cover_target(p, mate, idx: int, cfg) -> int:
 		if opposite >= lo and opposite <= hi:
 			tx = opposite
 	return clampi(tx, lo, hi)
+
+static func _mate_is_acting(mate) -> bool:
+	# 原作0x82E9のP_state!=0に相当。本作には統合stateがないため、
+	# 地上の通常制御以外(空中・打球硬直・構え・行動不能動作)を動作中とする。
+	return mate.on_ground == 0 or mate.hit_cooldown > 0 \
+		or mate.receive_stance != 0 or mate.stun > 0 or mate.burn > 0 \
+		or mate.throw > 0 or mate.flinch > 0 or mate.hip != 0 \
+		or mate.cling != 0 or mate.quake_stun > 0
+
+static func _cover_target(s, idx: int, cfg) -> int:
+	var team: int = idx / 2
+	var mate_idx: int = team * 2 + (1 - idx % 2)
+	var phase: int = s.cpu_hit_count % WAIT_PHASE_COUNT
+	var offset_px: int
+	if _mate_is_acting(s.players[mate_idx]):
+		offset_px = WAIT_ACTIVE_OFFSETS[phase]
+	elif _is_back_role(s, idx):
+		offset_px = WAIT_BACK_OFFSETS[phase]
+	else:
+		offset_px = WAIT_FRONT_OFFSETS[phase]
+	return cfg.net_x - _team_dir(team) * FP.from_int(offset_px)
+
+static func _receiver_yield_target(cfg, team: int) -> int:
+	return cfg.net_x - _team_dir(team) * FP.from_int(RECEIVER_YIELD_OFFSET_PX)
 
 static func _is_cpu_mate_receiver(s, idx: int, team: int, target_x: int) -> bool:
 	var mate_idx: int = team * 2 + (1 - idx % 2)
@@ -524,7 +582,8 @@ static func decide(s, idx: int, cfg) -> int:
 			var mslot: int = 1 - idx % 2
 			if _mate_is_human(s, team, mslot):
 				var m = s.players[team * 2 + mslot]
-				return _walk_to(p, _cover_target(p, m, idx, cfg), deadzone / 2)
+				return _walk_to(p,
+					_human_mate_cover_target(p, m, idx, cfg), deadzone / 2)
 		return 0
 	if s.phase == SimStateScript.PHASE_POINT_PAUSE:
 		# ポーズ中は棒立ちせず持ち場へ歩いて戻る(次ラリーの準備)
@@ -740,18 +799,13 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	elif mate_is_human:
 		# 非レシーバー×相棒が人間: 相棒と反対側のホームへ回り、空きコートを埋める。
 		# ボールを横切らないので張り付きが起きない(相棒が前へ出れば自分は下がる)
-		input = _walk_to(p, _cover_target(p, mate, idx, cfg), deadzone / 2)
+		input = _walk_to(p,
+			_human_mate_cover_target(p, mate, idx, cfg), deadzone / 2)
 	else:
-		var support_x: int
 		if receiving:
-			# CPU同士も相対位置から前衛/後衛の持ち場を毎tick選ぶ。
-			return _walk_to(p, _cover_target(p, mate, idx, cfg), deadzone / 2)
-		elif ab & AB_ATTACK:
-			var off: int = FP.from_int(48)
-			support_x = cfg.net_x - off if team == 0 else cfg.net_x + off
-		else:
-			support_x = _spawn_x(idx, cfg)
-		input = _walk_to(p, support_x, deadzone)
+			# 原作0x8372: 相方の方が着弾へ近い時は相方基準でなくネット際へ退く。
+			return _walk_to(p, _receiver_yield_target(cfg, team), deadzone / 2)
+		input = _walk_to(p, _cover_target(s, idx, cfg), deadzone)
 	# ジャンプアタック: 自チームの上げ球へ会合できるなら跳ぶ。ミス抽選が出た
 	# タッチでは跳ばない(=1拍遅れる、という惜しい失敗)。
 	# サーブ打球が飛行中(serve_flight)は「上げ球」ではないので跳ばない
@@ -802,7 +856,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: int) -> int:
 	var mate_slot: int = 1 - idx % 2
 	if not _mate_is_human(s, team, mate_slot):
-		return _walk_to(p, _spawn_x(idx, cfg), deadzone)
+		return _walk_to(p, _cover_target(s, idx, cfg), deadzone)
 	var mate = s.players[team * 2 + mate_slot]
 	var mate_is_front: bool = absi(mate.x - cfg.net_x) < cfg.court_width / 4
 	if not mate_is_front and (ab & AB_BLOCK):

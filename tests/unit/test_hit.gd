@@ -966,6 +966,7 @@ func test_block_reflects_opponent_shot() -> void:
 	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
 		"ブロッカーと最終タッチチームが一致")
 	check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
+	check_eq(s.cpu_hit_count, 1, "ブロック打球でもCPU位置取り用カウンタを1増やす")
 
 func test_jump_alone_does_not_block() -> void:
 	var w := _rally_world()
@@ -1355,11 +1356,13 @@ func test_cooldown_blocks_double_hit() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "1回目でタッチ1")
+	check_eq(s.cpu_hit_count, 1, "通常打球でCPU位置取り用カウンタを1増やす")
 	# ボールを引き戻して連打
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "クールダウン中は再ヒットしない")
+	check_eq(s.cpu_hit_count, 1, "不成立の再打撃ではカウンタを増やさない")
 
 func test_same_tick_closest_teammate_wins() -> void:
 	# 同tickに複数人がリーチ内なら最も近い1人だけがヒットする(1tick1ヒット)

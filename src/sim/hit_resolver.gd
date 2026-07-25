@@ -18,6 +18,8 @@ const HIT_NO_POINT := -1
 const SALT_MURA := 23
 const SALT_TOSS_BAD := 29
 const SALT_RECEIVE_SCATTER := 31
+# 原作0x7E9D: aitick % 8 == 0でCPUペアの前衛/後衛を交換する。
+const CPU_ROLE_SWAP_HITS := 8
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
 const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
@@ -42,6 +44,17 @@ const INTENT_AIR_FEINT := INTENT_AIR_TOSS
 
 static func team_of(i: int) -> int:
 	return SimStateScript.team_of(i)
+
+static func _advance_cpu_positioning_after_hit(s) -> void:
+	# 原作0x39C2のaitick更新を、乱数ではなく実打球1回=1として数える。
+	s.cpu_hit_count += 1
+	if s.cpu_hit_count % CPU_ROLE_SWAP_HITS != 0:
+		return
+	for team in 2:
+		if (s.human_team_mask & (1 << team)) != 0:
+			continue
+		var first_idx: int = team * 2
+		s.cpu_back_role_mask ^= (1 << first_idx) | (1 << (first_idx + 1))
 
 static func _classify_intent(on_ground: int, input: int, d2: int,
 		player_reach: int, serve_strike: bool) -> Array[int]:
@@ -594,6 +607,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		s.touches = 1
 	s.last_touch_team = team
 	s.last_touch_idx = i
+	_advance_cpu_positioning_after_hit(s)
 
 # ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
 # キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
@@ -676,6 +690,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 					s.hit_freeze = maxi(s.hit_freeze, 10)
 		s.last_touch_team = team
 		s.last_touch_idx = i
+		_advance_cpu_positioning_after_hit(s)
 		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick
 		p.hit_cooldown = cfg.hit_cooldown_ticks

@@ -24,6 +24,8 @@ func test_reset_match_positions() -> void:
 	check_eq(s.human_team_mask, 0, "試合初期化時は人間チームなし")
 	check_eq(s.rally_seq, 0, "試合開始直後のラリー番号は0")
 	check_eq(s.last_touch_idx, -1, "試合開始直後は打球者なし")
+	check_eq(s.cpu_hit_count, 0, "試合開始直後の打球回数は0")
+	check_eq(s.cpu_back_role_mask, 5, "両チームのslot0を初期後衛役にする")
 
 func test_reset_match_clears_cpu_positioning_state() -> void:
 	var cfg = SimConfig.new()
@@ -31,10 +33,14 @@ func test_reset_match_clears_cpu_positioning_state() -> void:
 	s.human_team_mask = 3
 	s.rally_seq = 99
 	s.last_touch_idx = 2
+	s.cpu_hit_count = 99
+	s.cpu_back_role_mask = 15
 	Simulation.reset_match(s, cfg, 0)
 	check_eq(s.human_team_mask, 0, "試合初期化で人間チームを消す")
 	check_eq(s.rally_seq, 0, "試合初期化でラリー番号を0に戻す")
 	check_eq(s.last_touch_idx, -1, "試合初期化で打球者を消す")
+	check_eq(s.cpu_hit_count, 0, "試合初期化で打球回数を0に戻す")
+	check_eq(s.cpu_back_role_mask, 5, "試合初期位置から後衛役を決め直す")
 
 func test_reset_rally_keeps_player_positions() -> void:
 	# ラリー再開でキャラをワープさせない(気持ちよさ優先、ユーザー決定)。
@@ -48,6 +54,8 @@ func test_reset_rally_keeps_player_positions() -> void:
 	s.serve_ball = 1
 	s.human_team_mask = 1
 	s.last_touch_idx = 3
+	s.cpu_hit_count = 13
+	var back_role_mask_before: int = s.cpu_back_role_mask
 	var rally_seq_before: int = s.rally_seq
 	Simulation.reset_rally(s, cfg, 1)
 	check_eq(s.players[0].x, moved_x, "reset_rallyでキャラ位置が変わらない")
@@ -58,6 +66,8 @@ func test_reset_rally_keeps_player_positions() -> void:
 	check_eq(s.human_team_mask, 1, "ラリー初期化は人間チームを維持")
 	check_eq(s.rally_seq, rally_seq_before + 1, "ラリー初期化ごとに通し番号を増やす")
 	check_eq(s.last_touch_idx, -1, "ラリー初期化で打球者を消す")
+	check_eq(s.cpu_hit_count, 13, "ラリー初期化は打球回数を維持")
+	check_eq(s.cpu_back_role_mask, back_role_mask_before, "ラリー初期化は前衛後衛役を維持")
 
 func test_ball_held_by_server() -> void:
 	var w := _serve_world(0)

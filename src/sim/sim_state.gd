@@ -106,6 +106,8 @@ var last_touch_team: int = -1
 var human_team_mask: int = 0  # bit0=team0、bit1=team1に人間がいる
 var rally_seq: int = 0  # 試合内のラリー通し番号
 var last_touch_idx: int = -1  # 最後に打球したplayer index。未接触は-1
+var cpu_hit_count: int = 0  # CPU位置取りの位相を進める打球回数。原作aitick相当
+var cpu_back_role_mask: int = 0  # bit i=1ならplayer iが後衛。打球間は役を保持
 var timer: int = 0
 var controlled_l: int = 0
 var controlled_r: int = 0
@@ -203,6 +205,8 @@ func to_int_array() -> Array[int]:
 	out.append(human_team_mask)
 	out.append(rally_seq)
 	out.append(last_touch_idx)
+	out.append(cpu_hit_count)
+	out.append(cpu_back_role_mask)
 	out.append(timer)
 	out.append(controlled_l)
 	out.append(controlled_r)
@@ -290,6 +294,8 @@ func load_int_array(arr: Array) -> void:
 	human_team_mask = arr[k]; k += 1
 	rally_seq = arr[k]; k += 1
 	last_touch_idx = arr[k]; k += 1
+	cpu_hit_count = arr[k]; k += 1
+	cpu_back_role_mask = arr[k]; k += 1
 	timer = arr[k]; k += 1
 	controlled_l = arr[k]; k += 1
 	controlled_r = arr[k]; k += 1

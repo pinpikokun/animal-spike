@@ -466,6 +466,8 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 	# reset_rallyが開始ラリーを1つ進めるため、試合直後を0にする起点は-1。
 	s.rally_seq = -1
 	s.last_touch_idx = -1
+	s.cpu_hit_count = 0
+	s.cpu_back_role_mask = SimCpu._back_role_mask_from_positions(s)
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

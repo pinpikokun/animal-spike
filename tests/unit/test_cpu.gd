@@ -366,21 +366,149 @@ func test_roles_split_receiver_and_support() -> void:
 	var mask: int = SimCpu.AB_PREDICT | SimCpu.AB_ROLES
 	s.players[0].cpu = _prof(mask)
 	s.players[1].cpu = _prof(mask)
-	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT, "非レシーバーは持ち場(202)へ離れる")
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT,
+		"非レシーバーはネットから64pxの退避先へ離れる")
 	# 役割なしなら同じ状況でボールへ突っ込む(=みんなで追いかける問題)
 	s.players[1].cpu = _prof(SimCpu.AB_PREDICT)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "役割なしはボールへ向かう")
 
-func test_cpu_cover_target_keeps_configured_spacing_from_receiver() -> void:
+func test_cpu_wait_targets_match_original_table_for_all_phases() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var active_offsets: Array[int] = [160, 160, 160, 160, 160, 256, 256, 64, 64]
+	var waiting_front_offsets: Array[int] = [80, 80, 80, 80, 140, 140, 60, 60, 80]
+	var waiting_back_offsets: Array[int] = [240, 240, 240, 240, 280, 280, 160, 160, 240]
+	for phase in 9:
+		s.cpu_hit_count = phase
+		s.players[1].on_ground = 0
+		check_eq(cfg.net_x - SimCpu._cover_target(s, 0, cfg),
+			FP.from_int(active_offsets[phase]),
+			"相方動作中の待機表 phase=%d" % phase)
+		s.players[0].on_ground = 0
+		check_eq(cfg.net_x - SimCpu._cover_target(s, 1, cfg),
+			FP.from_int(active_offsets[phase]),
+			"相方動作中は前衛役でも同じ表 phase=%d" % phase)
+		s.players[1].on_ground = 1
+		s.players[0].on_ground = 1
+		check_eq(cfg.net_x - SimCpu._cover_target(s, 0, cfg),
+			FP.from_int(waiting_back_offsets[phase]),
+			"相方待機中の後衛表 phase=%d" % phase)
+		check_eq(cfg.net_x - SimCpu._cover_target(s, 1, cfg),
+			FP.from_int(waiting_front_offsets[phase]),
+			"相方待機中の前衛表 phase=%d" % phase)
+	s.cpu_hit_count = 0
+	check_eq(SimCpu._cover_target(s, 2, cfg) - cfg.net_x, FP.from_int(240),
+		"右チームもネット基準の鏡像符号で後衛位置を得る")
+
+func test_front_back_roles_swap_only_on_each_eighth_hit() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var initial_mask: int = s.cpu_back_role_mask
+	for hit in 7:
+		HitResolver._apply_hit(s, hit % 4, cfg, Simulation.IN_ACTION, 0)
+		check_eq(s.cpu_back_role_mask, initial_mask,
+			"8打球未満では前衛後衛を維持 hit=%d" % (hit + 1))
+		s.tick += 1
+	HitResolver._apply_hit(s, 3, cfg, Simulation.IN_ACTION, 0)
+	check_eq(s.cpu_hit_count, 8, "8回の打球をそのまま数える")
+	check_eq(s.cpu_back_role_mask, initial_mask ^ 15, "8打球目でCPU2チームの役を交換")
+	var swapped_mask: int = s.cpu_back_role_mask
+	for hit in 7:
+		s.tick += 1
+		HitResolver._apply_hit(s, hit % 4, cfg, Simulation.IN_ACTION, 0)
+		check_eq(s.cpu_back_role_mask, swapped_mask,
+			"次の8打球目までは交換後の役を維持 hit=%d" % (hit + 9))
+	s.tick += 1
+	HitResolver._apply_hit(s, 3, cfg, Simulation.IN_ACTION, 0)
+	check_eq(s.cpu_hit_count, 16, "役交換のために打球回数へ余分な加算をしない")
+	check_eq(s.cpu_back_role_mask, initial_mask, "16打球目で元の役へ交換")
+
+func test_front_back_initial_role_uses_original_hysteresis() -> void:
+	var w := _world()
+	var s = w[0]
+	s.players[0].x = FP.from_int(140)
+	s.players[1].x = FP.from_int(80)
+	s.cpu_back_role_mask = SimCpu._back_role_mask_from_positions(s)
+	check(SimCpu._is_back_role(s, 0),
+		"左slot0は相方より60px前でも64pxの偏り内なら後衛を維持")
+	check(not SimCpu._is_back_role(s, 1), "同じチームの相方は前衛")
+	s.players[0].x = FP.from_int(160)
+	s.cpu_back_role_mask = SimCpu._back_role_mask_from_positions(s)
+	check(not SimCpu._is_back_role(s, 0),
+		"左slot0が相方より64pxを超えて前へ出た時だけ前衛へ変わる")
+	check(SimCpu._is_back_role(s, 1), "同じチームの相方が後衛")
+
+func test_front_back_roles_do_not_swap_with_human_mate() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.human_team_mask = 1
+	var initial_mask: int = s.cpu_back_role_mask
+	for hit in 8:
+		HitResolver._apply_hit(s, hit % 4, cfg, Simulation.IN_ACTION, 0)
+		s.tick += 1
+	check_eq(s.cpu_back_role_mask & 3, initial_mask & 3,
+		"人間がいる左チームは8打球目でも前衛後衛を交換しない")
+	check_eq(s.cpu_back_role_mask & 12, (initial_mask ^ 15) & 12,
+		"CPU同士の右チームだけは8打球目に交換する")
+
+func test_cpu_only_cover_target_does_not_follow_mate_x() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.cpu_hit_count = 4
+	s.players[1].on_ground = 1
+	s.players[1].x = FP.from_int(70)
+	var target_a: int = SimCpu._cover_target(s, 0, cfg)
+	s.players[1].x = FP.from_int(150)
+	var target_b: int = SimCpu._cover_target(s, 0, cfg)
+	check_eq(target_a, target_b, "CPU同士の待機目標は相方xを参照しない")
+	check_eq(target_a, cfg.net_x - FP.from_int(280),
+		"phase4の後衛はネットから280px")
+
+func test_cpu_only_non_receiver_retreat_does_not_follow_mate_x() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 1
+	s.ball_x = FP.from_int(100)
+	s.ball_y = FP.from_int(100)
+	s.players[1].x = cfg.net_x - FP.from_int(64)
+	var mask: int = SimCpu.AB_PREDICT | SimCpu.AB_ROLES
+	s.players[0].cpu = _prof(mask)
+	s.players[1].cpu = _prof(mask)
+	s.players[0].x = FP.from_int(90)
+	var input_a: int = SimCpu.decide(s, 1, cfg)
+	s.players[0].x = FP.from_int(110)
+	var input_b: int = SimCpu.decide(s, 1, cfg)
+	check_eq(input_a, input_b, "CPU非レシーバーの実入力は相方xを動かしても不変")
+	check_eq(input_a & (Simulation.IN_LEFT | Simulation.IN_RIGHT), 0,
+		"ネットから64pxの退避先にいれば横移動しない")
+
+func test_cpu_receiver_yield_retreats_to_original_net_offset() -> void:
 	var w := _world()
 	var cfg = w[1]
-	var receiver = w[0].players[0]
-	var cover = w[0].players[1]
-	receiver.x = FP.from_int(100)
-	cover.x = FP.from_int(120)
-	var target: int = SimCpu._cover_target(cover, receiver, 1, cfg)
-	check(absi(target - receiver.x) >= cfg.cpu_mate_spacing,
-		"非レシーバーの目標はレシーバーから設定間隔以上離れる")
+	check_eq(SimCpu._receiver_yield_target(cfg, 0), cfg.net_x - FP.from_int(64),
+		"左の非レシーバーはネットから64pxへ退く")
+	check_eq(SimCpu._receiver_yield_target(cfg, 1), cfg.net_x + FP.from_int(64),
+		"右の非レシーバーはネットから64pxへ退く")
+
+func test_human_mate_cover_keeps_opposite_home_behavior() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var cpu = s.players[1]
+	var human = s.players[0]
+	cpu.x = FP.from_int(120)
+	human.x = FP.from_int(200)
+	var back_target: int = SimCpu._human_mate_cover_target(cpu, human, 1, cfg)
+	human.x = FP.from_int(60)
+	var front_target: int = SimCpu._human_mate_cover_target(cpu, human, 1, cfg)
+	check(back_target < front_target,
+		"人間が前なら後ろ、人間が後ろなら前のホームを埋める")
 
 func _near_cpu_mate_receive_world() -> Array:
 	var w := _world()
@@ -690,16 +818,18 @@ func test_cpu_walks_home_during_pause() -> void:
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=202)へ戻る")
 
-func test_cpu_returns_to_spawn() -> void:
+func test_cpu_returns_to_original_wait_target() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
+	s.cpu_hit_count = 0
 	s.ball_x = cfg.net_x + FP.from_int(126)
 	s.ball_y = FP.from_int(100)
 	s.players[1].x = FP.from_int(cfg.spawn_front_px) - FP.from_int(57)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=202)へ戻る")
+	check(input & Simulation.IN_RIGHT,
+		"phase0の前衛待機位置(ネットから80px)へ戻る")
 
 func test_sweet_jump_plan_returns_two_values_when_plan_exists() -> void:
 	var w := _world()
