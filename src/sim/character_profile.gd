@@ -96,8 +96,10 @@ const PROFILES := {
 		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_C,
 	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 	5: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	# PIYO(鳥): 打たれ弱く足も遅い原作設定。2026-07-25にパワー差の試遊のため
+	# POWERをEへ。アタック速度の下限を見るための暫定値。
 	6: {"ranks": {
-		ABILITY_POWER: RANK_C, ABILITY_JUMP: RANK_C, ABILITY_SPEED: RANK_D,
+		ABILITY_POWER: RANK_E, ABILITY_JUMP: RANK_C, ABILITY_SPEED: RANK_D,
 		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_E,
 	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 	7: {"ranks": {
@@ -110,7 +112,12 @@ const PROFILES := {
 	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 	9: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 	10: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
-	11: {"ranks": ALL_C_RANKS, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
+	# UMA(白い馬・隠し): 2026-07-25にパワー差の試遊のため POWERをAへ。
+	# アタック速度の上限を見るための暫定値。他の能力はCのまま。
+	11: {"ranks": {
+		ABILITY_POWER: RANK_A, ABILITY_JUMP: RANK_C, ABILITY_SPEED: RANK_C,
+		ABILITY_BRAKE: RANK_C, ABILITY_GUARD: RANK_C,
+	}, "weight_pct": STANDARD_WEIGHT_PCT, "traits": []},
 }
 
 static func rank(char_id: int, ability: String) -> int:

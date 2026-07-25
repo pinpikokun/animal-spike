@@ -28,7 +28,9 @@ func test_original_character_rank_assignments() -> void:
 			Profile.RANK_C, Profile.RANK_C],
 		Chars.CHAR_HITO: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
 			Profile.RANK_C, Profile.RANK_C],
-		Chars.CHAR_PIYO: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_D,
+		# PIYO/UMAのPOWERは2026-07-25のパワー差試遊のため暫定でE/Aへ振った。
+		# 手触りの判断後に見直す。他キャラは全員Cのまま。
+		Chars.CHAR_PIYO: [Profile.RANK_E, Profile.RANK_C, Profile.RANK_D,
 			Profile.RANK_C, Profile.RANK_E],
 		Chars.CHAR_UME: [Profile.RANK_C, Profile.RANK_E, Profile.RANK_A,
 			Profile.RANK_C, Profile.RANK_A],
@@ -38,7 +40,7 @@ func test_original_character_rank_assignments() -> void:
 			Profile.RANK_C, Profile.RANK_C],
 		Chars.CHAR_SEC1: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
 			Profile.RANK_C, Profile.RANK_C],
-		Chars.CHAR_SEC2: [Profile.RANK_C, Profile.RANK_C, Profile.RANK_C,
+		Chars.CHAR_SEC2: [Profile.RANK_A, Profile.RANK_C, Profile.RANK_C,
 			Profile.RANK_C, Profile.RANK_C],
 	}
 	for cid in expected:
