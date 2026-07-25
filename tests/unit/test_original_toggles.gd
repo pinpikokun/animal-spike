@@ -14,10 +14,10 @@ func _rally_world() -> Array:
 		# 基礎物理テストへパンダの付与能力を混入させない。
 		p.char_id = Chars.CHAR_FOX
 		p.y = cfg.floor_y
-	s.players[0].x = FP.from_int(100)
-	s.players[1].x = FP.from_int(175)
-	s.players[2].x = FP.from_int(380)
-	s.players[3].x = FP.from_int(270)
+	s.players[0].x = cfg.net_x - FP.from_int(124)
+	s.players[1].x = cfg.net_x - FP.from_int(49)
+	s.players[2].x = cfg.net_x + FP.from_int(156)
+	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
 func test_wall_always_damps_reflection_to_half() -> void:

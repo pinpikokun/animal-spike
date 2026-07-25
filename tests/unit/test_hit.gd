@@ -17,10 +17,10 @@ func _rally_world() -> Array:
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
 		p.y = cfg.floor_y
-	s.players[0].x = FP.from_int(100)
-	s.players[1].x = FP.from_int(175)
-	s.players[2].x = FP.from_int(380)
-	s.players[3].x = FP.from_int(270)
+	s.players[0].x = cfg.net_x - FP.from_int(124)
+	s.players[1].x = cfg.net_x - FP.from_int(49)
+	s.players[2].x = cfg.net_x + FP.from_int(156)
+	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
 func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
@@ -595,15 +595,15 @@ func test_receive_reach_changes_actual_hit_detection() -> void:
 
 func test_toss_good_zone_mapping_mirrors_both_teams() -> void:
 	var cfg = SimConfig.new()
-	check_eq(HitResolver.toss_target_x(0, 0, cfg), FP.from_int(157), "左・無方向=自陣前")
-	check_eq(HitResolver.toss_target_x(0, -1, cfg), FP.from_int(56), "左・ネット逆=自陣後")
-	check_eq(HitResolver.toss_target_x(0, 1, cfg), FP.from_int(448 - 157),
+	check_eq(HitResolver.toss_target_x(0, 0, cfg), FP.from_int(202), "左・無方向=自陣前")
+	check_eq(HitResolver.toss_target_x(0, -1, cfg), FP.from_int(72), "左・ネット逆=自陣後")
+	check_eq(HitResolver.toss_target_x(0, 1, cfg), FP.from_int(374),
 		"左・ネット方向=敵陣前")
-	check_eq(HitResolver.toss_target_x(1, 0, cfg), FP.from_int(448 - 157),
+	check_eq(HitResolver.toss_target_x(1, 0, cfg), FP.from_int(374),
 		"右・無方向=自陣前")
-	check_eq(HitResolver.toss_target_x(1, 1, cfg), FP.from_int(448 - 56),
+	check_eq(HitResolver.toss_target_x(1, 1, cfg), FP.from_int(504),
 		"右・ネット逆=自陣後")
-	check_eq(HitResolver.toss_target_x(1, -1, cfg), FP.from_int(157),
+	check_eq(HitResolver.toss_target_x(1, -1, cfg), FP.from_int(202),
 		"右・ネット方向=敵陣前")
 
 func test_toss_good_aims_ground_and_air_trajectory_at_zone() -> void:

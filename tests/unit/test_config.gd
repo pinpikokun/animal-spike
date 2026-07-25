@@ -14,7 +14,7 @@ func _count_checkboxes(node: Node) -> int:
 func test_loads_default_rules() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.tick_rate, 60, "tick_rate")
-	check_eq(cfg.court_width, FP.from_int(448), "court_width")
+	check_eq(cfg.court_width, FP.from_int(576), "court_width")
 	check_eq(cfg.floor_y, FP.from_int(320), "floor_y")
 	check_eq(cfg.points_to_win, 11, "11点先取(原作準拠)")
 	check_eq(cfg.deuce, true, "デュース有")
@@ -66,6 +66,11 @@ func test_guard_heal_just_is_removed() -> void:
 func test_default_rules_valid() -> void:
 	check_eq(SimConfig.new().valid, true, "既定ルールはvalid")
 
+func test_net_is_exactly_at_court_center() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.net_x, cfg.court_width / 2,
+		"net_xはcourt_widthのちょうど半分")
+
 func test_original_wall_is_the_only_configured_rule() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.wall_bounce_num, 50, "壁反射は常時50%")
@@ -109,14 +114,16 @@ func test_invalid_rules_detected() -> void:
 
 func test_m1a_keys_loaded() -> void:
 	var cfg = SimConfig.new()
-	check_eq(cfg.net_x, FP.from_int(224), "net_x")
+	check_eq(cfg.net_x, FP.from_int(288), "net_x")
 	check_eq(cfg.max_touches, 3, "max_touches")
 	check(cfg.spike_vx > 0, "spike_vxが正")
 	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
 	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
-	check_eq(cfg.spawn_back_px, 56, "spawn_back_px")
-	check_eq(cfg.toss_zone_back_px, 56, "トス上手の自陣後方ゾーン")
-	check_eq(cfg.toss_zone_front_px, 157, "トス上手の自陣前方ゾーン")
+	check_eq(cfg.serve_line, FP.from_int(31), "serve_line")
+	check_eq(cfg.spawn_back_px, 72, "spawn_back_px")
+	check_eq(cfg.spawn_front_px, 202, "spawn_front_px")
+	check_eq(cfg.toss_zone_back_px, 72, "トス上手の自陣後方ゾーン")
+	check_eq(cfg.toss_zone_front_px, 202, "トス上手の自陣前方ゾーン")
 
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()

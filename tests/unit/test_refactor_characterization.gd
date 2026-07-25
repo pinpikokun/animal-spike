@@ -16,10 +16,10 @@ func _world() -> Array:
 	for p in s.players:
 		p.char_id = STANDARD_CHAR
 		p.y = cfg.floor_y
-	s.players[0].x = FP.from_int(100)
-	s.players[1].x = FP.from_int(175)
-	s.players[2].x = FP.from_int(380)
-	s.players[3].x = FP.from_int(270)
+	s.players[0].x = cfg.net_x - FP.from_int(124)
+	s.players[1].x = cfg.net_x - FP.from_int(49)
+	s.players[2].x = cfg.net_x + FP.from_int(156)
+	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
 func _hit_snapshot(on_ground: int, input: int, d2: int, vx: int, vy: int, power: int = 0) -> Array[int]:
@@ -108,13 +108,13 @@ func test_output_velocity_snapshot() -> void:
 		_hit_snapshot(1, 0, outside_sweet, -FP.from_int(12), FP.from_int(8), 1),
 	]
 	check_eq(cases, [
-		[1, 0, 64299, -567978, 0, 100, 0],
-		[1, 0, 221585, -567978, 0, 100, 0],
-		[1, 14, 387280, -567978, 0, 100, 0],
-		[0, 0, 968704, 100489, 1, 100, 0],
-		[0, 0, 1147224, 149640, 0, 100, 0],
-		[0, 0, 429202, -749294, 0, 100, 0],
-		[1, 0, 805721, -170393, 0, 75, 24],
+		[1, 0, 40805, -567978, 0, 100, 0],
+		[1, 0, 198091, -567978, 0, 100, 0],
+		[1, 14, 410774, -567978, 0, 100, 0],
+		[0, 0, 1105920, 100489, 1, 100, 0],
+		[0, 0, 1312789, 149640, 0, 100, 0],
+		[0, 0, 467719, -749294, 0, 100, 0],
+		[1, 0, 798673, -170393, 0, 75, 24],
 	], "固定フィクスチャの整数出力速度")
 
 func test_collision_order_hit_move_net_block() -> void:
@@ -144,7 +144,7 @@ func test_collision_order_hit_move_net_block() -> void:
 	# 変わっていないので、検証している同tick順序は保たれている。実測値。
 	check_eq([s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, s.last_touch_team,
 		s.touches, attacker.hit_cooldown, blocker.hit_cooldown],
-		[14857011, 13897090, -444727, 134530, 1, 1, 14, 14],
+		[19208601, 13897090, -567410, 134530, 1, 1, 14, 14],
 		"同tickのヒット→移動→ネット→ブロック順")
 
 func test_scatter_stream_snapshot() -> void:
@@ -230,12 +230,14 @@ func test_hit_chain_second_golden() -> void:
 	# 2026-07-25 (第4回) SimStateに human_team_mask / rally_seq / last_touch_idx を
 	# 追加したため全て変化した。state_hash は全intフィールドを畳むので、
 	# 値が0や-1でもフィールドが増えれば全ハッシュがずれる。実測値。
+	# 2026-07-26 コート幅を448→576、ネットを224→288へ広げたため全て変化した。
+	# 選手・ボールの座標がすべて動くので、物理を変えた場合の正当な更新である。実測値。
 	check_eq(_chain_hashes(), [
-		8951505616346830489,
-		2750824948899917800,
-		-7070513858503370664,
-		1245203432683810496,
-		-6909514165522284668,
-		-7194277245548782591,
-		-8180219293976624298,
+		8755234355694437546,
+		-1963059237592222445,
+		5504577571870672384,
+		5272572314195222772,
+		-7183397069728311508,
+		-5301109900497317438,
+		-6561723648203288967,
 	], "ジャスト→芯外し→気絶→ブロック→帽子の第2ゴールデン")

@@ -1,6 +1,6 @@
 {
 	"tick_rate": 60,
-	"court_width_px": 448,
+	"court_width_px": 576,
 	"court_height_px": 360,
 	"floor_y_px": 320,
 	"gravity_px_s2": 1150,
@@ -12,13 +12,13 @@
 	"wall_bounce_pct": 50,
 	"points_to_win": 11,
 	"deuce": 1,
-	"net_x_px": 224,
+	"net_x_px": 288,
 	"net_top_y_px": 275,
 	"net_half_w_px": 3,
 	"player_reach_px": 40,
 	"player_reach_up_px": 34,
 	"serve_hold_height_px": 28,
-	"serve_line_px": 24,
+	"serve_line_px": 31,
 	"hit_inertia_pct": 30,
 	"hit_inertia_just_pct": 10,
 	"inertia_min_speed_px_s": 400,
@@ -67,8 +67,8 @@
 	"serve_delay_ticks": 60,
 	"max_touches": 3,
 	"cpu_mate_spacing_px": 72,
-	"spawn_back_px": 56,
-	"spawn_front_px": 157,
-	"toss_zone_back_px": 56,
-	"toss_zone_front_px": 157
+	"spawn_back_px": 72,
+	"spawn_front_px": 202,
+	"toss_zone_back_px": 72,
+	"toss_zone_front_px": 202
 }

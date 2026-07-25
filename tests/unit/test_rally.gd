@@ -89,8 +89,8 @@ func test_serve_toss_never_crosses_net() -> void:
 	s.serve_pow = Simulation.POW_MAX
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	for i in 300:
-		if s.serve_tossed == 0:
-			break  # 床に落ちて再トス待ちに戻った
+		if s.phase != SimState.PHASE_SERVE or s.serve_tossed == 0:
+			break  # 空振り得点でサーブ局面を抜けた、または次のトス待ちへ戻った
 		check(s.ball_x < cfg.net_x, "トスがネットを越えない(tick %d)" % i)
 		Simulation.step(s, [0, 0, 0, 0], cfg)
 

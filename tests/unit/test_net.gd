@@ -60,31 +60,31 @@ func test_ball_passes_above_net() -> void:
 	check_eq(s.touches, 0, "ネット越えでタッチ数リセット")
 
 func test_fast_ball_cannot_tunnel_through_net_from_multiple_starts() -> void:
-	for start_x in [193, 196, 200, 205, 210]:
+	for net_offset in [31, 28, 24, 19, 14]:
 		var w := _new_world()
 		var s = w[0]
 		var cfg = w[1]
 		s.serve_flight = 1
 		s.touches = 2
-		s.ball_x = FP.from_int(start_x)
+		s.ball_x = cfg.net_x - FP.from_int(net_offset)
 		s.ball_y = FP.from_int(290)
 		s.ball_vx = FP.from_int(2940) / cfg.tick_rate
 		s.ball_vy = 0
 		BallPhysics._step_ball(s, cfg)
 		check(s.ball_x < cfg.net_x,
-			"49px/tickの高速球を開始x=%dでも左側へ跳ね返す" % start_x)
+			"49px/tickの高速球をnet_x-%d開始でも左側へ跳ね返す" % net_offset)
 		check(s.ball_vx < 0,
-			"49px/tickの高速球を開始x=%dでも反射する" % start_x)
+			"49px/tickの高速球をnet_x-%d開始でも反射する" % net_offset)
 		check_eq(s.serve_flight, 1,
-			"ネットに当たった開始x=%dのサーブ飛行状態を維持する" % start_x)
+			"ネットに当たったnet_x-%d開始のサーブ飛行状態を維持する" % net_offset)
 		check_eq(s.touches, 2,
-			"ネットに当たった開始x=%dのタッチ数を維持する" % start_x)
+			"ネットに当たったnet_x-%d開始のタッチ数を維持する" % net_offset)
 
 func test_observed_85px_per_tick_ball_cannot_tunnel_through_net() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.ball_x = FP.from_int(200)
+	s.ball_x = cfg.net_x - FP.from_int(24)
 	s.ball_y = FP.from_int(290)
 	s.ball_vx = FP.from_int(5100) / cfg.tick_rate
 	s.ball_vy = 0
@@ -97,7 +97,7 @@ func test_fast_serve_cross_above_net_top_clears_flight() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.serve_flight = 1
-	s.ball_x = FP.from_int(200)
+	s.ball_x = cfg.net_x - FP.from_int(24)
 	s.ball_y = FP.from_int(250)
 	s.ball_vx = FP.from_int(2940) / cfg.tick_rate
 	s.ball_vy = 0
@@ -109,7 +109,7 @@ func test_descending_fast_ball_hits_net_during_tick() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.ball_x = FP.from_int(200)
+	s.ball_x = cfg.net_x - FP.from_int(24)
 	s.ball_y = FP.from_int(270)
 	s.ball_vx = FP.from_int(2940) / cfg.tick_rate
 	s.ball_vy = FP.from_int(600) / cfg.tick_rate

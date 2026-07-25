@@ -21,9 +21,9 @@ func test_cpu_chases_ball_on_own_side() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(100)
+	s.ball_x = s.players[1].x - FP.from_int(57)
 	s.ball_y = FP.from_int(100)
-	# players[1](左チーム相方、spawn_front=157)から見てボールは左
+	# players[1](左チーム相方、spawn_front=202)から見てボールは左
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_LEFT, "ボールへ向かって左移動")
 
@@ -49,7 +49,7 @@ func test_cpu_ignores_ball_on_other_side() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(350)
+	s.ball_x = cfg.net_x + FP.from_int(126)
 	s.ball_y = FP.from_int(100)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(not (input & Simulation.IN_ACTION), "敵陣のボールは打たない")
@@ -238,7 +238,7 @@ func _attack_priority_world() -> Array:
 	var mate = s.players[0]
 	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
 	mate.cpu = p.cpu
-	p.x = FP.from_int(176)
+	p.x = cfg.net_x - FP.from_int(48)
 	mate.x = p.x
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)
@@ -282,7 +282,7 @@ func _own_toss_world(human_team_mask: int) -> Array:
 	s.ball_attack_kind = SimState.BALL_ATTACK_NONE
 	var p = s.players[1]
 	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
-	p.x = FP.from_int(176)
+	p.x = cfg.net_x - FP.from_int(48)
 	s.players[0].x = FP.from_int(20)
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)
@@ -346,7 +346,7 @@ func test_weak_chases_current_ball_predict_chases_landing() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(120)  # 今はplayers[1](x=157)の左
+	s.ball_x = s.players[1].x - FP.from_int(37)  # 今はplayers[1]の左
 	s.ball_y = FP.from_int(100)
 	s.ball_vx = FP.from_int(8)   # 右へ強く飛んでいる=落下点は右
 	s.players[1].cpu = _prof(0)
@@ -360,13 +360,13 @@ func test_roles_split_receiver_and_support() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(56)   # 奥(p0の守備範囲)に落ちる
+	s.ball_x = FP.from_int(cfg.spawn_back_px)  # 奥(p0の守備範囲)に落ちる
 	s.ball_y = FP.from_int(100)
-	s.players[1].x = FP.from_int(100)
+	s.players[1].x = s.ball_x + FP.from_int(44)
 	var mask: int = SimCpu.AB_PREDICT | SimCpu.AB_ROLES
 	s.players[0].cpu = _prof(mask)
 	s.players[1].cpu = _prof(mask)
-	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT, "非レシーバーは持ち場(157)へ離れる")
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_RIGHT, "非レシーバーは持ち場(202)へ離れる")
 	# 役割なしなら同じ状況でボールへ突っ込む(=みんなで追いかける問題)
 	s.players[1].cpu = _prof(SimCpu.AB_PREDICT)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "役割なしはボールへ向かう")
@@ -457,7 +457,7 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	s.last_touch_team = 0
 	s.touches = 1
 	var p = s.players[1]
-	p.x = FP.from_int(176)  # ネット際の前衛位置
+	p.x = cfg.net_x - FP.from_int(48)  # ネット際の前衛位置
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)  # 頭上高くから落ちてくる
 	s.ball_vy = 0
@@ -480,16 +480,16 @@ func test_support_zone_complements_human_mate() -> void:
 	var cpu = s.players[1]
 	cpu.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ROLES | SimCpu.AB_ATTACK)
 	# ボールは操作キャラ(slot0)のすぐ側=レシーバーは相方、CPUは支援位置へ
-	s.players[0].x = FP.from_int(200)  # 相方は前衛圏(ネット224の近く)
-	s.ball_x = FP.from_int(200)
+	s.players[0].x = cfg.net_x - FP.from_int(24)  # 相方はネット近くの前衛圏
+	s.ball_x = s.players[0].x
 	s.ball_y = FP.from_int(150)
-	cpu.x = FP.from_int(157)
+	cpu.x = FP.from_int(cfg.spawn_front_px)
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_LEFT, "相方が前なのでCPUは後衛ゾーンへ下がる")
 	# 相方が後衛に居るならCPUは前衛ゾーンへ出て、ゾーン内でボールを横に追う
-	s.players[0].x = FP.from_int(60)
-	s.ball_x = FP.from_int(60)
-	cpu.x = FP.from_int(90)
+	s.players[0].x = FP.from_int(cfg.spawn_back_px + 4)
+	s.ball_x = s.players[0].x
+	cpu.x = s.players[0].x + FP.from_int(30)
 	input = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_RIGHT, "相方が後ろなのでCPUは前衛ゾーンへ出る")
 
@@ -582,7 +582,7 @@ func test_no_jump_at_serve_in_flight() -> void:
 	s.last_touch_team = 0
 	s.touches = 1
 	var p = s.players[1]
-	p.x = FP.from_int(176)
+	p.x = cfg.net_x - FP.from_int(48)
 	s.ball_x = p.x
 	s.ball_y = cfg.floor_y - FP.from_int(160)
 	s.ball_vy = 0
@@ -686,27 +686,27 @@ func test_cpu_walks_home_during_pause() -> void:
 	var cfg = w[1]
 	s.phase = SimState.PHASE_POINT_PAUSE
 	s.timer = cfg.point_pause_ticks
-	s.players[1].x = FP.from_int(100)
+	s.players[1].x = FP.from_int(cfg.spawn_front_px) - FP.from_int(57)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=157)へ戻る")
+	check(input & Simulation.IN_RIGHT, "ポーズ中は持ち場(spawn_front=202)へ戻る")
 
 func test_cpu_returns_to_spawn() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
-	s.ball_x = FP.from_int(350)
+	s.ball_x = cfg.net_x + FP.from_int(126)
 	s.ball_y = FP.from_int(100)
-	s.players[1].x = FP.from_int(100)
+	s.players[1].x = FP.from_int(cfg.spawn_front_px) - FP.from_int(57)
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=157)へ戻る")
+	check(input & Simulation.IN_RIGHT, "持ち場(spawn_front=202)へ戻る")
 
 func test_sweet_jump_plan_returns_two_values_when_plan_exists() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[1]
-	p.x = FP.from_int(176)
+	p.x = cfg.net_x - FP.from_int(48)
 	s.ball_x = p.x + FP.from_int(40)
 	s.ball_y = cfg.floor_y - FP.from_int(160)
 	s.ball_vy = 0

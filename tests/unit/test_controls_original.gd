@@ -15,10 +15,10 @@ func _rally_world() -> Array:
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
 		p.y = cfg.floor_y
-	s.players[0].x = FP.from_int(100)
+	s.players[0].x = cfg.net_x - FP.from_int(124)
 	s.players[1].x = cfg.net_x - FP.from_int(20)
-	s.players[2].x = FP.from_int(380)
-	s.players[3].x = FP.from_int(270)
+	s.players[2].x = cfg.net_x + FP.from_int(156)
+	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
 
