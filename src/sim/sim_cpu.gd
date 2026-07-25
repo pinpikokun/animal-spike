@@ -56,6 +56,7 @@ const SALT_SWEET := 3
 const SALT_RECEIVE := 4
 const SALT_SUPER := 5
 const SALT_ATTACK := 6
+const SALT_ROLE := 7
 
 # 難易度プリセット(2026-07-13「人間化」改訂)。方針:
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
@@ -93,6 +94,29 @@ static func _noise(salt: int, key: int, actor: int) -> int:
 
 static func _roll(salt: int, s, actor: int) -> int:
 	return _noise(salt, s.last_hit_tick, actor)
+
+# ラリー番号とチームだけから役を引く。状態には保存せず、同じラリー中は常に同じ役。
+static func _is_rally_attacker(s, idx: int) -> bool:
+	var team: int = idx / 2
+	var slot: int = idx % 2
+	var role_roll: int = _noise(SALT_ROLE, s.rally_seq, team) % 9
+	match role_roll:
+		0, 1, 5, 8:
+			return slot == 0
+		_:
+			return slot == 1
+
+static func _is_rally_blocker(s, idx: int) -> bool:
+	var team: int = idx / 2
+	var slot: int = idx % 2
+	var role_roll: int = _noise(SALT_ROLE, s.rally_seq, team) % 9
+	match role_roll:
+		0, 2, 5, 8:
+			return true
+		1, 4, 7:
+			return slot == 0
+		_:
+			return false
 
 static func _spawn_x(idx: int, cfg) -> int:
 	var back: int = FP.from_int(cfg.spawn_back_px)
@@ -545,7 +569,7 @@ static func decide(s, idx: int, cfg) -> int:
 		if not on_own_side:
 			# 相手コートにボール=守備局面。ブロック能力があれば相手アタッカーの
 			# ネット際ジャンプに反応してネットへ詰めて跳ぶ。それ以外は構え位置へ
-			input = _decide_block(s, p, cfg, team, ab, deadzone)
+			input = _decide_block(s, idx, p, cfg, team, ab, deadzone)
 			if input == 0:
 				input = _ready_position(s, idx, p, cfg, team, ab, deadzone)
 		else:
@@ -732,10 +756,20 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	# タッチでは跳ばない(=1拍遅れる、という惜しい失敗)。
 	# サーブ打球が飛行中(serve_flight)は「上げ球」ではないので跳ばない
 	# (味方がサーブに跳びついてトスし返す誤反応の抑止)
+	var attacker_priority: bool = _is_rally_attacker(s, idx)
+	if not attacker_priority:
+		var attacker_mate_idx: int = team * 2 + mate_slot
+		attacker_priority = _is_rally_attacker(s, attacker_mate_idx) \
+			and not _jump_will_meet(s, mate, cfg, reach)
+	var own_toss_for_human_mate: bool = s.last_touch_idx == idx \
+		and s.last_touch_team == team \
+		and s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE \
+		and mate_is_human
 	if (ab & AB_ATTACK) and _attack_ok(s, idx, prof) \
 			and p.on_ground == 1 and p.stun == 0 and not miss_roll \
 			and s.serve_flight == 0 \
-			and s.last_touch_team == team and s.touches < cfg.max_touches:
+			and s.last_touch_team == team and s.touches < cfg.max_touches \
+			and attacker_priority and not own_toss_for_human_mate:
 		var precision_jump: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)
 		var precision_committed := false
 		if precision_jump:
@@ -797,7 +831,8 @@ static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: i
 # ブロック迎撃: 相手アタッカーがネット際で空中+ボールが打点圏なら、
 # 自陣ネット際へ走り、着いていれば跳ぶ(体が壁になるのはsimulation._ball_vs_block)。
 # 0を返したら通常の持ち場戻りにフォールバック
-static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
+static func _decide_block(
+		s, idx: int, p, cfg, team: int, ab: int, deadzone: int) -> int:
 	if not (ab & AB_BLOCK) or p.stun > 0:
 		return 0
 	var reach: int = cfg.player_reach
@@ -814,6 +849,14 @@ static func _decide_block(s, p, cfg, team: int, ab: int, deadzone: int) -> int:
 		var post: int = cfg.net_x - FP.from_int(20) if team == 0 \
 			else cfg.net_x + FP.from_int(20)
 		if absi(p.x - post) <= FP.from_int(24):
+			var blocker_priority: bool = _is_rally_blocker(s, idx)
+			if not blocker_priority:
+				var mate_idx: int = team * 2 + (1 - idx % 2)
+				blocker_priority = _is_rally_blocker(s, mate_idx) \
+					and not _jump_will_meet(
+						s, s.players[mate_idx], cfg, reach)
+			if not blocker_priority:
+				return 0
 			if p.on_ground == 1:
 				return SimInput.IN_JUMP | SimInput.IN_UP
 			return SimInput.IN_ACTION | SimInput.IN_UP

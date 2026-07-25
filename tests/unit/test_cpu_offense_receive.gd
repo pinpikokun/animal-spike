@@ -22,6 +22,13 @@ func _select_successful_roll(s, actor: int, salt: int, threshold: int) -> void:
 			s.last_hit_tick = key
 			return
 
+func _set_rally_attacker(s, idx: int) -> void:
+	for seq in 1000:
+		s.rally_seq = seq
+		if SimCpu._is_rally_attacker(s, idx):
+			return
+	check(false, "狙ったアタッカー役になるrally_seqが見つかる")
+
 func _air_attack_world(char_id: int, profile: int) -> Array:
 	var w := _world()
 	var s = w[0]
@@ -234,6 +241,7 @@ func test_max_cpu_converts_high_team_toss_to_just_attack() -> void:
 	s.touches = 1
 	s.serve_flight = 0
 	var attacker_idx := 1
+	_set_rally_attacker(s, attacker_idx)
 	var attacker = s.players[attacker_idx]
 	attacker.cpu = SimCpu.PRESET_MAX
 	attacker.x = cfg.net_x - FP.from_int(64)

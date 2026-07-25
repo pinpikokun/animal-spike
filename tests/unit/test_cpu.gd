@@ -142,6 +142,167 @@ func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, t
 	# テスト用: 誤差・ミス・遅延のない純粋な能力プロファイル(既定)
 	return SimCpu.make_profile(ab, delay, aim, miss, sweet, depth, tiq)
 
+func _set_rally_attacker(s, idx: int, expected: bool) -> void:
+	for seq in 1000:
+		s.rally_seq = seq
+		if SimCpu._is_rally_attacker(s, idx) == expected:
+			return
+	check(false, "狙ったアタッカー役になるrally_seqが見つかる")
+
+func _set_rally_blocker(s, idx: int, expected: bool) -> void:
+	for seq in 1000:
+		s.rally_seq = seq
+		if SimCpu._is_rally_blocker(s, idx) == expected:
+			return
+	check(false, "狙ったブロッカー役になるrally_seqが見つかる")
+
+func test_rally_roles_are_deterministic() -> void:
+	var s = SimState.new()
+	s.rally_seq = 37
+	for team in 2:
+		var idx_a: int = team * 2
+		var idx_b: int = idx_a + 1
+		var expected: Array[bool] = [
+			SimCpu._is_rally_attacker(s, idx_a),
+			SimCpu._is_rally_attacker(s, idx_b),
+			SimCpu._is_rally_blocker(s, idx_a),
+			SimCpu._is_rally_blocker(s, idx_b),
+		]
+		for repeat in 8:
+			s.tick = repeat * 17
+			s.last_hit_tick = repeat * 31
+			check_eq([
+				SimCpu._is_rally_attacker(s, idx_a),
+				SimCpu._is_rally_attacker(s, idx_b),
+				SimCpu._is_rally_blocker(s, idx_a),
+				SimCpu._is_rally_blocker(s, idx_b),
+			], expected, "同じラリーとチームの役割は何度引いても同じ")
+
+func test_every_rally_has_exactly_one_attacker_per_team() -> void:
+	var s = SimState.new()
+	for seq in 9:
+		s.rally_seq = seq
+		for team in 2:
+			var idx_a: int = team * 2
+			var attackers: int = (1 if SimCpu._is_rally_attacker(s, idx_a) else 0) \
+				+ (1 if SimCpu._is_rally_attacker(s, idx_a + 1) else 0)
+			check_eq(attackers, 1,
+				"rally_seq=%s team=%sのアタッカーはちょうど1人" % [seq, team])
+
+func test_rally_role_table_matches_all_nine_rolls() -> void:
+	var expected_attacker_slot: Array[int] = [0, 0, 1, 1, 1, 0, 1, 1, 0]
+	var expected_blocker_a: Array[bool] = [
+		true, true, true, false, true, true, false, true, true,
+	]
+	var expected_blocker_b: Array[bool] = [
+		true, false, true, false, false, true, false, false, true,
+	]
+	var s = SimState.new()
+	for team in 2:
+		var seen: Array[bool] = [
+			false, false, false, false, false, false, false, false, false,
+		]
+		var seen_count: int = 0
+		for seq in 1000:
+			var role_roll: int = SimCpu._noise(SimCpu.SALT_ROLE, seq, team) % 9
+			if seen[role_roll]:
+				continue
+			seen[role_roll] = true
+			seen_count += 1
+			s.rally_seq = seq
+			var idx_a: int = team * 2
+			check_eq(SimCpu._is_rally_attacker(s, idx_a),
+				expected_attacker_slot[role_roll] == 0,
+				"目%sのslot0アタッカー役" % role_roll)
+			check_eq(SimCpu._is_rally_attacker(s, idx_a + 1),
+				expected_attacker_slot[role_roll] == 1,
+				"目%sのslot1アタッカー役" % role_roll)
+			check_eq(SimCpu._is_rally_blocker(s, idx_a),
+				expected_blocker_a[role_roll], "目%sのslot0ブロッカー役" % role_roll)
+			check_eq(SimCpu._is_rally_blocker(s, idx_a + 1),
+				expected_blocker_b[role_roll], "目%sのslot1ブロッカー役" % role_roll)
+			if seen_count == 9:
+				break
+		check_eq(seen_count, 9, "0..8の全抽選結果をテストできる")
+
+func _attack_priority_world() -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 0
+	s.touches = 1
+	s.serve_flight = 0
+	s.ball_attack_kind = SimState.BALL_ATTACK_NONE
+	var p = s.players[1]
+	var mate = s.players[0]
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+	mate.cpu = p.cpu
+	p.x = FP.from_int(176)
+	mate.x = p.x
+	s.ball_x = p.x
+	s.ball_y = cfg.floor_y - FP.from_int(160)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	_set_rally_attacker(s, 1, false)
+	return w
+
+func test_non_attacker_yields_when_role_mate_can_meet() -> void:
+	var w := _attack_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	check(SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: アタッカー役の相方も同じトスに会合できる")
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check_eq(input & Simulation.IN_JUMP, 0,
+		"両者が届く時は非アタッカー役がジャンプを譲る")
+
+func test_non_attacker_jumps_when_role_mate_cannot_meet() -> void:
+	var w := _attack_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = FP.from_int(20)
+	check(not SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: アタッカー役の相方はトスに会合できない")
+	var input: int = SimCpu.decide(s, 1, cfg)
+	check(input & Simulation.IN_JUMP,
+		"役持ち相方が会合不能なら非アタッカー役が代わりにジャンプする")
+
+func _own_toss_world(human_team_mask: int) -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.human_team_mask = human_team_mask
+	s.controlled_l = 0
+	s.last_touch_team = 0
+	s.last_touch_idx = 1
+	s.touches = 1
+	s.serve_flight = 0
+	s.ball_attack_kind = SimState.BALL_ATTACK_NONE
+	var p = s.players[1]
+	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+	p.x = FP.from_int(176)
+	s.players[0].x = FP.from_int(20)
+	s.ball_x = p.x
+	s.ball_y = cfg.floor_y - FP.from_int(160)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	_set_rally_attacker(s, 1, true)
+	return w
+
+func test_cpu_does_not_jump_for_own_toss_with_human_mate() -> void:
+	var w := _own_toss_world(1)
+	var input: int = SimCpu.decide(w[0], 1, w[1])
+	check_eq(input & Simulation.IN_JUMP, 0,
+		"人間の相方がいるチームでは自分が上げたトスを自分で打たない")
+
+func test_cpu_jumps_for_own_toss_with_cpu_mate() -> void:
+	var w := _own_toss_world(0)
+	var input: int = SimCpu.decide(w[0], 1, w[1])
+	check(input & Simulation.IN_JUMP,
+		"同じ配置でもCPU同士のチームなら自分のトスへジャンプする")
+
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
 	var prof: int = SimCpu.make_profile(127, 13, 15, 13, 153, 2, 2)
@@ -301,6 +462,7 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(160)  # 頭上高くから落ちてくる
 	s.ball_vy = 0
 	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+	_set_rally_attacker(s, 1, true)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, "会合可能な球へジャンプする")
 	# アタック能力なしなら跳ばない
 	p.cpu = _prof(SimCpu.AB_PREDICT)
@@ -350,12 +512,65 @@ func test_cpu_jumps_to_block() -> void:
 	var blk = s.players[1]  # 左チームの前衛
 	blk.x = cfg.net_x - FP.from_int(20)  # ネット際ポストに到着済み
 	blk.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_BLOCK)
+	_set_rally_blocker(s, 1, true)
 	var block_input: int = SimCpu.decide(s, 1, cfg)
 	check(block_input & Simulation.IN_JUMP, "ブロックへ跳ぶ")
 	check(block_input & Simulation.IN_UP, "CPUも上入力でブロックを明示する")
 	# 能力なしは跳ばない
 	blk.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
+
+func _block_priority_world() -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 1
+	var attacker = s.players[2]
+	attacker.x = cfg.net_x + FP.from_int(40)
+	attacker.y = cfg.floor_y - FP.from_int(20)
+	attacker.on_ground = 0
+	s.ball_x = cfg.net_x + FP.from_int(1)
+	s.ball_y = attacker.y
+	s.ball_vx = -FP.from_int(1)
+	s.ball_vy = 0
+	var post: int = cfg.net_x - FP.from_int(20)
+	s.players[0].x = post
+	s.players[1].x = post
+	s.players[0].cpu = _prof(SimCpu.AB_BLOCK)
+	s.players[1].cpu = _prof(SimCpu.AB_BLOCK)
+	var blocker_pair_found := false
+	for seq in 1000:
+		s.rally_seq = seq
+		if SimCpu._is_rally_blocker(s, 0) \
+				and not SimCpu._is_rally_blocker(s, 1):
+			blocker_pair_found = true
+			break
+	check(blocker_pair_found, "slot0だけがブロッカー役になるrally_seqが見つかる")
+	return w
+
+func test_non_blocker_yields_when_role_mate_can_meet() -> void:
+	var w := _block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	check(SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: ブロッカー役の相方は相手球に会合できる")
+	var input: int = SimCpu._decide_block(
+		s, 1, s.players[1], cfg, 0, SimCpu.AB_BLOCK, 0)
+	check_eq(input & Simulation.IN_JUMP, 0,
+		"役持ち相方が届く時は非ブロッカー役が跳ばない")
+
+func test_non_blocker_jumps_when_role_mate_cannot_meet() -> void:
+	var w := _block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = FP.from_int(20)
+	check(not SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: ブロッカー役の相方は相手球に会合できない")
+	var input: int = SimCpu._decide_block(
+		s, 1, s.players[1], cfg, 0, SimCpu.AB_BLOCK, 0)
+	check(input & Simulation.IN_JUMP,
+		"役持ち相方が会合不能なら非ブロッカー役が代わりに跳ぶ")
 
 func test_no_jump_at_serve_in_flight() -> void:
 	# サーブ打球がまだネットを越えていない間(serve_flight)は、味方の上げ球と
@@ -372,6 +587,7 @@ func test_no_jump_at_serve_in_flight() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(160)
 	s.ball_vy = 0
 	p.cpu = _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+	_set_rally_attacker(s, 1, true)
 	s.serve_flight = 1
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "サーブ飛行中は跳ばない")
 	s.serve_flight = 0
