@@ -461,7 +461,8 @@ func _sync_sprites() -> void:
 			if spr.animation != "jump":
 				spr.animation = "jump"
 			spr.pause()
-			spr.frame = 0 if p.vy < 0 else 1
+			var jump_frames: int = spr.sprite_frames.get_frame_count("jump")
+			spr.frame = 0 if jump_frames < 2 or p.vy < 0 else 1
 		elif spr.sprite_frames.get_frame_count("jump") >= 3 and _land[i] > 0 \
 				and (anim == "idle" or anim == "run"):
 			# 着地ポーズ=jumpの3枚目(3コマ以上のジャンプ素材を持つキャラのみ)
@@ -489,9 +490,10 @@ func _sync_sprites() -> void:
 			spr.rotation = 0.0
 		# 被弾直後は白/赤の高速点滅(ダメージフラッシュ)。その後スタン中は薄い赤み。
 		# 頭上の渦巻きはFxLayerが描く
-		if p.just_receive_flash > 0:
-			var just_t := clampf(float(p.just_receive_flash) / 30.0, 0.0, 1.0)
-			spr.modulate = Color.WHITE.lerp(Color(0.20, 0.75, 1.0), 1.0 - just_t)
+		if p.just_receive_flash > 24:
+			# 実機フィードバックで減光。成立直後6tickだけ低彩度の水色を薄く乗せる。
+			# 約30tick残るJUST!表示が主表示なので、本体を長時間発光させない。
+			spr.modulate = Color(0.82, 0.92, 1.0)
 		elif _flash[i] > 0:
 			_flash[i] -= 1
 			spr.modulate = Color.WHITE if (_flash[i] / 2) % 2 == 0 \
@@ -619,17 +621,13 @@ func draw_fx(c: CanvasItem) -> void:
 
 func _draw_drive_feedback(c: CanvasItem) -> void:
 	# simカウンタだけから導出するため、ロールバック後も同じtickは同じ表示になる。
-	var just_screen_flash: bool = false
 	var burnout_screen_flash: bool = false
 	for p in state.players:
-		just_screen_flash = just_screen_flash or p.just_receive_flash >= 29
 		burnout_screen_flash = burnout_screen_flash \
 			or p.burnout_ticks > cfg.burnout_recovery_ticks - 2
 	var screen_rect := Rect2(-position, Vector2(640.0, 360.0))
 	if burnout_screen_flash:
 		c.draw_rect(screen_rect, Color(0.75, 0.08, 0.08, 0.38))
-	if just_screen_flash:
-		c.draw_rect(screen_rect, Color(1.0, 1.0, 1.0, 0.58))
 	var font := ThemeDB.fallback_font
 	for i in state.players.size():
 		var p = state.players[i]

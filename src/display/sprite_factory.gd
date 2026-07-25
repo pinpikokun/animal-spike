@@ -17,22 +17,36 @@ const M_CH := 29
 
 # 代役ルール: スプライトが無いアクションは連鎖の先頭から順に探して流用する
 # (歩きか立ち1枚あればキャラが成立する=パンダ方式の公式化)。最後の砦はidle
+const ANIMATIONS: Array[String] = [
+	"idle", "run", "jump", "attack", "receive_stance", "ground_swing",
+	"toss", "toss_fwd", "dive", "crouch", "brake", "hurt", "shock",
+	"stun", "burn", "fly", "bubble", "victory", "fall_special",
+	"hat-throw", "hat-catch", "hipdrop", "wallcling",
+]
 const FALLBACK := {
+	"idle": [],
 	"run": ["idle"],
 	"jump": ["run", "idle"],
 	"attack": ["jump", "run", "idle"],
-	"crouch": ["idle"],
-	"toss": ["crouch", "idle"],
-	"toss_fwd": ["toss", "crouch", "idle"],
-	"brake": ["crouch", "idle"],
-	"hurt": ["crouch", "idle"],
+	"receive_stance": ["crouch", "idle"],
+	"ground_swing": ["toss", "receive_stance", "idle"],
+	"toss": ["receive_stance", "idle"],
+	"toss_fwd": ["toss", "receive_stance", "idle"],
+	"dive": ["ground_swing", "jump", "idle"],
+	"crouch": ["receive_stance", "idle"],
+	"brake": ["run", "idle"],
+	"hurt": ["idle"],
+	"shock": ["hurt", "stun", "idle"],
 	"stun": ["hurt", "idle"],
 	"burn": ["stun", "hurt", "idle"],
+	"fly": ["jump", "idle"],
+	"bubble": ["hurt", "idle"],
 	"victory": ["jump", "idle"],
+	"fall_special": ["hurt", "jump", "idle"],
 	"hat-throw": ["toss_fwd", "idle"],
 	"hat-catch": ["idle"],
-	"hipdrop": ["crouch", "jump", "idle"],
-	"wallcling": ["crouch", "idle"],
+	"hipdrop": ["jump", "idle"],
+	"wallcling": ["idle"],
 }
 
 # char_id→SpriteFrames。キャラ追加時はここに1分岐足す(将来はキャラ定義から自動構築)
@@ -156,17 +170,24 @@ static func build_original(sheet_path: String) -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
 	_add_original_sheet(sf, "idle", sheet_path, [0, 1], [30, 30], true)
-	_add_original_sheet(sf, "run", sheet_path, [2, 0], [6, 6], true)
-	_add_original_sheet(sf, "jump", sheet_path, [8], [1], false)
-	_add_original_sheet(sf, "attack", sheet_path, [9], [1], false)
-	_add_original_sheet(sf, "toss", sheet_path, [3], [1], false)
-	_add_original_sheet(sf, "toss_fwd", sheet_path, [3], [1], false)
-	_add_original_sheet(sf, "crouch", sheet_path, [10], [1], false)
-	_add_original_sheet(sf, "hurt", sheet_path, [11], [1], false)
-	_add_original_sheet(sf, "brake", sheet_path, [10], [1], false)
+	_add_original_sheet(sf, "run", sheet_path, [0, 1], [6, 6], true)
+	_add_original_sheet(sf, "jump", sheet_path, [2], [1], false)
+	_add_original_sheet(sf, "attack", sheet_path, [3, 4, 5], [2, 2, 2], false)
+	_add_original_sheet(sf, "receive_stance", sheet_path, [6], [1], false)
+	_add_original_sheet(sf, "ground_swing", sheet_path, [8, 9], [2, 2], false)
+	_add_original_sheet(sf, "toss", sheet_path, [7], [1], false)
+	_add_original_sheet(sf, "toss_fwd", sheet_path, [7], [1], false)
+	_add_original_sheet(sf, "dive", sheet_path, [11, 10, 7, 0], [2, 2, 2, 2], false)
+	_add_original_sheet(sf, "crouch", sheet_path, [6], [1], false)
+	_add_original_sheet(sf, "hurt", sheet_path, [12], [1], false)
+	_add_original_sheet(sf, "shock", sheet_path, [12, 13], [3, 3], true)
+	_add_original_sheet(sf, "brake", sheet_path, [1], [1], false)
 	_add_original_sheet(sf, "stun", sheet_path, [14, 15], [8, 8], true)
 	_add_original_sheet(sf, "burn", sheet_path, [16, 17], [4, 4], true)
+	_add_original_sheet(sf, "fly", sheet_path, [18, 19, 20, 19], [3, 3, 3, 3], true)
+	_add_original_sheet(sf, "bubble", sheet_path, [20], [1], false)
 	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [8, 8], true)
+	_add_original_sheet(sf, "fall_special", sheet_path, [23], [1], false)
 	return sf
 
 # マリオ(参考素材)を、既存のバレー用アニメ名(idle/run/jump/crouch/hurt)に割り当てる。

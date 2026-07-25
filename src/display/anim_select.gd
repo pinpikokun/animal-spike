@@ -2,8 +2,8 @@
 # 状態を読むだけ(副作用なし)。表示層だがテクスチャ非依存なのでヘッドレステスト可能。
 extends RefCounted
 
-# 優先順位: スタン=hurt > 空中で打撃=attack > 空中=jump > 接地ヒット硬直=crouch
-#         > 移動=run > 静止=idle
+# 優先順位: 被弾/固有動作 > 横っ飛び > 空中打撃 > 空中 > 接地実打
+#         > レシーブ構え > 移動 > 静止
 static func anim_for(p) -> String:
 	if p.stun > 0:
 		return "stun"
@@ -13,6 +13,8 @@ static func anim_for(p) -> String:
 		return "hipdrop"
 	if p.cling != 0:
 		return "wallcling"
+	if p.dive != 0:
+		return "dive"
 	if p.on_ground == 0:
 		if p.hit_cooldown > 0:
 			return "attack"
@@ -20,11 +22,12 @@ static func anim_for(p) -> String:
 	if p.brake != 0:
 		return "brake"
 	if p.hit_cooldown > 0:
-		# 地上ヒット: 前トス(横のみ=hit_kind2)以外の上げ系はすべてトス扱い。
-		# ニュートラル受けも球は上へ上がる=見た目はトスなのでtossに寄せる
+		# 地上のトス/レシーブ実打は原作セル8,9。前トスだけ専用姿勢を残す。
 		if p.hit_kind == 2:
 			return "toss_fwd"
-		return "toss"
+		return "ground_swing"
+	if p.on_ground == 1 and p.receive_stance != 0:
+		return "receive_stance"
 	if p.vx != 0:
 		return "run"
 	return "idle"
