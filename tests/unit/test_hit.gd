@@ -981,6 +981,7 @@ func test_serve_cannot_be_blocked() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.serve_flight = 1
+	s.serve_ball = 1
 	var p = s.players[2]  # 右チームのブロッカー
 	p.x = cfg.net_x + FP.from_int(30)
 	p.y = cfg.floor_y - FP.from_int(140)
@@ -991,6 +992,82 @@ func test_serve_cannot_be_blocked() -> void:
 	s.ball_vx = FP.from_int(8)
 	Simulation.step(s, [0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0], cfg)
 	check(s.ball_vx > 0, "サーブはブロックされず通り抜ける")
+
+func test_crossed_serve_cannot_be_blocked_before_receiver_touch() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.serving_team = 0
+	s.serve_flight = 0
+	s.serve_ball = 1
+	s.touches = 0
+	s.last_touch_team = 0
+	var p = s.players[2]
+	p.x = cfg.net_x + FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.ball_x = p.x - FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = FP.from_int(600) / cfg.tick_rate
+	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	check(not HitResolver._is_active_block(s, 2, block_input, cfg),
+		"ネット越え後も受球前のサーブには有効ブロックを作らない")
+	var before_vx: int = s.ball_vx
+	HitResolver._ball_vs_block(s, cfg, [0, 0, block_input, 0])
+	check_eq(s.ball_vx, before_vx, "受球前のサーブをブロック反射しない")
+
+func test_normal_rally_ball_can_still_be_blocked() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.serve_flight = 0
+	s.serve_ball = 0
+	s.touches = 1
+	s.last_touch_team = 0
+	var p = s.players[2]
+	p.x = cfg.net_x + FP.from_int(30)
+	p.y = cfg.floor_y - FP.from_int(140)
+	p.on_ground = 0
+	s.ball_x = p.x - FP.from_int(5)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = FP.from_int(600) / cfg.tick_rate
+	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	check(HitResolver._is_active_block(s, 2, block_input, cfg),
+		"通常ラリー球には有効ブロックが成立する")
+	HitResolver._ball_vs_block(s, cfg, [0, 0, block_input, 0])
+	check(s.ball_vx < 0, "通常ラリー球は従来どおりブロック反射する")
+
+func test_receiver_touch_clears_serve_ball_and_restores_blocking() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.serving_team = 0
+	s.serve_ball = 1
+	s.serve_flight = 0
+	s.touches = 0
+	s.last_touch_team = 0
+	var receiver = s.players[2]
+	receiver.x = cfg.net_x + FP.from_int(100)
+	receiver.y = cfg.floor_y
+	receiver.on_ground = 1
+	s.ball_x = receiver.x
+	s.ball_y = receiver.y - FP.from_int(10)
+	s.ball_vx = FP.from_int(8)
+	HitResolver._resolve_hit(
+		s, [0, 0, Simulation.IN_ACTION | Simulation.IN_DOWN, 0], cfg)
+	check_eq(s.serve_ball, 0, "受け手チームの最初の接触でサーブ由来球状態を解除")
+	var blocker = s.players[0]
+	blocker.x = cfg.net_x - FP.from_int(30)
+	blocker.y = cfg.floor_y - FP.from_int(140)
+	blocker.on_ground = 0
+	blocker.hit_cooldown = 0
+	s.last_touch_team = 1
+	s.ball_x = blocker.x + FP.from_int(5)
+	s.ball_y = blocker.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(600) / cfg.tick_rate
+	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	HitResolver._ball_vs_block(s, cfg, [block_input, 0, 0, 0])
+	check(s.ball_vx > 0, "受球後に返ってきた球はブロックできる")
 
 func test_receiving_power_ball_damages_guard() -> void:
 	# パワーボールを(スイート外で)受けるとヒットは成立し、耐久力が削れる

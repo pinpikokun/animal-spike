@@ -242,6 +242,10 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		and state.serve_tossed == 1
 	_update_receive_stances(state, inputs, cfg)
 	var hit_result: int = HitResolver._resolve_hit(state, inputs, cfg)
+	if was_serve_strike and hit_result != HitResolver.NO_HIT:
+		# serve_flightとは別に、受け手の初接触までサーブ由来球であることを保持する。
+		# 得点判定より先に立て、同tickにラリー終了した場合は_award_pointで解除する。
+		state.serve_ball = 1
 	if hit_result == 0 or hit_result == 1:
 		_award_point(state, hit_result, cfg)
 	if was_serve_strike and hit_result != HitResolver.NO_HIT:
@@ -378,6 +382,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.serve_pow = 100
 	s.serve_tossed = 0
 	s.serve_flight = 0
+	s.serve_ball = 0
 	s.hit_freeze = 0
 	s.slow_ticks = 0
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
@@ -497,6 +502,7 @@ static func _check_floor_point(s, cfg) -> void:
 	_award_point(s, 1 if landed_left else 0, cfg)
 
 static func _award_point(s, team: int, cfg) -> void:
+	s.serve_ball = 0
 	if team == 0:
 		s.score_l += 1
 	else:

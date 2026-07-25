@@ -87,6 +87,9 @@ var serve_tossed: int = 0  # 2段階サーブ: 0=構え(照準中)、1=トス済
 # 1=サーブ打球がまだ最初のネット越えをしていない。物理には影響せず、
 # 味方CPUが「上げ球だ」と誤認してサーブにジャンプするのを抑えるためにAIが読む
 var serve_flight: int = 0
+# 1=サーブ打撃から受け手チームの最初の接触まで。ネット越え後も維持し、
+# サーブのブロック禁止だけに使う(通常の打撃可否には使わない)
+var serve_ball: int = 0
 # ヒットストップの残りtick。パワーボール成立や気絶の瞬間に数tick全員が止まり
 # 「重さ」を出す。simが凍るだけなので決定論・ロールバック安全
 var hit_freeze: int = 0
@@ -184,6 +187,7 @@ func to_int_array() -> Array[int]:
 	out.append(serve_pow)
 	out.append(serve_tossed)
 	out.append(serve_flight)
+	out.append(serve_ball)
 	out.append(hit_freeze)
 	out.append(slow_ticks)
 	out.append(hip_quake_event)
@@ -267,6 +271,7 @@ func load_int_array(arr: Array) -> void:
 	serve_pow = arr[k]; k += 1
 	serve_tossed = arr[k]; k += 1
 	serve_flight = arr[k]; k += 1
+	serve_ball = arr[k]; k += 1
 	hit_freeze = arr[k]; k += 1
 	slow_ticks = arr[k]; k += 1
 	hip_quake_event = arr[k]; k += 1

@@ -31,11 +31,13 @@ func test_reset_rally_keeps_player_positions() -> void:
 	var moved_x: int = FP.from_int(123)
 	s.players[0].x = moved_x
 	s.players[0].burn = 30
+	s.serve_ball = 1
 	Simulation.reset_rally(s, cfg, 1)
 	check_eq(s.players[0].x, moved_x, "reset_rallyでキャラ位置が変わらない")
 	check_eq(s.players[0].burn, 0, "reset_rallyで炎上を解除")
 	check_eq(s.phase, SimState.PHASE_SERVE, "フェーズはSERVEに戻る")
 	check_eq(s.touches, 0, "タッチはリセット")
+	check_eq(s.serve_ball, 0, "新ラリーではサーブ由来球状態をリセット")
 
 func test_ball_held_by_server() -> void:
 	var w := _serve_world(0)
@@ -163,6 +165,21 @@ func test_serve_flight_clears_on_net_cross() -> void:
 	Simulation.step(s, [0, 0], cfg)
 	check_eq(s.serve_flight, 0, "ネット越えでサーブ飛行が終わる")
 
+func test_serve_strike_marks_ball_until_receiver_touch() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var server = s.players[0]
+	s.serve_tossed = 1
+	s.ball_x = server.x
+	s.ball_y = server.y - FP.from_int(10)
+	server.hit_cooldown = 0
+	Simulation._step_players_and_hits(
+		s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
+	check_eq(s.phase, SimState.PHASE_RALLY, "サーブ打撃成立でラリーへ移る")
+	check_eq(s.serve_flight, 1, "ネット越え前の接触禁止状態を立てる")
+	check_eq(s.serve_ball, 1, "受け手の初接触までサーブ由来球状態を立てる")
+
 func test_server_is_pinned_during_serve() -> void:
 	# サーブ照準中、横キーは角度調整に使うためサーバーは移動しない(白線の位置に固定)
 	var w := _serve_world(0)
@@ -260,12 +277,14 @@ func test_floor_scores_opponent() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
+	s.serve_ball = 1
 	s.ball_x = FP.from_int(100)
 	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(10)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.score_r, 1, "左コートに落ちたら右チームの得点")
 	check_eq(s.phase, SimState.PHASE_POINT_PAUSE, "得点後はポーズ")
+	check_eq(s.serve_ball, 0, "得点時にサーブ由来球状態を解除")
 
 func test_flame_ball_resets_when_it_lands_for_a_point() -> void:
 	var w := _serve_world(0)

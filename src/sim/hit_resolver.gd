@@ -250,7 +250,8 @@ static func _is_block_input(p, input: int) -> bool:
 	return p.on_ground == 0 and (input & IN_ACTION) != 0 and (input & IN_UP) != 0
 
 static func _is_active_block(s, i: int, input: int, cfg) -> bool:
-	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+	if s.phase != SimStateScript.PHASE_RALLY \
+			or s.serve_flight == 1 or s.serve_ball == 1:
 		return false
 	var team: int = team_of(i)
 	var p = s.players[i]
@@ -546,6 +547,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			else avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
+	if s.serve_ball == 1 and team != s.serving_team:
+		# サーブ由来球は受け手チームの最初の接触で通常ラリー球へ移る。
+		s.serve_ball = 0
 	if s.last_touch_team == team:
 		s.touches += 1
 	else:
@@ -570,10 +574,11 @@ static func _trait_roll_pct(s, actor: int, salt: int) -> int:
 # 横方向は問わず、位置取りに加えて明示入力のタイミングを要求する。
 # 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
 # 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
-# サーブは飛行中ブロック不可(バレーのルール準拠)。ボールのパワーは
+# サーブは受け手チームの初接触までブロック不可(バレーのルール準拠)。ボールのパワーは
 # ブロックでは消費されない(自分のメテオが跳ね返ってくるスリルは残す)
 static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
-	if s.phase != SimStateScript.PHASE_RALLY or s.serve_flight == 1:
+	if s.phase != SimStateScript.PHASE_RALLY \
+			or s.serve_flight == 1 or s.serve_ball == 1:
 		return
 	if s.last_touch_team < 0:
 		return

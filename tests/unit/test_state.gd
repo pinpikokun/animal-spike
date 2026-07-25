@@ -28,9 +28,9 @@ func test_hash_changes_on_diff() -> void:
 
 func test_serialize_length() -> void:
 	# tick(1) + プレイヤー4体x36(回復ディレイを含む)
-	# + 全体31(ball_guard_damage/ball_defense_classを含む) + エンティティ8スロットx8欄
-	# 1 + 4x36 + 31 + 8x8 = 240
-	check_eq(SimState.new().to_int_array().size(), 240,
+	# + 全体32(serve_ballを含む) + エンティティ8スロットx8欄
+	# 1 + 4x36 + 32 + 8x8 = 241
+	check_eq(SimState.new().to_int_array().size(), 241,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -40,6 +40,7 @@ func test_load_int_array_roundtrip() -> void:
 	a.ball_x = 456789
 	a.ball_ghost = 1
 	a.ball_flame = 1
+	a.serve_ball = 1
 	a.phase = SimState.PHASE_RALLY
 	a.score_l = 7
 	a.winner = 1
@@ -80,6 +81,7 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.tick, 123, "tickの復元")
 	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
 	check_eq(b.ball_flame, 1, "炎状態の復元")
+	check_eq(b.serve_ball, 1, "サーブ由来球状態の復元")
 
 func test_load_int_array_overwrites_everything() -> void:
 	# 汚れた状態に読み込んでも完全に上書きされる(ロールバック時は必ず過去へ戻す)
