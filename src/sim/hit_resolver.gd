@@ -152,8 +152,8 @@ static func toss_target_x(team: int, hdir: int, cfg) -> int:
 		else cfg.court_width - FP.from_int(cfg.toss_zone_back_px)
 	var own_front: int = FP.from_int(cfg.toss_zone_front_px) if team == 0 \
 		else cfg.court_width - FP.from_int(cfg.toss_zone_front_px)
-	var opponent_front: int = cfg.court_width - FP.from_int(cfg.toss_zone_front_px) \
-		if team == 0 else FP.from_int(cfg.toss_zone_front_px)
+	var opponent_front: int = FP.from_int(cfg.opponent_toss_zone_front_px) \
+		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_front_px)
 	if hdir == -toward_net:
 		return own_back
 	if hdir == toward_net:
@@ -162,10 +162,10 @@ static func toss_target_x(team: int, hdir: int, cfg) -> int:
 
 static func air_target_x(team: int, hdir: int, cfg) -> int:
 	var toward_net: int = 1 if team == 0 else -1
-	var enemy_front: int = cfg.court_width - FP.from_int(cfg.toss_zone_front_px) \
-		if team == 0 else FP.from_int(cfg.toss_zone_front_px)
-	var enemy_back: int = cfg.court_width - FP.from_int(cfg.toss_zone_back_px) \
-		if team == 0 else FP.from_int(cfg.toss_zone_back_px)
+	var enemy_front: int = FP.from_int(cfg.opponent_toss_zone_front_px) \
+		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_front_px)
+	var enemy_back: int = FP.from_int(cfg.opponent_toss_zone_back_px) \
+		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_back_px)
 	if hdir == -toward_net:
 		return enemy_front
 	if hdir == toward_net:
@@ -469,12 +469,16 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var toss_bad: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_BAD)
 	if p.on_ground == 1:
 		# 地上は下+ボタンだけがレシーブ。それ以外は横3種のトス。
+		var ground_toss_hdir: int = hdir
+		if intent_kind == INTENT_GROUND_TOSS and s.last_touch_team == team \
+				and s.touches == cfg.max_touches - 1:
+			ground_toss_hdir = dir
 		var desired_vx: int = 0
 		var desired_vy: int = 0
 		if intent_kind == INTENT_GROUND_TOSS:
 			desired_vy = -cfg.bump_up_speed
 			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
-				toss_target_x(team, hdir, cfg), cfg)
+				toss_target_x(team, ground_toss_hdir, cfg), cfg)
 			if intent[3] != 0:
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
 			p.hit_kind = 1
@@ -496,7 +500,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 					_toss_apex_pct(s, i, p.char_id))
 			if toss_good:
 				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
-					toss_target_x(team, hdir, cfg), cfg)
+					toss_target_x(team, ground_toss_hdir, cfg), cfg)
 		if special == Chars.SUPER_GHOST_BALL:
 			s.ball_ghost = 1
 			var ghost_def: Dictionary = Chars.super_def(special)

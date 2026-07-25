@@ -595,16 +595,138 @@ func test_receive_reach_changes_actual_hit_detection() -> void:
 
 func test_toss_good_zone_mapping_mirrors_both_teams() -> void:
 	var cfg = SimConfig.new()
-	check_eq(HitResolver.toss_target_x(0, 0, cfg), FP.from_int(202), "左・無方向=自陣前")
-	check_eq(HitResolver.toss_target_x(0, -1, cfg), FP.from_int(72), "左・ネット逆=自陣後")
+	check_eq(HitResolver.toss_target_x(0, 0, cfg), FP.from_int(248),
+		"左・無方向=原作の自陣前")
+	check_eq(HitResolver.toss_target_x(0, -1, cfg), FP.from_int(136),
+		"左・ネット逆=原作の自陣後")
 	check_eq(HitResolver.toss_target_x(0, 1, cfg), FP.from_int(374),
 		"左・ネット方向=敵陣前")
-	check_eq(HitResolver.toss_target_x(1, 0, cfg), FP.from_int(374),
-		"右・無方向=自陣前")
-	check_eq(HitResolver.toss_target_x(1, 1, cfg), FP.from_int(504),
-		"右・ネット逆=自陣後")
+	check_eq(HitResolver.toss_target_x(1, 0, cfg), FP.from_int(328),
+		"右・無方向=原作の自陣前を鏡写し")
+	check_eq(HitResolver.toss_target_x(1, 1, cfg), FP.from_int(440),
+		"右・ネット逆=原作の自陣後を鏡写し")
 	check_eq(HitResolver.toss_target_x(1, -1, cfg), FP.from_int(202),
 		"右・ネット方向=敵陣前")
+	check_eq(HitResolver.air_target_x(0, 1, cfg), FP.from_int(504),
+		"左・ネット方向の空中打撃=敵陣後")
+	check_eq(HitResolver.air_target_x(1, -1, cfg), FP.from_int(72),
+		"右・ネット方向の空中打撃=敵陣後を鏡写し")
+
+func test_own_and_opponent_toss_zones_are_independent() -> void:
+	var cfg = SimConfig.new()
+	var left_opponent_front: int = HitResolver.toss_target_x(0, 1, cfg)
+	var left_opponent_back: int = HitResolver.air_target_x(0, 1, cfg)
+	var right_opponent_front: int = HitResolver.toss_target_x(1, -1, cfg)
+	var right_opponent_back: int = HitResolver.air_target_x(1, -1, cfg)
+	cfg.toss_zone_front_px = 240
+	cfg.toss_zone_back_px = 120
+	check_eq(HitResolver.toss_target_x(0, 1, cfg), left_opponent_front,
+		"自陣前方だけ変えても敵陣前方は動かない")
+	check_eq(HitResolver.air_target_x(0, 1, cfg), left_opponent_back,
+		"自陣後方だけ変えても敵陣後方は動かない")
+	check_eq(HitResolver.toss_target_x(1, -1, cfg), right_opponent_front,
+		"右側も自陣前方だけ変えて敵陣前方は動かない")
+	check_eq(HitResolver.air_target_x(1, -1, cfg), right_opponent_back,
+		"右側も自陣後方だけ変えて敵陣後方は動かない")
+
+	var left_own_front: int = HitResolver.toss_target_x(0, 0, cfg)
+	var left_own_back: int = HitResolver.toss_target_x(0, -1, cfg)
+	var right_own_front: int = HitResolver.toss_target_x(1, 0, cfg)
+	var right_own_back: int = HitResolver.toss_target_x(1, 1, cfg)
+	cfg.opponent_toss_zone_front_px = 360
+	cfg.opponent_toss_zone_back_px = 480
+	check_eq(HitResolver.toss_target_x(0, 0, cfg), left_own_front,
+		"敵陣前方だけ変えても自陣前方は動かない")
+	check_eq(HitResolver.toss_target_x(0, -1, cfg), left_own_back,
+		"敵陣後方だけ変えても自陣後方は動かない")
+	check_eq(HitResolver.toss_target_x(1, 0, cfg), right_own_front,
+		"右側も敵陣前方だけ変えて自陣前方は動かない")
+	check_eq(HitResolver.toss_target_x(1, 1, cfg), right_own_back,
+		"右側も敵陣後方だけ変えて自陣後方は動かない")
+
+func test_third_ground_toss_forces_opponent_front_for_every_direction() -> void:
+	for row in [
+		[0, Simulation.IN_LEFT, 374],
+		[0, 0, 374],
+		[0, Simulation.IN_RIGHT, 374],
+		[2, Simulation.IN_LEFT, 202],
+		[2, 0, 202],
+		[2, Simulation.IN_RIGHT, 202],
+	]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = row[0]
+		var team: int = actor / 2
+		var p = s.players[actor]
+		s.touches = cfg.max_touches - 1
+		s.last_touch_team = team
+		s.ball_x = p.x + FP.from_int(5)
+		s.ball_y = p.y - FP.from_int(10)
+		var expected_target: int = FP.from_int(row[2])
+		var expected_vx: int = HitResolver.toss_aim_vx(
+			s.ball_x, s.ball_y, -cfg.bump_up_speed, expected_target, cfg)
+		HitResolver._apply_hit(
+			s, actor, cfg, Simulation.IN_ACTION | row[1], 0)
+		check_eq(s.ball_vx, expected_vx,
+			"3打目の地上トスは方向入力によらず敵陣前方: %s" % [row])
+
+func test_first_and_second_ground_toss_keep_backward_aim() -> void:
+	for row in [
+		[0, Simulation.IN_LEFT, 1, 2, 136],
+		[0, Simulation.IN_LEFT, 0, 1, 136],
+		[2, Simulation.IN_RIGHT, 0, 2, 440],
+		[2, Simulation.IN_RIGHT, 1, 1, 440],
+	]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = row[0]
+		var p = s.players[actor]
+		s.last_touch_team = row[2]
+		s.touches = row[3]
+		s.ball_x = p.x + FP.from_int(5)
+		s.ball_y = p.y - FP.from_int(10)
+		var expected_target: int = FP.from_int(row[4])
+		var expected_vx: int = HitResolver.toss_aim_vx(
+			s.ball_x, s.ball_y, -cfg.bump_up_speed, expected_target, cfg)
+		HitResolver._apply_hit(
+			s, actor, cfg, Simulation.IN_ACTION | row[1], 0)
+		check_eq(s.ball_vx, expected_vx,
+			"1・2打目の地上トスは後方入力を維持: %s" % [row])
+
+func test_third_touch_does_not_change_air_toss_or_spike() -> void:
+	for input in [
+		Simulation.IN_ACTION | Simulation.IN_LEFT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
+	]:
+		var first := _rally_world()
+		var third := _rally_world()
+		for w in [first, third]:
+			var state = w[0]
+			var cfg = w[1]
+			var p = state.players[0]
+			p.on_ground = 0
+			p.y = cfg.floor_y - FP.from_int(60)
+			state.ball_x = p.x + FP.from_int(5)
+			state.ball_y = p.y - FP.from_int(5)
+		third[0].last_touch_team = 0
+		third[0].touches = third[1].max_touches - 1
+		for w in [first, third]:
+			HitResolver._apply_hit(
+				w[0], 0, w[1], input, w[1].player_reach * w[1].player_reach)
+		check_eq(third[0].ball_vx, first[0].ball_vx,
+			"3打目でも空中打撃の横速度は通常時と同じ: %d" % input)
+		check_eq(third[0].ball_vy, first[0].ball_vy,
+			"3打目でも空中打撃の縦速度は通常時と同じ: %d" % input)
+		if input & Simulation.IN_DOWN:
+			check(third[0].ball_vy > 0, "3打目でも空中+下はスパイク")
+			check_eq(third[0].ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+				"3打目の通常スパイク分類を維持")
+		else:
+			check(third[0].ball_vy < 0, "3打目の空中トスは上向き")
+			check_eq(third[0].ball_attack_kind, SimState.BALL_ATTACK_NONE,
+				"3打目の空中トス分類を維持")
 
 func test_toss_good_aims_ground_and_air_trajectory_at_zone() -> void:
 	var cfg = SimConfig.new()
@@ -820,7 +942,7 @@ func test_flat_spike_goes_farther() -> void:
 		[Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "緩角スパイクも下向き")
 	check_eq(HitResolver.air_target_x(0, 1, cfg),
-		cfg.court_width - FP.from_int(cfg.toss_zone_back_px), "前入力は敵陣後面を狙う")
+		FP.from_int(cfg.opponent_toss_zone_back_px), "前入力は敵陣後面を狙う")
 	check(s.ball_vx > 0, "後面アタックも敵陣方向へ飛ぶ")
 	check(s.ball_vy < cfg.spike_steep_vy, "緩角の縦速度は鋭角より浅い")
 

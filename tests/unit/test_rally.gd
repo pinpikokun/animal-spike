@@ -27,6 +27,22 @@ func test_reset_match_positions() -> void:
 	check_eq(s.cpu_hit_count, 0, "試合開始直後の打球回数は0")
 	check_eq(s.cpu_back_role_mask, 5, "両チームのslot0を初期後衛役にする")
 
+func test_servers_start_at_the_service_line_with_a_valid_aim_range() -> void:
+	# サーブ線の値そのものは固定しない(2026-07-26 時点で31、第2段で14へ下げる予定)。
+	# 固定するのは「サーバーは左右対称にサーブ線へ立つ」ことと
+	# 「照準のclamp範囲が成立する(下限 <= 上限)」こと。値が変わっても意図は変わらない。
+	var left := _serve_world(0)
+	var right := _serve_world(1)
+	var cfg = left[1]
+	check(cfg.ball_radius <= cfg.serve_line,
+		"左サーブ照準のclamp範囲が成立する(壁からボール半径 <= サーブ線)")
+	check(cfg.court_width - cfg.serve_line <= cfg.court_width - cfg.ball_radius,
+		"右サーブ照準のclamp範囲が成立する")
+	check_eq(left[0].players[0].x, cfg.serve_line,
+		"左サーバーはサーブ線に立つ")
+	check_eq(right[0].players[2].x, cfg.court_width - cfg.serve_line,
+		"右サーバーは左右対称のサーブ線に立つ")
+
 func test_reset_match_clears_cpu_positioning_state() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()

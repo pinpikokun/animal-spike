@@ -69,6 +69,8 @@
 	"cpu_mate_spacing_px": 72,
 	"spawn_back_px": 72,
 	"spawn_front_px": 202,
-	"toss_zone_back_px": 72,
-	"toss_zone_front_px": 202
+	"toss_zone_back_px": 136,
+	"toss_zone_front_px": 248,
+	"opponent_toss_zone_front_px": 374,
+	"opponent_toss_zone_back_px": 504
 }
