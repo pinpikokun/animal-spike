@@ -487,8 +487,7 @@ static func decide(s, idx: int, cfg) -> int:
 	var deadzone: int = cfg.player_reach / 2
 	if s.phase == SimStateScript.PHASE_SERVE:
 		var serve_in: int = _decide_serve(s, idx, cfg, prof)
-		if p.on_ground == 0 and p.vy < 0 \
-				and not (serve_in & SimInput.IN_ACTION):
+		if p.on_ground == 0 and p.vy < 0:
 			serve_in |= SimInput.IN_JUMP
 		if serve_in != 0:
 			return serve_in
@@ -611,6 +610,9 @@ static func decide(s, idx: int, cfg) -> int:
 			and s.last_touch_team == team and (ab & AB_ATTACK) and (ab & AB_SWEET) \
 			and _sweet_ok(s, idx, prof):
 		input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
+	if (input & SimInput.IN_ACTION) and s.last_touch_team == team \
+			and s.ball_attack_kind != SimStateScript.BALL_ATTACK_NONE:
+		input &= ~SimInput.IN_ACTION
 	# 可変ジャンプ対応: 打撃tickも含め、上昇中はジャンプキーを保持し続ける。
 	# 空中では再ジャンプせず、打ち分けもIN_JUMPを読まない。
 	if p.on_ground == 0 and p.vy < 0:

@@ -492,21 +492,64 @@ func test_sweet_jump_plan_returns_two_values_when_no_plan_exists() -> void:
 	check_eq(plan[0], -1, "unreachable toss produces the sentinel")
 
 func test_jump_serve_holds_jump_while_rising() -> void:
+	# 実在するジャンプランクはA/B/C/E。Dのキャラクターは現在存在しない。
+	var rank_chars: Array[int] = [
+		Chars.CHAR_TOME, Chars.CHAR_CARBY, Chars.CHAR_HITO, Chars.CHAR_UME,
+	]
+	for char_id in rank_chars:
+		var w := _world()
+		var s = w[0]
+		var cfg = w[1]
+		s.phase = SimState.PHASE_SERVE
+		s.serving_team = 0
+		s.controlled_l = 1
+		s.serve_tossed = 1
+		var p = s.players[0]
+		p.char_id = char_id
+		p.cpu = _prof(SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
+		p.on_ground = 0
+		p.vy = -FP.from_int(4)
+		s.ball_x = p.x
+		s.ball_y = p.y
+		var input: int = SimCpu.decide(s, 0, cfg)
+		var rank_name: String = Chars.Profile.rank_name(
+			Chars.rank(char_id, Chars.Profile.ABILITY_JUMP))
+		check(input & Simulation.IN_ACTION,
+			"jump rank %s serve attacks while rising" % rank_name)
+		check(input & Simulation.IN_JUMP,
+			"jump rank %s serve holds jump on attack tick" % rank_name)
+
+func _reachable_rally_ball_world(last_touch_team: int, attack_kind: int) -> Array:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
-	s.phase = SimState.PHASE_SERVE
-	s.serving_team = 0
-	s.controlled_l = 1
-	s.serve_tossed = 1
-	var p = s.players[0]
-	p.cpu = _prof(SimCpu.AB_ATTACK, 0, 0, 0, 255, 3, 3)
-	p.on_ground = 0
-	p.vy = -FP.from_int(4)
-	s.ball_x = p.x + cfg.player_reach * 2
-	s.ball_y = p.y - cfg.player_reach_up * 2
-	var input: int = SimCpu.decide(s, 0, cfg)
-	check(input & Simulation.IN_JUMP, "jump serve holds jump while rising")
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = last_touch_team
+	s.ball_attack_kind = attack_kind
+	var p = s.players[1]
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.ball_vx = 0
+	s.ball_vy = 0
+	return w
+
+func test_cpu_suppresses_action_for_own_team_attack_ball() -> void:
+	var w := _reachable_rally_ball_world(0, SimState.BALL_ATTACK_NORMAL)
+	var input: int = SimCpu.decide(w[0], 1, w[1])
+	check_eq(input & Simulation.IN_ACTION, 0,
+		"CPU does not touch its own team's attack ball")
+
+func test_cpu_keeps_action_for_opponent_attack_ball() -> void:
+	var w := _reachable_rally_ball_world(1, SimState.BALL_ATTACK_NORMAL)
+	var input: int = SimCpu.decide(w[0], 1, w[1])
+	check(input & Simulation.IN_ACTION,
+		"CPU still receives an opponent attack ball")
+
+func test_cpu_keeps_action_for_own_team_toss_ball() -> void:
+	var w := _reachable_rally_ball_world(0, SimState.BALL_ATTACK_NONE)
+	var input: int = SimCpu.decide(w[0], 1, w[1])
+	check(input & Simulation.IN_ACTION,
+		"CPU still plays its own team's non-attack toss")
 
 func test_rally_attack_holds_jump_while_rising() -> void:
 	var w := _world()
