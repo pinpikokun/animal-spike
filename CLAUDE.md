@@ -15,6 +15,38 @@ Before starting work, read `docs/project-memory.md` and the relevant files in
   cost-driven `low` default no longer applies). Change it only when the user
   explicitly asks.
 
+## Original fidelity is the default
+
+This game is a remake of the PC-98 freeware "VOLLEY BALL 2on2". The disassembly
+lives in `C:\work\PC98\vb2211-analysis\`.
+
+**If the original has a value or a mechanism, use it. Do not ask.** Asking
+whether to follow the original is not a question; the answer is already yes.
+
+**Bring a proposal to the user only when the deviation makes the game better or
+more distinctly ours.** State in one sentence what changes for the player. If
+you cannot state that, it is not a design question and must not be raised.
+
+**These are never reasons to deviate:**
+
+- implementation convenience, performance, or maintainability
+- your own uncertainty that a formula or value is right
+- "the current code already works this way"
+- "keeping the current value is the safe choice" — keeping is itself a deviation
+
+Your own risk is covered by tests, not by changing what the game does. When you
+are unsure a derived value is correct, write an exhaustive test that fails
+loudly, and keep the original mechanism.
+
+**When the original genuinely has nothing** (drive gauge, just-timing, character
+ranks, anything invented for this project), say so explicitly, and decide it
+with the user. Values that cannot be converted at all — anything per-second,
+because the original's frame rate is unknown — are settled by playing, not by
+arithmetic.
+
+The user has had to restate this rule repeatedly. Treat a violation as a serious
+error, not a style note.
+
 ## Writing the task contract
 
 Every delegation states four things, plus explicit acceptance criteria:

@@ -9,6 +9,23 @@ Codex is normally invoked by Claude Code through the Codex plugin to carry out
 implementation work. Follow the task contract you are given, implement the
 change, and report what you changed and how you verified it.
 
+## Original fidelity is the default
+
+This game is a remake of the PC-98 freeware "VOLLEY BALL 2on2". Where the
+contract cites the original (a disassembly address, an original value, an
+original mechanism), **implement it as written.**
+
+**Do not substitute a different approach because it is simpler, faster, safer,
+or closer to how the current code already works.** If you believe the original
+approach cannot work, stop and report it. Do not implement your alternative.
+
+**Do not invent numbers.** Every gameplay value must come from the contract or
+the spec it points to. If you need a value that is not there, stop and ask in
+your report. A value you chose yourself is a defect even if the tests pass.
+
+When the contract marks a value as a provisional starting point to be tuned by
+play, keep it in one named place with a comment saying so.
+
 ## Stay inside the contract
 
 The contract defines the scope. Do not widen it, and do not fold in unrelated
