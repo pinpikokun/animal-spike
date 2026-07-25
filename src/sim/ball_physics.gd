@@ -8,6 +8,7 @@ static func wall_reflect_vx(vx: int, cfg) -> int:
 
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x
+	var prev_y: int = s.ball_y
 	s.ball_vy += cfg.gravity
 	s.ball_x += s.ball_vx
 	s.ball_y += s.ball_vy
@@ -35,7 +36,7 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	# 床の反射はしない。RALLY中の床接触は_check_floor_pointが得点として処理する。
 	# 天井の反射もしない(原作準拠): ボールは画面上端を突き抜けて出てよい。重力で必ず
 	# 戻るため見失わない。跳ね返るのは左右の壁だけ。
-	_ball_vs_net(s, cfg, prev_x)
+	_ball_vs_net(s, cfg, prev_x, prev_y)
 
 static func _step_ball_loose(s, cfg) -> void:
 	# ポーズ中・勝敗確定後のボール。得点処理はせず、床で減衰バウンドして転がる
@@ -59,32 +60,50 @@ static func _step_ball_loose(s, cfg) -> void:
 		if absi(s.ball_vx) < cfg.ball_rest_speed:
 			s.ball_vx = 0
 
-static func _ball_vs_net(s, cfg, prev_x: int) -> void:
-	# 既知の制限: ネット衝突は移動後の1点だけを判定し、軌道を掃引しない。
-	# 1tickの水平移動が帯幅を超える高速球は帯を飛び越える。実測2040px/s以上。
+static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 	var net_left: int = cfg.net_x - cfg.net_half_w - cfg.ball_radius
 	var net_right: int = cfg.net_x + cfg.net_half_w + cfg.ball_radius
-	var below_top: bool = s.ball_y > cfg.net_top_y
 	var was_left: bool = prev_x < cfg.net_x
 	var is_left: bool = s.ball_x < cfg.net_x
-	if below_top:
+	var move_x: int = s.ball_x - prev_x
+	var move_y: int = s.ball_y - prev_y
+	var hits_net_side := false
+	if move_x == 0:
+		# 垂直移動は補間せず、帯内で経路の下端が上端を越えたかを見る。
+		hits_net_side = s.ball_x >= net_left and s.ball_x <= net_right \
+			and maxi(prev_y, s.ball_y) > cfg.net_top_y
+	else:
+		# 水平移動距離を分母とし、帯と重なる線分上で最も下側のyを整数補間する。
+		var travel: int = absi(move_x)
+		var enter_dist: int
+		var exit_dist: int
+		if move_x > 0:
+			enter_dist = maxi(net_left - prev_x, 0)
+			exit_dist = mini(net_right - prev_x, travel)
+		else:
+			enter_dist = maxi(prev_x - net_right, 0)
+			exit_dist = mini(prev_x - net_left, travel)
+		if enter_dist <= exit_dist:
+			var probe_dist: int = exit_dist if move_y > 0 else enter_dist
+			var probe_y: int = prev_y + move_y * probe_dist / travel
+			hits_net_side = probe_y > cfg.net_top_y
+	if hits_net_side:
 		# ネット下部は壁。来た側へ押し返す
-		if s.ball_x >= net_left and s.ball_x <= net_right:
-			s.ball_flame = 0
-			if s.ball_defense_class != 0:
-				s.ball_guard_damage = 0
-				s.ball_defense_class = 0
-			# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
-			if was_left:
-				s.ball_x = net_left - (s.ball_x - net_left)
-				if s.ball_vx > 0:
-					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-				s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
-			else:
-				s.ball_x = net_right + (net_right - s.ball_x)
-				if s.ball_vx < 0:
-					s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
-				s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
+		s.ball_flame = 0
+		if s.ball_defense_class != 0:
+			s.ball_guard_damage = 0
+			s.ball_defense_class = 0
+		# 減衰反射しつつ最低反発速度を保証(ネットに当たったら必ず少し跳ね返る)
+		if was_left:
+			s.ball_x = net_left - (s.ball_x - net_left)
+			if s.ball_vx > 0:
+				s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+			s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
+		else:
+			s.ball_x = net_right + (net_right - s.ball_x)
+			if s.ball_vx < 0:
+				s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
+			s.ball_vx = maxi(s.ball_vx, cfg.net_repel)
 	elif s.ball_vy > 0 \
 			and s.ball_x >= net_left and s.ball_x <= net_right \
 			and s.ball_y >= cfg.net_top_y - cfg.ball_radius:

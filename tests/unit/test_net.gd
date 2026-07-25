@@ -59,20 +59,38 @@ func test_ball_passes_above_net() -> void:
 	check(s.ball_x > cfg.net_x, "ネット上空は通過する")
 	check_eq(s.touches, 0, "ネット越えでタッチ数リセット")
 
-func test_fast_serve_cross_below_net_top_clears_flight_and_touches() -> void:
+func test_fast_ball_cannot_tunnel_through_net_from_multiple_starts() -> void:
+	for start_x in [193, 196, 200, 205, 210]:
+		var w := _new_world()
+		var s = w[0]
+		var cfg = w[1]
+		s.serve_flight = 1
+		s.touches = 2
+		s.ball_x = FP.from_int(start_x)
+		s.ball_y = FP.from_int(290)
+		s.ball_vx = FP.from_int(2940) / cfg.tick_rate
+		s.ball_vy = 0
+		BallPhysics._step_ball(s, cfg)
+		check(s.ball_x < cfg.net_x,
+			"49px/tickの高速球を開始x=%dでも左側へ跳ね返す" % start_x)
+		check(s.ball_vx < 0,
+			"49px/tickの高速球を開始x=%dでも反射する" % start_x)
+		check_eq(s.serve_flight, 1,
+			"ネットに当たった開始x=%dのサーブ飛行状態を維持する" % start_x)
+		check_eq(s.touches, 2,
+			"ネットに当たった開始x=%dのタッチ数を維持する" % start_x)
+
+func test_observed_85px_per_tick_ball_cannot_tunnel_through_net() -> void:
 	var w := _new_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.serve_flight = 1
-	s.touches = 2
 	s.ball_x = FP.from_int(200)
 	s.ball_y = FP.from_int(290)
-	s.ball_vx = FP.from_int(2940) / cfg.tick_rate
+	s.ball_vx = FP.from_int(5100) / cfg.tick_rate
 	s.ball_vy = 0
 	BallPhysics._step_ball(s, cfg)
-	check(s.ball_x > cfg.net_x, "高速サーブがネット下側を1tickで横切る")
-	check_eq(s.serve_flight, 0, "下側横断でもサーブ飛行状態を解除する")
-	check_eq(s.touches, 0, "下側横断でもタッチ数をリセットする")
+	check(s.ball_x < cfg.net_x, "実測最大85px/tickの球を左側へ跳ね返す")
+	check(s.ball_vx < 0, "実測最大85px/tickの球を反射する")
 
 func test_fast_serve_cross_above_net_top_clears_flight() -> void:
 	var w := _new_world()
@@ -86,6 +104,30 @@ func test_fast_serve_cross_above_net_top_clears_flight() -> void:
 	BallPhysics._step_ball(s, cfg)
 	check(s.ball_x > cfg.net_x, "高速サーブがネット上側を横切る")
 	check_eq(s.serve_flight, 0, "上側横断でもサーブ飛行状態を解除する")
+
+func test_descending_fast_ball_hits_net_during_tick() -> void:
+	var w := _new_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = FP.from_int(200)
+	s.ball_y = FP.from_int(270)
+	s.ball_vx = FP.from_int(2940) / cfg.tick_rate
+	s.ball_vy = FP.from_int(600) / cfg.tick_rate
+	BallPhysics._step_ball(s, cfg)
+	check(s.ball_x < cfg.net_x, "上端より上から降下して帯へ入る球を左側へ戻す")
+	check(s.ball_vx < 0, "上端より上から降下して帯へ入る球を反射する")
+
+func test_zero_horizontal_speed_does_not_divide_by_zero_at_net() -> void:
+	var w := _new_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = cfg.net_x
+	s.ball_y = FP.from_int(290)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	BallPhysics._step_ball(s, cfg)
+	check(s.ball_x > cfg.net_x, "水平速度0の帯内球も既存の右押し出しを行う")
+	check(s.ball_vx > 0, "水平速度0の帯内球へ最低反発を与える")
 
 func test_serve_bounced_by_net_keeps_flight() -> void:
 	var w := _new_world()
