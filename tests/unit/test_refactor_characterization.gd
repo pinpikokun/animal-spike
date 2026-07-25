@@ -111,8 +111,8 @@ func test_output_velocity_snapshot() -> void:
 		[1, 0, 64299, -567978, 0, 100, 0],
 		[1, 0, 221585, -567978, 0, 100, 0],
 		[1, 14, 387280, -567978, 0, 100, 0],
-		[0, 0, 1549926, 368094, 1, 100, 0],
-		[0, 0, 1500774, 305834, 0, 100, 0],
+		[0, 0, 1291605, 253406, 1, 100, 0],
+		[0, 0, 1332838, 220637, 0, 100, 0],
 		[0, 0, 429202, -749294, 0, 100, 0],
 		[1, 0, 805721, -170393, 0, 75, 24],
 	], "固定フィクスチャの整数出力速度")
@@ -127,8 +127,11 @@ func test_collision_order_hit_move_net_block() -> void:
 	attacker.y = cfg.floor_y - FP.from_int(100)
 	attacker.x = cfg.net_x - cfg.net_half_w - FP.from_int(8)
 	blocker.on_ground = 0
-	# 通常アタック80%化後も、同tick移動後の手のひら楕円内で接触する高さに置く。
-	blocker.y = cfg.floor_y - FP.from_int(57)
+	# このテストの目的は「ヒット→移動→ネット→ブロック」の同tick順序の検証であり、
+	# ブロックの成立境界を測ることではない。以前は57pxとギリギリに置いていたため
+	# アタック速度を80%→50%へ下げただけでブロックが不成立になりテストが壊れた。
+	# 実測で成立するのは59px以上なので、余裕を見て範囲の中央に置く。
+	blocker.y = cfg.floor_y - FP.from_int(65)
 	blocker.x = cfg.net_x + FP.from_int(16)
 	s.ball_x = attacker.x + FP.from_int(5)
 	s.ball_y = attacker.y - FP.from_int(10)
@@ -136,10 +139,12 @@ func test_collision_order_hit_move_net_block() -> void:
 	s.ball_vy = 0
 	Simulation.step(s, [0, Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 		0, Simulation.IN_ACTION | Simulation.IN_UP], cfg)
-	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)+ブロッカー位置1px調整。2026-07-20設計会仕様
+	# 2026-07-25: アタック速度をジャスト110→80%、通常80→50%へ引き下げたため座標と
+	# 速度が変化した。ブロックの成立自体(last_touch_team=1, touches=1, 両者cd=14)は
+	# 変わっていないので、検証している同tick順序は保たれている。実測値。
 	check_eq([s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, s.last_touch_team,
 		s.touches, attacker.hit_cooldown, blocker.hit_cooldown],
-		[15101366, 14095882, -635324, 333322, 1, 1, 14, 14],
+		[14999552, 14010686, -555909, 248126, 1, 1, 14, 14],
 		"同tickのヒット→移動→ネット→ブロック順")
 
 func test_scatter_stream_snapshot() -> void:
@@ -217,9 +222,13 @@ func test_hit_chain_second_golden() -> void:
 	# 2番目以降が変化した。この連鎖は2手目でガード破壊→気絶に入るので、
 	# 気絶カウンタの初期値がそのまま state_hash に乗る。1番目(ジャストアタック)は
 	# 気絶を通らないため変化していない。実測値。
+	#
+	# 2026-07-25 (第3回) アタック速度の引き下げ(ジャスト110→80%、通常80→50%)で
+	# 1番目(ジャストアタック)と2番目が変化した。3番目以降はブロックと帽子で、
+	# アタック速度を通らないため不変。実測値。
 	check_eq(_chain_hashes(), [
-		8529602989212722252,
-		-3622486629260594528,
+		923267379770092831,
+		-7035687006816462201,
 		-6676369414171217957,
 		6003829651502486851,
 		2945686973259461767,

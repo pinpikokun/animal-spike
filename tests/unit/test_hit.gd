@@ -528,7 +528,9 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	check_eq(sa.ball_vy, (cfga.spike_steep_vy + cfga.spike_vy) * serve_pct / 200,
 		"空中アタックサーブへむらっけ最終倍率を一度だけ適用")
 
-func test_attack_speed_uses_rules_normal_80_and_just_110() -> void:
+func test_attack_speed_follows_rules_json_percentages() -> void:
+	# 数値はバランス調整で動くのでテスト名や本文に埋めない。rules.jsonを唯一の出所とし、
+	# 「設定どおりに適用されるか」と「ジャストが通常より速いか」だけを固定する。
 	var outputs: Array[int] = []
 	for sweet in [false, true]:
 		var w := _rally_world()
@@ -547,9 +549,11 @@ func test_attack_speed_uses_rules_normal_80_and_just_110() -> void:
 			"%s速度倍率はrules.jsonの%d%%" %
 			["ジャスト" if sweet else "通常", expected_pct])
 		outputs.append(s.ball_vy)
-	check_eq(SimConfig.new().spike_normal_pct, 80, "通常は旧100%でなく80%")
-	check_eq(SimConfig.new().spike_power_pct, 110, "ジャストは旧150%でなく110%")
-	check(outputs[0] < outputs[1], "通常80%はジャスト110%より遅い")
+	var live = SimConfig.new()
+	check(live.spike_normal_pct > 0, "通常アタック倍率が正")
+	check(live.spike_power_pct > live.spike_normal_pct,
+		"ジャストは通常より速い(SimConfigの検証と同じ不変条件)")
+	check(outputs[0] < outputs[1], "通常アタックはジャストアタックより遅い")
 
 func test_receive_reach_is_trait_aware_only_for_receive_intent() -> void:
 	var base := FP.from_int(40)
