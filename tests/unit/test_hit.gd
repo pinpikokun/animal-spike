@@ -302,6 +302,41 @@ func test_bump_on_ground() -> void:
 	check_eq(s.last_touch_team, 0, "最終タッチは左チーム")
 	check(s.players[0].hit_cooldown > 0, "クールダウン開始")
 
+func _ground_receive_vx(offset_px: int, input: int = 0, tick: int = 0) -> int:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.tick = tick
+	s.ball_x = s.players[0].x + FP.from_int(offset_px)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = 0
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | input, 0)
+	return s.ball_vx
+
+func test_ground_receive_vx_follows_contact_offset_sign() -> void:
+	check(_ground_receive_vx(40) > 0, "右で捉えたレシーブは右へ返る")
+	check(_ground_receive_vx(-40) < 0, "左で捉えたレシーブは左へ返る")
+	check(absi(_ground_receive_vx(0)) <= FP.from_int(12) / 60,
+		"中心で捉えたレシーブは散り幅内でほぼ真上へ返る")
+
+func test_ground_receive_vx_is_clamped() -> void:
+	var cfg = SimConfig.new()
+	check(absi(_ground_receive_vx(200, Simulation.IN_RIGHT)) <= cfg.receive_vx_max,
+		"右端を越える接触と右操舵でも横速度上限を超えない")
+	check(absi(_ground_receive_vx(-200, Simulation.IN_LEFT)) <= cfg.receive_vx_max,
+		"左端を越える接触と左操舵でも横速度上限を超えない")
+
+func test_ground_receive_scatter_is_deterministic() -> void:
+	check_eq(_ground_receive_vx(0, 0, 137), _ground_receive_vx(0, 0, 137),
+		"同じtick・actor・入力のレシーブ散りは同じ値になる")
+
+func test_ground_receive_has_no_forward_bias() -> void:
+	var cfg = SimConfig.new()
+	var vx: int = _ground_receive_vx(0, 0, 0)
+	check(absi(vx) <= cfg.receive_scatter,
+		"中心接触・入射なしの横速度は固定前方値でなく散り幅内に収まる")
+
 func test_neutral_receive_keeps_legacy_bounce() -> void:
 	# 方向なしアクションはトスではなく素レシーブ。トス技能の低軌道補正を受けない。
 	for seed_tick in 201:
@@ -839,22 +874,26 @@ func test_just_meet_cuts_inertia() -> void:
 
 func test_just_receive_holds_aim() -> void:
 	# 地上のジャスト受け(芯)も慣性カット: 強い入射でも狙いがブレにくい
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	# タイミング式の正規手順: 静止中の下+ボタン押下エッジで有効窓を開く。
+	var no_incoming := _rally_world()
+	var incoming := _rally_world()
 	var receive_input: int = Simulation.IN_ACTION | Simulation.IN_DOWN
-	Simulation._update_receive_stances(s, [receive_input, 0, 0, 0], cfg)
-	s.last_touch_team = 1
-	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
-	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
-	s.ball_y = s.players[0].y - FP.from_int(2)
-	s.ball_vx = -FP.from_int(20)
-	Simulation.step(s, [receive_input, 0, 0, 0], cfg)
-	# 下レシーブは狙い不能の既定前方成分を持ち、そこへjust慣性分が加わる。
-	var expect: int = cfg.bump_fwd_speed \
-		+ FP.from_int(20) * cfg.hit_inertia_just_num / cfg.hit_inertia_den
-	check_eq(s.ball_vx, expect, "下レシーブは既定前方成分+just慣性分になる")
+	for w in [no_incoming, incoming]:
+		var s = w[0]
+		var cfg = w[1]
+		# タイミング式の正規手順: 静止中の下+ボタン押下エッジで有効窓を開く。
+		Simulation._update_receive_stances(s, [receive_input, 0, 0, 0], cfg)
+		s.last_touch_team = 1
+		s.ball_attack_kind = SimState.BALL_ATTACK_JUST
+		s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
+		s.ball_y = s.players[0].y - FP.from_int(2)
+	no_incoming[0].ball_vx = 0
+	incoming[0].ball_vx = -FP.from_int(20)
+	Simulation.step(no_incoming[0], [receive_input, 0, 0, 0], no_incoming[1])
+	Simulation.step(incoming[0], [receive_input, 0, 0, 0], incoming[1])
+	var inertia_vx: int = FP.from_int(20) \
+		* incoming[1].hit_inertia_just_num / incoming[1].hit_inertia_den
+	check_eq(incoming[0].ball_vx - no_incoming[0].ball_vx, inertia_vx,
+		"同じ接触項と散りにjust慣性分だけが加わる")
 
 func test_block_reflects_opponent_shot() -> void:
 	# 空中上+アクションの明示入力だけでブロックする。

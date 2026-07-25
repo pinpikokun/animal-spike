@@ -60,6 +60,8 @@ static func _step_ball_loose(s, cfg) -> void:
 			s.ball_vx = 0
 
 static func _ball_vs_net(s, cfg, prev_x: int) -> void:
+	# 既知の制限: ネット衝突は移動後の1点だけを判定し、軌道を掃引しない。
+	# 1tickの水平移動が帯幅を超える高速球は帯を飛び越える。実測2040px/s以上。
 	var net_left: int = cfg.net_x - cfg.net_half_w - cfg.ball_radius
 	var net_right: int = cfg.net_x + cfg.net_half_w + cfg.ball_radius
 	var below_top: bool = s.ball_y > cfg.net_top_y
@@ -97,12 +99,10 @@ static func _ball_vs_net(s, cfg, prev_x: int) -> void:
 		var out_dir: int = -1 if is_left else 1
 		if s.ball_vx * out_dir < cfg.net_repel / 2:
 			s.ball_vx = out_dir * cfg.net_repel / 2
-		if was_left != is_left:
-			s.touches = 0
-			s.serve_flight = 0
-			_clear_ghost_on_opponent_entry(s, is_left)
-	elif was_left != is_left:
-		# ネット上空を越えた: 攻守交代なのでタッチ数リセット。サーブ打球も渡り切り
+	is_left = s.ball_x < cfg.net_x
+	if was_left != is_left:
+		# ネットを越えた: 高さにかかわらず攻守交代。実衝突で跳ね返った球は
+		# ball_xが来た側へ戻されているため、この条件には入らない。
 		s.touches = 0
 		s.serve_flight = 0
 		_clear_ghost_on_opponent_entry(s, is_left)

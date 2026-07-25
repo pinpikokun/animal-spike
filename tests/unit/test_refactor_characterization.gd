@@ -91,6 +91,7 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 		check_eq(actual, row[4], "純粋意図分類: %s" % [row])
 
 func test_output_velocity_snapshot() -> void:
+	# 実測待ち: 地上レシーブを含む行は新しい接触位置式により更新が必要。
 	# アタック速度の意図的変更(ジャスト150→110%、通常100→80%)。2026-07-20設計会仕様
 	# 固定パワー球はPOWER Cの絶対削り25を持つ。2026-07-20設計会仕様
 	var w: Array = _world()
@@ -212,7 +213,8 @@ func test_hit_chain_second_golden() -> void:
 	# drive_recovery_delay追加(消費/被削り後180tickは自然回復停止)による状態拡張+挙動変更。2026-07-23
 	check_eq(_chain_hashes(), [
 		3473862460420816044,
-		5546723243883307760,
+		# 接触位置式へ変えた芯外し地上レシーブの実測ハッシュ。
+		-5213937398153282932,
 		8092660097623903975,
 		-4101440443026504969,
 		-4375440232575522293,

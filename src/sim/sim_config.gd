@@ -31,7 +31,10 @@ var serve_hold_height: int
 var serve_line: int
 var ball_rest_speed: int
 var bump_up_speed: int
-var bump_fwd_speed: int
+var bump_fwd_speed: int  # 旧レシーブ速度。比較テスト等の互換用に設定キーを保持する。
+var receive_offset_gain_pct: int
+var receive_scatter: int
+var receive_vx_max: int
 var toss_fwd_vy: int
 var toss_fwd_vx: int
 var toss_mid_vx: int
@@ -74,6 +77,7 @@ var hit_cooldown_ticks: int
 var point_pause_ticks: int
 var serve_delay_ticks: int
 var max_touches: int
+var cpu_mate_spacing: int
 var spawn_back_px: int
 var spawn_front_px: int
 var toss_zone_back_px: int
@@ -117,6 +121,20 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	ball_rest_speed = FP.from_int(_int_of(raw, "ball_rest_speed_px_s")) / tick_rate
 	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
 	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
+	receive_offset_gain_pct = _int_of(raw, "receive_offset_gain_pct")
+	if receive_offset_gain_pct <= 0:
+		_fail("receive_offset_gain_pctは正であること")
+		return
+	var receive_scatter_px_s: int = _int_of(raw, "receive_scatter_px_s")
+	if receive_scatter_px_s < 0:
+		_fail("receive_scatter_px_sは0以上であること")
+		return
+	receive_scatter = FP.from_int(receive_scatter_px_s) / tick_rate
+	var receive_vx_max_px_s: int = _int_of(raw, "receive_vx_max_px_s")
+	if receive_vx_max_px_s <= 0:
+		_fail("receive_vx_max_px_sは正であること")
+		return
+	receive_vx_max = FP.from_int(receive_vx_max_px_s) / tick_rate
 	toss_fwd_vy = FP.from_int(_int_of(raw, "toss_fwd_vy_px_s")) / tick_rate
 	toss_fwd_vx = FP.from_int(_int_of(raw, "toss_fwd_vx_px_s")) / tick_rate
 	toss_mid_vx = FP.from_int(_int_of(raw, "toss_mid_vx_px_s")) / tick_rate
@@ -198,6 +216,11 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	point_pause_ticks = _int_of(raw, "point_pause_ticks")
 	serve_delay_ticks = _int_of(raw, "serve_delay_ticks")
 	max_touches = _int_of(raw, "max_touches")
+	var cpu_mate_spacing_px: int = _int_of(raw, "cpu_mate_spacing_px")
+	if cpu_mate_spacing_px <= 0:
+		_fail("cpu_mate_spacing_pxは正であること")
+		return
+	cpu_mate_spacing = FP.from_int(cpu_mate_spacing_px)
 	spawn_back_px = _int_of(raw, "spawn_back_px")
 	spawn_front_px = _int_of(raw, "spawn_front_px")
 	toss_zone_back_px = _int_of(raw, "toss_zone_back_px")

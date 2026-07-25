@@ -17,6 +17,7 @@ const NO_HIT := -2
 const HIT_NO_POINT := -1
 const SALT_MURA := 23
 const SALT_TOSS_BAD := 29
+const SALT_RECEIVE_SCATTER := 31
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
 const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に残る狙い成分%(制御喪失)
@@ -426,9 +427,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
 			p.hit_kind = 1
 		else:
-			# 下レシーブは既存どおり制御不能になり得る受け軌道。
+			# 地上レシーブは接触位置を主成分とし、散りと小さな左右操舵を加える。
 			desired_vy = -cfg.bump_up_speed
-			desired_vx = dir * cfg.bump_fwd_speed
+			var offset_vx: int = (s.ball_x - p.x) \
+				* cfg.receive_offset_gain_pct / 100 / cfg.tick_rate
+			var scatter_vx: int = _scatter(s, i, SALT_RECEIVE_SCATTER) \
+				* cfg.receive_scatter / 100
+			var steer_vx: int = hdir * cfg.receive_vx_max / 4
+			desired_vx = clampi(offset_vx + scatter_vx + steer_vx,
+				-cfg.receive_vx_max, cfg.receive_vx_max)
 			p.hit_kind = 0
 		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS
 		if is_ground_toss:

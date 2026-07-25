@@ -73,7 +73,10 @@ func test_traitless_toss_keeps_direct_output_without_global_toggle() -> void:
 	s.ball_vx = 0
 	s.ball_vy = 0
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.ball_vx, cfg.bump_fwd_speed, "OFFなら従来の素レシーブ横速度")
+	var offset_vx: int = FP.from_int(5) * cfg.receive_offset_gain_pct \
+		/ 100 / cfg.tick_rate
+	check(absi(s.ball_vx - offset_vx) <= cfg.receive_scatter,
+		"素レシーブ横速度は5pxの接触項から散り幅内に収まる")
 
 func test_player_stops_before_net_face() -> void:
 	# ネットめり込み防止: 体の半幅(8px)ぶん手前で止まる

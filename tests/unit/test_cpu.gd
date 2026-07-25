@@ -144,8 +144,8 @@ func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, t
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(125, 13, 15, 13, 153, 2, 2)
-	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 125, "能力")
+	var prof: int = SimCpu.make_profile(127, 13, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 127, "能力")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 13, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
@@ -168,6 +168,11 @@ func test_upper_presets_keep_jump_attack() -> void:
 		"最強CPUはジャンプアタックを維持")
 	check(SimCpu.prof_byte(SimCpu.PRESET_STRONG, SimCpu.P_AB) & SimCpu.AB_SWEET,
 		"強CPUは設定済みジャスト率を実際の芯狙いに使う")
+
+func test_all_presets_enable_roles() -> void:
+	for preset in SimCpu.PRESETS:
+		check(SimCpu.prof_byte(preset, SimCpu.P_AB) & SimCpu.AB_ROLES,
+			"全CPUプリセットが味方との役割分担を使う")
 
 func test_state_default_profile_is_max() -> void:
 	# sim_state.gdの既定リテラルがsim_cpu.PRESET_MAXからずれない番人
@@ -204,6 +209,48 @@ func test_roles_split_receiver_and_support() -> void:
 	# 役割なしなら同じ状況でボールへ突っ込む(=みんなで追いかける問題)
 	s.players[1].cpu = _prof(SimCpu.AB_PREDICT)
 	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_LEFT, "役割なしはボールへ向かう")
+
+func test_cpu_cover_target_keeps_configured_spacing_from_receiver() -> void:
+	var w := _world()
+	var cfg = w[1]
+	var receiver = w[0].players[0]
+	var cover = w[0].players[1]
+	receiver.x = FP.from_int(100)
+	cover.x = FP.from_int(120)
+	var target: int = SimCpu._cover_target(cover, receiver, 1, cfg)
+	check(absi(target - receiver.x) >= cfg.cpu_mate_spacing,
+		"非レシーバーの目標はレシーバーから設定間隔以上離れる")
+
+func _near_cpu_mate_receive_world() -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.controlled_l = 0
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_x = FP.from_int(110)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vx = 0
+	s.ball_vy = FP.from_int(1)
+	s.players[0].x = FP.from_int(100)
+	s.players[1].x = FP.from_int(110)
+	s.players[0].cpu = SimCpu.PRESET_NORMAL
+	s.players[1].cpu = SimCpu.PRESET_NORMAL
+	return w
+
+func test_non_receiver_suppresses_hit_when_cpu_mate_is_too_close() -> void:
+	var w := _near_cpu_mate_receive_world()
+	var input: int = SimCpu.decide(w[0], 0, w[1])
+	check_eq(input & Simulation.IN_ACTION, 0,
+		"近距離では非レシーバー側CPUが打撃を譲る")
+
+func test_non_receiver_does_not_suppress_hit_when_cpu_mate_is_stunned() -> void:
+	var w := _near_cpu_mate_receive_world()
+	w[0].players[1].stun = 1
+	var input: int = SimCpu.decide(w[0], 0, w[1])
+	check(input & Simulation.IN_ACTION,
+		"相方CPUがスタン中なら非レシーバーも打撃を試みる")
 
 func test_yields_to_human_mate() -> void:
 	# 人間の相方が同じ球を取れるならCPUは譲る(人間優先、お見合い事故の防止)

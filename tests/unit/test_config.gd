@@ -22,6 +22,16 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.spike_power_pct, 110, "ジャストアタック速度110%")
 	check_eq(cfg.spike_sweet_pct, 45, "ジャスト判定はリーチ45%以内")
 
+func test_receive_rules_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.receive_offset_gain_pct, 100, "レシーブ接触オフセット倍率100%")
+	check_eq(cfg.receive_scatter, FP.from_int(12) / cfg.tick_rate,
+		"レシーブ散り幅12px/s")
+	check_eq(cfg.receive_vx_max, FP.from_int(45) / cfg.tick_rate,
+		"レシーブ横速度上限45px/s")
+	check_eq(cfg.cpu_mate_spacing, FP.from_int(72),
+		"CPU相方の守備間隔72px")
+
 func test_drive_gauge_rules_loaded() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")

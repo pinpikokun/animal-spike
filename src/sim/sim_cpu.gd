@@ -60,13 +60,14 @@ const SALT_ATTACK := 6
 # 難易度プリセット(2026-07-13「人間化」改訂)。方針:
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
 #   読み(予測深度)・技(ブロック/ジャスト)・判断(配球IQ)で出す
-# - 設計された弱点: 弱=予測なし(ネット際ドロップが拾えない)、
-#   普通=壁反射を読めない(depth0)、強=精度と判断は高いが役割分担なし。
-#   プレイヤーが「こいつにはアレが効く」と発見できる穴を各段に残す
-const PRESET_WEAK := (24 << P_DELAY) | (40 << P_AIM) | (64 << P_MISS) | (26 << P_SWEET)
-const PRESET_NORMAL := (AB_PREDICT | AB_ATTACK) | (16 << P_DELAY) | (25 << P_AIM) \
+# - 味方同士の役割分担は全段共通。予測深度・精度・技術判断の差は各段に残す。
+const PRESET_WEAK := AB_ROLES | (24 << P_DELAY) | (40 << P_AIM) \
+	| (64 << P_MISS) | (26 << P_SWEET)
+const PRESET_NORMAL := (AB_PREDICT | AB_ROLES | AB_ATTACK) \
+	| (16 << P_DELAY) | (25 << P_AIM) \
 	| (13 << P_MISS) | (0 << P_SWEET) | (1 << P_TIQ)
-const PRESET_STRONG := (AB_PREDICT | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
+const PRESET_STRONG := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET \
+	| AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
 const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
 	| (12 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
@@ -139,10 +140,41 @@ static func _cover_home(p, mate, idx: int, cfg) -> int:
 # 相棒(人間)が前に出たら自分は下がる、という追従がこの1関数で決まる
 static func _cover_target(p, mate, idx: int, cfg) -> int:
 	var tx: int = _cover_home(p, mate, idx, cfg)
-	var sep: int = cfg.player_reach * 3 / 2
+	var sep: int = cfg.cpu_mate_spacing
 	if absi(tx - mate.x) < sep:
 		tx = mate.x + sep if tx >= mate.x else mate.x - sep
-	return clampi(tx, cfg.player_reach, cfg.court_width - cfg.player_reach)
+	var lo: int = cfg.player_reach
+	var hi: int = cfg.court_width - cfg.player_reach
+	if tx < lo or tx > hi:
+		var opposite: int = mate.x - sep if tx > mate.x else mate.x + sep
+		if opposite >= lo and opposite <= hi:
+			tx = opposite
+	return clampi(tx, lo, hi)
+
+static func _is_cpu_mate_receiver(s, idx: int, team: int, target_x: int) -> bool:
+	var mate_idx: int = team * 2 + (1 - idx % 2)
+	var my_d: int = absi(s.players[idx].x - target_x)
+	var mate_d: int = absi(s.players[mate_idx].x - target_x)
+	return my_d < mate_d or (my_d == mate_d and idx < mate_idx)
+
+static func _should_yield_hit_to_cpu_mate(
+		s, idx: int, cfg, team: int, prof: int) -> bool:
+	if not (prof_byte(prof, P_AB) & AB_ROLES):
+		return false
+	if s.last_touch_team < 0 or s.last_touch_team == team:
+		return false
+	var mate_slot: int = 1 - idx % 2
+	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
+	if mate_slot == controlled:
+		return false
+	var p = s.players[idx]
+	var mate = s.players[team * 2 + mate_slot]
+	if mate.stun > 0 or mate.hit_cooldown > 0:
+		return false
+	if absi(p.x - mate.x) > cfg.cpu_mate_spacing / 2:
+		return false
+	var target_x: int = _receive_target_x(s, cfg, prof)
+	return not _is_cpu_mate_receiver(s, idx, team, target_x)
 
 # 任意の初期条件から高さtarget_yへ落ちる位置xを弾道積分で予測する。
 # max_bounce=壁反射を読む深さ(0なら放物線のみ=壁で崩せる弱いCPUになる)。
@@ -570,6 +602,9 @@ static func decide(s, idx: int, cfg) -> int:
 				input &= ~(SimInput.IN_ACTION | SimInput.IN_DOWN)
 			else:
 				input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
+	if p.on_ground == 1 and (input & SimInput.IN_ACTION) \
+			and _should_yield_hit_to_cpu_mate(s, idx, cfg, team, prof):
+		input &= ~SimInput.IN_ACTION
 	# 精密ジャンプは固定xで会合予測しているため、打撃入力を出すまでは空中横移動を止める。
 	# 打撃時の横キーは配球方向なので保持する。
 	if p.on_ground == 0 and not (input & SimInput.IN_ACTION) \
@@ -630,6 +665,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	var mate_slot: int = 1 - idx % 2
 	var mate = s.players[team * 2 + mate_slot]
 	var controlled: int = s.controlled_l if team == 0 else s.controlled_r
+	var mate_is_human: bool = mate_slot == controlled
 	# 役割分担: 落下点に近い方がレシーバー。人間の相方が同じ球を追えるなら譲る
 	# (人間とのお見合い衝突は事故なのでCPU側が広めに退く)
 	var receiver := true
@@ -642,7 +678,10 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		# 人間が操作している時はこの margin が「人間優先の譲り」として働き、
 		# 人間がボール方向へ移動中ならさらに広く譲る
 		var margin: int = reach / 4
-		if idx % 2 == controlled:
+		if not mate_is_human:
+			var role_target_x: int = _receive_target_x(s, cfg, prof)
+			receiver = _is_cpu_mate_receiver(s, idx, team, role_target_x)
+		elif idx % 2 == controlled:
 			receiver = my_d <= mate_d + margin
 		else:
 			# 相方(操作キャラ)がボールへ移動中なら譲るが、止まっているなら
@@ -654,9 +693,8 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 			else:
 				receiver = mate_d > my_d - margin
 		# 目の前(リーチ内)のボールは誰の担当だろうと必ず拾いに行く
-		if not receiver and my_d <= reach and my_d < mate_d:
+		if mate_is_human and not receiver and my_d <= reach and my_d < mate_d:
 			receiver = true
-	var mate_is_human: bool = (mate_slot == controlled)
 	var input: int
 	if receiver:
 		if just_receive_plan:
@@ -682,12 +720,8 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	else:
 		var support_x: int
 		if receiving:
-			# CPU同士の守備カバー: レシーバーのネット寄り24pxに詰めて後逸・ミスを拾う。
-			# 単独レシーバー制は相方のミス1回が即失点になる(役割分担が冗長性を壊す)
-			# ため、受けの局面は必ず2人で狭く挟む。カバーの立ち位置は精密に
-			# (deadzone半分)取らないと網の外に立ってしまう
-			var toward_net: int = 1 if team == 0 else -1
-			return _walk_to(p, land_x + toward_net * FP.from_int(24), deadzone / 2)
+			# CPU同士も相対位置から前衛/後衛の持ち場を毎tick選ぶ。
+			return _walk_to(p, _cover_target(p, mate, idx, cfg), deadzone / 2)
 		elif ab & AB_ATTACK:
 			var off: int = FP.from_int(48)
 			support_x = cfg.net_x - off if team == 0 else cfg.net_x + off
