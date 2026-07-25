@@ -26,7 +26,6 @@ const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押�
 const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
 const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=自陣の壁際まで届く大出力
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
-const BURN_TICKS := 60     # 燃えるアタック被弾後の炎上表示時間
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
 
@@ -220,7 +219,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			continue
 		if _is_active_block(s, i, input, cfg):
 			continue
-		if p.hit_cooldown > 0 or p.stun > 0 or p.quake_stun > 0:
+		if p.hit_cooldown > 0 or p.stun > 0 or p.burn > 0 or p.quake_stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
@@ -255,6 +254,8 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 		return false
 	var team: int = team_of(i)
 	var p = s.players[i]
+	if p.burn > 0:
+		return false
 	if s.last_touch_team != 1 - team or not _is_block_input(p, input):
 		return false
 	if absi(p.x - cfg.net_x) > FP.from_int(60):
@@ -280,6 +281,19 @@ static func _spend_drive(p, amount: int, cfg) -> void:
 
 static func _burnout_guard_damage(p, damage: int) -> int:
 	return damage * 3 / 2 if p.burnout_ticks > 0 else damage
+
+static func _ignite_player(p, team: int, cfg) -> void:
+	var back: int = -1 if team == 0 else 1
+	p.burn = cfg.burn_stun_ticks
+	p.stun = 0
+	p.flinch = 0
+	p.push = 0
+	# 原作の摩擦停止まで約15座標単位=本作換算約47pxに対し、標準重量で約48px。
+	p.vx = back * FP.from_int(KNOCKBACK_PX * 2) * 100 \
+		/ Chars.stat(p.char_id, "weight")
+	# 原作の頂点約21座標単位=本作換算約65pxに対し、既存ジャンプ初速なら約80px。
+	p.vy = -cfg.jump_speed
+	p.on_ground = 0
 
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	var p = s.players[i]
@@ -363,9 +377,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
 				if incoming_flame:
-					p.burn = BURN_TICKS
-				flame_received = true
-				if p.guard <= 0:
+					flame_received = true
+				if p.guard <= 0 and not flame_received:
 					p.stun = cfg.stun_ticks
 					p.guard = p.guard_max
 					s.hit_freeze = 10
@@ -378,8 +391,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			var guard_damage: int = incoming_guard_damage
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				if incoming_flame:
-					p.burn = BURN_TICKS
-				flame_received = true
+					flame_received = true
 			guard_damage = _burnout_guard_damage(p, guard_damage)
 			p.guard -= guard_damage
 			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
@@ -392,15 +404,19 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			if p.on_ground == 0:
 				p.vy = mini(p.vy, -FP.from_int(KNOCK_AIR_UP_PX_S) / cfg.tick_rate)
 			if p.guard <= 0:
-				p.stun = cfg.stun_ticks
-				p.guard = p.guard_max
-				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
-				# 決着の一撃: 自陣の壁際まで吹っ飛ばされて気絶する(壁クランプで止まる)。
-				# 重さ%は掛けない=誰でも壁まで飛ぶフィニッシュ演出(浮きは共通処理が担う)
-				p.push = back * PUSH_STUN_TICKS
-			else:
+				if not flame_received:
+					p.stun = cfg.stun_ticks
+					p.guard = p.guard_max
+					s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
+					# 決着の一撃: 自陣の壁際まで吹っ飛ばされて気絶する(壁クランプで止まる)。
+					# 重さ%は掛けない=誰でも壁まで飛ぶフィニッシュ演出(浮きは共通処理が担う)
+					p.push = back * PUSH_STUN_TICKS
+			elif not flame_received:
 				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
 				s.hit_freeze = maxi(s.hit_freeze, 3)
+	if flame_received:
+		# 通常被弾のしりもち計算より後で炎上専用ノックバックへ確定させる。
+		_ignite_player(p, team, cfg)
 	s.ball_power = 0
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	s.ball_guard_damage = 0
@@ -591,7 +607,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not _is_active_block(s, i, input, cfg):
 			continue
-		if p.stun > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
+		if p.stun > 0 or p.burn > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
 			continue
 		if absi(p.x - cfg.net_x) > zone:
 			continue
@@ -628,9 +644,9 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			if incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE:
 				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
 				if s.ball_flame == 1:
-					p.burn = BURN_TICKS
+					_ignite_player(p, team, cfg)
 				s.ball_flame = 0
-				if p.guard <= 0:
+				if p.guard <= 0 and p.burn == 0:
 					p.stun = cfg.stun_ticks
 					p.guard = p.guard_max
 					p.push = back_dir * PUSH_STUN_TICKS

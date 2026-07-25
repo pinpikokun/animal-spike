@@ -59,6 +59,7 @@ var just_receive_window_ticks: int
 var burnout_recovery_ticks: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
+var burn_stun_ticks: int   # 燃えるアタック被弾後の行動不能時間
 var stun_mash_bonus: int
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_max_by_rank: Array[int]
@@ -189,6 +190,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	stun_ticks = _int_of(raw, "stun_ticks")
 	if stun_ticks < 0:
 		_fail("stun_ticksは0以上であること")
+		return
+	burn_stun_ticks = _int_of(raw, "burn_stun_ticks")
+	if burn_stun_ticks <= 0:
+		_fail("burn_stun_ticksは正であること")
 		return
 	stun_mash_bonus = _int_of(raw, "stun_mash_bonus")
 	if stun_mash_bonus < 0:

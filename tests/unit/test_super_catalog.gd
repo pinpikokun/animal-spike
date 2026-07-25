@@ -5,6 +5,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const FP := preload("res://src/sim/fp.gd")
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
@@ -34,6 +35,9 @@ func test_flame_two_hits_deal_eighty_without_stun() -> void:
 	var p = s.players[0]
 	p.guard = 100
 	for hit in 2:
+		# 固定ダメージの累積だけを検証するため、前の炎上が明けた次の被弾を再現する。
+		p.burn = 0
+		p.on_ground = 1
 		_arm_flame(s)
 		HitResolver._apply_hit(s, 0, cfg,
 			Simulation.IN_ACTION | Simulation.IN_DOWN,
@@ -77,3 +81,105 @@ func test_burnout_multiplies_fixed_flame_damage_to_sixty() -> void:
 		Simulation.IN_ACTION | Simulation.IN_DOWN,
 		cfg.player_reach * cfg.player_reach)
 	check_eq(p.guard, 40, "固定40へバーンアウト3/2を掛けて60")
+
+func test_flame_hit_starts_configured_burn_knockback() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.guard = 100
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	_arm_flame(s)
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN,
+		cfg.player_reach * cfg.player_reach)
+	check_eq(p.burn, cfg.burn_stun_ticks, "炎上時間はrules.jsonの90tick")
+	check(p.vx < 0, "左チームは自陣側へ炎上ノックバック")
+	check(p.vy < 0, "炎上被弾で上へ舞い上がる")
+	check_eq(p.on_ground, 0, "炎上ノックバックは空中物理へ移す")
+
+func test_flame_guard_break_defers_stun_until_burn_ends() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.guard = 40
+	_arm_flame(s)
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN,
+		cfg.player_reach * cfg.player_reach)
+	check_eq(p.guard, 0, "炎上中は割れた耐久を0のまま保持")
+	check_eq(p.stun, 0, "炎上被弾tickでは即気絶しない")
+	check_eq(p.burn, cfg.burn_stun_ticks, "気絶より先に炎上状態へ入る")
+
+func test_burning_player_cannot_ground_receive() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.burn = 10
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	s.ball_x = p.x
+	s.ball_y = p.y - FP.from_int(10)
+	s.last_touch_team = 1
+	HitResolver._resolve_hit(
+		s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.last_touch_team, 1, "炎上中は地上レシーブで球に触れない")
+
+func test_last_burn_tick_still_ignores_hit_input() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.burn = 1
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	s.ball_x = p.x
+	s.ball_y = p.y - FP.from_int(10)
+	s.last_touch_team = 1
+	Simulation._step_players_and_hits(
+		s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(p.burn, 0, "最終tickの物理更新後に炎上解除")
+	check_eq(s.last_touch_team, 1, "炎上最終tickも打撃入力を無視")
+
+func test_burning_player_cannot_air_attack() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.burn = 10
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y - FP.from_int(80)
+	p.on_ground = 0
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.last_touch_team = 1
+	HitResolver._resolve_hit(
+		s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.last_touch_team, 1, "炎上中は空中アタックで球に触れない")
+
+func test_burning_player_cannot_block() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.burn = 10
+	p.x = cfg.net_x - FP.from_int(20)
+	p.y = cfg.floor_y - FP.from_int(80)
+	p.on_ground = 0
+	s.ball_x = p.x
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(10)
+	s.last_touch_team = 1
+	HitResolver._ball_vs_block(
+		s, cfg, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0])
+	check_eq(s.ball_vx, -FP.from_int(10), "炎上中はブロック反射できない")
+	check_eq(s.last_touch_team, 1, "炎上中のブロックはタッチにならない")
+
+func test_last_burn_tick_still_cannot_block() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.burn = 1
+	p.x = cfg.net_x - FP.from_int(20)
+	p.y = cfg.floor_y - FP.from_int(80)
+	p.on_ground = 0
+	s.ball_x = p.x - FP.from_int(10)
+	s.ball_y = p.y - cfg.player_reach_up
+	s.ball_vx = -FP.from_int(10)
+	s.last_touch_team = 1
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	check_eq(p.burn, 0, "ブロック判定前に炎上最終tickの物理更新が終わる")
+	check(s.ball_vx < 0, "炎上最終tickもブロック反射しない")
+	check_eq(s.last_touch_team, 1, "炎上最終tickのブロックはタッチにならない")

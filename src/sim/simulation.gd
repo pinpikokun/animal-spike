@@ -149,7 +149,8 @@ static func step(state, inputs: Array[int], cfg) -> void:
 				elif raw & IN_DOWN:
 					state.serve_pow = maxi(state.serve_pow - 1, POW_MIN)
 				serve_inputs[srv_idx] &= ~(IN_JUMP | IN_LEFT | IN_RIGHT)
-			_step_players_and_hits(state, serve_inputs, cfg)
+			var effective_serve_inputs: Array[int] = \
+				_step_players_and_hits(state, serve_inputs, cfg)
 			# サーバーは外線(サービスライン)を越えられない(トスまで)。線の後ろでは動ける。
 			# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
 			# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
@@ -160,22 +161,24 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			else:
 				srv.x = clampi(srv.x, line, cfg.court_width - cfg.ball_radius)
 			_hold_ball_on_server(state, cfg)
-			_try_serve(state, inputs, cfg)
+			_try_serve(state, effective_serve_inputs, cfg)
 		else:
 			# 2段目=トス済み・打撃待ち。サーバーは移動・ジャンプ解禁され、通常の
 			# ヒットルールで打つ(地上前トス=安全サーブ/走り込みジャンプ+下=アタック)。
 			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
-			_step_players_and_hits(state, inputs, cfg)
-			BallPhysics._step_ball(state, cfg, inputs)
-			HitResolver._ball_vs_block(state, cfg, inputs)
+			var effective_toss_inputs: Array[int] = \
+				_step_players_and_hits(state, inputs, cfg)
+			BallPhysics._step_ball(state, cfg, effective_toss_inputs)
+			HitResolver._ball_vs_block(state, cfg, effective_toss_inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
 					and state.ball_y >= cfg.floor_y - cfg.ball_radius:
 				# サーブトス空振りは相手得点となり、次のサーブ権も相手へ移る。
 				_award_point(state, 1 - state.serving_team, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
-		_step_players_and_hits(state, inputs, cfg)
-		BallPhysics._step_ball(state, cfg, inputs)
-		HitResolver._ball_vs_block(state, cfg, inputs)
+		var effective_rally_inputs: Array[int] = \
+			_step_players_and_hits(state, inputs, cfg)
+		BallPhysics._step_ball(state, cfg, effective_rally_inputs)
+		HitResolver._ball_vs_block(state, cfg, effective_rally_inputs)
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
@@ -225,13 +228,17 @@ static func _update_drive_recovery(state, cfg) -> void:
 		if p.drive_gauge == cfg.drive_gauge_max:
 			p.drive_recovery_progress = 0
 
-static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
+static func _step_players_and_hits(state, inputs: Array[int], cfg) -> Array[int]:
 	var hip_landed: bool = false
+	var effective_inputs: Array[int] = []
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
+		# 炎上開始時点で入力を封じ、最終tickにburnが0へ減った後も同tick中は
+		# 打撃・構え・固有技へ生入力を漏らさない。
+		effective_inputs.append(0 if p.burn > 0 else input)
 		var was_hip_drop: bool = p.hip == -1
-		PlayerMovement._step_player(p, input, cfg, team_of(i))
+		PlayerMovement._step_player(p, effective_inputs[i], cfg, team_of(i))
 		if was_hip_drop and p.on_ground == 1 and p.hip == 0:
 			hip_landed = true
 	if hip_landed:
@@ -240,8 +247,8 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 			p.quake_stun = cfg.hip_quake_stun_ticks
 	var was_serve_strike: bool = state.phase == SimStateScript.PHASE_SERVE \
 		and state.serve_tossed == 1
-	_update_receive_stances(state, inputs, cfg)
-	var hit_result: int = HitResolver._resolve_hit(state, inputs, cfg)
+	_update_receive_stances(state, effective_inputs, cfg)
+	var hit_result: int = HitResolver._resolve_hit(state, effective_inputs, cfg)
 	if was_serve_strike and hit_result != HitResolver.NO_HIT:
 		# serve_flightとは別に、受け手の初接触までサーブ由来球であることを保持する。
 		# 得点判定より先に立て、同tickにラリー終了した場合は_award_pointで解除する。
@@ -253,19 +260,23 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> void:
 		state.phase = SimStateScript.PHASE_RALLY
 		state.serve_tossed = 0
 		state.serve_flight = 1
-	_update_hat(state, inputs, cfg)
+	_update_hat(state, effective_inputs, cfg)
+	return effective_inputs
 
 static func _update_receive_stances(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
 		var p = state.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
+		if p.burn > 0:
+			p.receive_stance = 0
+			continue
 		var chord: bool = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
 		if not chord or state.phase != SimStateScript.PHASE_RALLY:
 			p.receive_stance = 0
 			continue
 		if p.receive_stance == 0:
 			var valid_edge: bool = p.on_ground == 1 and p.vx == 0 \
-				and p.stun == 0 and p.quake_stun == 0 \
+				and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
 				and (input & (IN_LEFT | IN_RIGHT)) == 0
 			p.receive_stance = cfg.just_receive_window_ticks if valid_edge else -1
 		elif p.receive_stance > 1:
@@ -284,7 +295,8 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
-				and p.stun == 0 and p.flinch == 0 and p.burnout_ticks == 0 \
+				and p.stun == 0 and p.burn == 0 \
+				and p.flinch == 0 and p.burnout_ticks == 0 \
 				and p.hip == 0 and p.quake_stun == 0 \
 				and ent_find(state, KIND_CAP) < 0:
 			if p.drive_gauge > 0:

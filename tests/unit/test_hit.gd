@@ -167,8 +167,8 @@ func test_flame_receive_deals_catalog_fixed_guard_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 60,
 		"燃える球のレシーブはカタログ固定40ダメージ")
-	check(s.players[0].flinch > 0, "芯外しなら通常パワー球同様に返球が乱れる")
-	check_eq(s.players[0].burn, 60, "炎被弾で60tick炎上")
+	check_eq(s.players[0].flinch, 0, "炎上専用の行動不能が通常しりもちを置き換える")
+	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "炎被弾で90tick行動不能")
 	check_eq(s.ball_flame, 0, "レシーブで炎球効果を消費")
 
 func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
@@ -188,10 +188,10 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].guard, 60,
 		"防御不能系は芯でレシーブしても固定40ダメージ")
-	check_eq(s.players[0].burn, 60, "芯受けでも60tick炎上")
+	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "芯受けでも90tick行動不能")
 	check_eq(s.ball_flame, 0, "芯レシーブでも炎球効果を消費")
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check_eq(s.players[0].burn, 59, "炎上残り時間は毎tick減衰")
+	check_eq(s.players[0].burn, cfg.burn_stun_ticks - 1, "炎上残り時間は毎tick減衰")
 
 func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
 	var w := _rally_world()
@@ -212,7 +212,7 @@ func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(p.guard, 60,
 		"燃える球のブロックはカタログ固定40ダメージ")
-	check_eq(p.burn, 60, "炎球ブロックでも60tick炎上")
+	check_eq(p.burn, cfg.burn_stun_ticks, "炎球ブロックでも90tick行動不能")
 	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
 
 func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
@@ -229,7 +229,7 @@ func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
 	check_eq(teammate.guard, 60, "味方の炎球でもカタログ固定40ダメージ")
-	check_eq(teammate.burn, 60, "味方の炎球でも60tick炎上")
+	check_eq(teammate.burn, cfg.burn_stun_ticks, "味方の炎球でも90tick行動不能")
 	check_eq(s.ball_flame, 0, "味方接触で炎球効果を消費")
 
 func test_air_attack_return_clears_flame_and_power() -> void:

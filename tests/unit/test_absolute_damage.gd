@@ -5,6 +5,7 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const FP := preload("res://src/sim/fp.gd")
 
 func test_rank_tables_are_absolute_monotonic_and_evenly_spaced() -> void:
 	var cfg = SimConfig.new()
@@ -67,3 +68,65 @@ func test_stun_mashing_recovers_faster_than_no_input() -> void:
 		PlayerMovement._step_player(idle, 0, cfg, 0)
 	check_eq(mashed.stun, 0, "交互連打は8tick以内に復帰")
 	check(idle.stun > 0, "非連打は同じ時間では気絶中")
+
+func test_burn_ignores_move_jump_and_mash_inputs() -> void:
+	var cfg = SimConfig.new()
+	var input_burn = SimState.Player.new()
+	var idle_burn = SimState.Player.new()
+	for p in [input_burn, idle_burn]:
+		p.burn = 10
+		p.x = FP.from_int(100)
+		p.y = cfg.floor_y - FP.from_int(20)
+		p.on_ground = 0
+		p.vx = FP.from_int(3)
+		p.vy = 0
+	PlayerMovement._step_player(input_burn,
+		Simulation.IN_LEFT | Simulation.IN_JUMP | Simulation.IN_ACTION, cfg, 0)
+	PlayerMovement._step_player(idle_burn, 0, cfg, 0)
+	check_eq(input_burn.x, idle_burn.x, "炎上中は左右入力を無視")
+	check_eq(input_burn.y, idle_burn.y, "炎上中はジャンプ入力を無視")
+	check_eq(input_burn.vx, idle_burn.vx, "炎上中の横物理は入力に依存しない")
+	check_eq(input_burn.vy, idle_burn.vy, "炎上中の縦物理は入力に依存しない")
+	check_eq(input_burn.burn, idle_burn.burn, "炎上は連打しても短縮されない")
+
+func test_burn_expiry_returns_to_normal_control() -> void:
+	var cfg = SimConfig.new()
+	var p = SimState.Player.new()
+	p.burn = 1
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	PlayerMovement._step_player(p, 0, cfg, 0)
+	check_eq(p.burn, 0, "規定tickの終了で炎上解除")
+	var before_x: int = p.x
+	PlayerMovement._step_player(p, Simulation.IN_RIGHT, cfg, 0)
+	check(p.x > before_x, "炎上解除後は通常の移動入力へ戻る")
+
+func test_guard_break_waits_for_burn_expiry_before_stun() -> void:
+	var cfg = SimConfig.new()
+	var p = SimState.Player.new()
+	p.guard_max = 100
+	p.guard = 0
+	p.burn = 2
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	PlayerMovement._step_player(p, Simulation.IN_ACTION, cfg, 0)
+	check_eq(p.burn, 1, "炎上は連打で余分に減らない")
+	check_eq(p.stun, 0, "炎上中の耐久0は即気絶させない")
+	check_eq(p.guard, 0, "炎上中は耐久0を保持")
+	PlayerMovement._step_player(p, 0, cfg, 0)
+	check_eq(p.burn, 0, "炎上終了")
+	check_eq(p.stun, cfg.stun_ticks, "炎上が明けてから気絶へ移行")
+	check_eq(p.guard, p.guard_max, "気絶移行時に耐久を全回復")
+
+func test_burn_physics_bounces_on_floor() -> void:
+	var cfg = SimConfig.new()
+	var p = SimState.Player.new()
+	p.burn = 10
+	p.y = cfg.floor_y - FP.from_int(1)
+	p.vy = FP.from_int(4)
+	p.on_ground = 0
+	PlayerMovement._step_player(p, 0, cfg, 0)
+	check_eq(p.y, cfg.floor_y, "炎上中の落下は床面で止める")
+	check(p.vy < 0, "炎上中は床で上向きに反発する")
+	check_eq(p.on_ground, 0, "反発後は空中物理を継続")

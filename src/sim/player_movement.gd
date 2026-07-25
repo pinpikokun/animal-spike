@@ -45,6 +45,29 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	var action_down: int = 1 if (input & IN_ACTION) != 0 else 0
 	if p.burn > 0:
 		p.burn -= 1
+		# 炎上中は入力を完全に無視し、被弾時の慣性・摩擦・重力だけで動く。
+		# 原作と同じ2/3反発で床を跳ね、連打による時間短縮は行わない。
+		p.vx = p.vx * 3 / 4
+		p.vy += cfg.gravity
+		var burn_min_x: int = 0
+		var burn_max_x: int = cfg.court_width
+		if team == 0:
+			burn_max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
+		else:
+			burn_min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
+		p.x = clampi(p.x + p.vx, burn_min_x, burn_max_x)
+		p.y += p.vy
+		if p.y >= cfg.floor_y:
+			p.y = cfg.floor_y
+			p.vy = -p.vy * 2 / 3
+			p.on_ground = 0 if p.vy != 0 else 1
+		if p.hit_cooldown > 0:
+			p.hit_cooldown -= 1
+		if p.burn == 0 and p.guard <= 0:
+			p.stun = cfg.stun_ticks
+			p.guard = p.guard_max
+			p.stun_action_held = 0
+		return
 	if p.quake_stun > 0:
 		p.quake_stun -= 1
 		p.vx = 0
