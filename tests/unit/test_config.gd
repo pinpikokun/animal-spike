@@ -50,6 +50,7 @@ func test_absolute_damage_and_stun_mash_rules_loaded() -> void:
 		"POWER A-Eジャスト削り絶対値")
 	check_eq(cfg.stun_ticks, 240, "気絶は4秒=240tick")
 	check_eq(cfg.burn_stun_ticks, 90, "炎上行動不能は1.5秒=90tick")
+	check_eq(cfg.burn_launch_height_px, 80, "炎上打ち上げ頂点は80px")
 	check_eq(cfg.stun_mash_bonus, 3, "気絶中の押下エッジは追加3tick短縮")
 	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
 	var raw: Dictionary = JSON.parse_string(file.get_as_text())

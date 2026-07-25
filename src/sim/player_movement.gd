@@ -60,7 +60,11 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		if p.y >= cfg.floor_y:
 			p.y = cfg.floor_y
 			p.vy = -p.vy * 2 / 3
-			p.on_ground = 0 if p.vy != 0 else 1
+			if -p.vy <= cfg.gravity:
+				p.vy = 0
+				p.on_ground = 1
+			else:
+				p.on_ground = 0
 		if p.hit_cooldown > 0:
 			p.hit_cooldown -= 1
 		if p.burn == 0 and p.guard <= 0:

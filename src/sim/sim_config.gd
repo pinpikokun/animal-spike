@@ -60,6 +60,7 @@ var burnout_recovery_ticks: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var burn_stun_ticks: int   # 燃えるアタック被弾後の行動不能時間
+var burn_launch_height_px: int  # 燃えるアタック被弾時の打ち上げ頂点(px)
 var stun_mash_bonus: int
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var guard_max_by_rank: Array[int]
@@ -194,6 +195,10 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	burn_stun_ticks = _int_of(raw, "burn_stun_ticks")
 	if burn_stun_ticks <= 0:
 		_fail("burn_stun_ticksは正であること")
+		return
+	burn_launch_height_px = _int_of(raw, "burn_launch_height_px")
+	if burn_launch_height_px <= 0:
+		_fail("burn_launch_height_pxは正であること")
 		return
 	stun_mash_bonus = _int_of(raw, "stun_mash_bonus")
 	if stun_mash_bonus < 0:

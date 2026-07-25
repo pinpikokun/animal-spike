@@ -47,6 +47,7 @@
 	"hip_quake_stun_ticks": 6,
 	"stun_ticks": 240,
 	"burn_stun_ticks": 90,
+	"burn_launch_height_px": 80,
 	"stun_mash_bonus": 3,
 	"stagger_ticks": 30,
 	"guard_max_by_rank": [120, 110, 100, 90, 80],

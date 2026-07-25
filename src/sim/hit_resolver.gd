@@ -113,6 +113,26 @@ static func toss_vy_for_apex_pct(normal_vy: int, gravity: int, apex_pct: int) ->
 			hi = mid - 1
 	return -best
 
+static func launch_vy_for_apex_height(target: int, gravity: int) -> int:
+	if target <= 0 or gravity <= 0:
+		return 0
+	var lo: int = 0
+	var hi: int = target + gravity
+	var best: int = 0
+	var best_error: int = target
+	while lo <= hi:
+		var mid: int = (lo + hi) / 2
+		var height: int = apex_height(-mid, gravity)
+		var error: int = absi(height - target)
+		if error < best_error:
+			best = mid
+			best_error = error
+		if height < target:
+			lo = mid + 1
+		else:
+			hi = mid - 1
+	return -best
+
 static func toss_target_x(team: int, hdir: int, cfg) -> int:
 	var toward_net: int = 1 if team == 0 else -1
 	var own_back: int = FP.from_int(cfg.toss_zone_back_px) if team == 0 \
@@ -291,8 +311,10 @@ static func _ignite_player(p, team: int, cfg) -> void:
 	# 原作の摩擦停止まで約15座標単位=本作換算約47pxに対し、標準重量で約48px。
 	p.vx = back * FP.from_int(KNOCKBACK_PX * 2) * 100 \
 		/ Chars.stat(p.char_id, "weight")
-	# 原作の頂点約21座標単位=本作換算約65pxに対し、既存ジャンプ初速なら約80px。
-	p.vy = -cfg.jump_speed
+	# 打ち上げ頂点から整数弾道の初速を逆算する。80px=ネット高さの1.75倍で、
+	# 原作の0.65倍より高い。派手さを優先した意図的な逸脱(仕様書に根拠あり)。
+	p.vy = launch_vy_for_apex_height(
+		FP.from_int(cfg.burn_launch_height_px), cfg.gravity)
 	p.on_ground = 0
 
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
