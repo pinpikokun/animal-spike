@@ -111,13 +111,12 @@ func _air_toss_vy(vin_px: int) -> int:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	return s.ball_vy
 
-func test_air_toss_reflects_inertia() -> void:
-	# 空中トスにも地上と同じ慣性反射が乗る(不整合の解消)。
-	# 強く落ちてくる球を空中トスするほど高く上がる(=入射の反発が乗る)
+func test_air_opponent_return_keeps_existing_upward_speed() -> void:
+	# 敵陣へ送る空中球は横の入射だけを新しい係数へ入れ、縦速度は既存値のまま。
 	var soft: int = _air_toss_vy(100)
 	var hard: int = _air_toss_vy(700)
 	check(soft < 0 and hard < 0, "どちらも上向きに打ち上がる")
-	check(hard < soft, "強い落下球を受けた方が高く上がる(慣性反射)")
+	check_eq(hard, soft, "入射の縦速度は空中返球の上向き速度を変えない")
 
 func test_soft_ball_gives_full_control() -> void:
 	# 特性なしキャラは緩い球を通常高度で完全制御する。

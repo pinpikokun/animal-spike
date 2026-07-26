@@ -30,6 +30,13 @@ const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=�
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
+# 実プレイで調整する初期値。敵陣返球が横の入射速度から受ける影響率。
+const OPPONENT_RETURN_INCOMING_GOOD_PCT := 10
+const OPPONENT_RETURN_INCOMING_NORMAL_PCT := 25
+const OPPONENT_RETURN_INCOMING_BAD_PCT := 45
+# 敵陣トス設定の撤去前からスパイクだけが使っていた着弾点を挙動不変で分離する。
+const SPIKE_TARGET_FRONT_PX := 374
+const SPIKE_TARGET_BACK_PX := 504
 
 const INTENT_GROUND_RECEIVE := 0
 const INTENT_GROUND_TOSS := 1
@@ -152,25 +159,47 @@ static func toss_target_x(team: int, hdir: int, cfg) -> int:
 		else cfg.court_width - FP.from_int(cfg.toss_zone_back_px)
 	var own_front: int = FP.from_int(cfg.toss_zone_front_px) if team == 0 \
 		else cfg.court_width - FP.from_int(cfg.toss_zone_front_px)
-	var opponent_front: int = FP.from_int(cfg.opponent_toss_zone_front_px) \
-		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_front_px)
 	if hdir == -toward_net:
 		return own_back
-	if hdir == toward_net:
-		return opponent_front
 	return own_front
 
-static func air_target_x(team: int, hdir: int, cfg) -> int:
+static func spike_target_x(team: int, hdir: int, cfg) -> int:
 	var toward_net: int = 1 if team == 0 else -1
-	var enemy_front: int = FP.from_int(cfg.opponent_toss_zone_front_px) \
-		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_front_px)
-	var enemy_back: int = FP.from_int(cfg.opponent_toss_zone_back_px) \
-		if team == 0 else cfg.court_width - FP.from_int(cfg.opponent_toss_zone_back_px)
+	var enemy_front: int = FP.from_int(SPIKE_TARGET_FRONT_PX) \
+		if team == 0 else cfg.court_width - FP.from_int(SPIKE_TARGET_FRONT_PX)
+	var enemy_back: int = FP.from_int(SPIKE_TARGET_BACK_PX) \
+		if team == 0 else cfg.court_width - FP.from_int(SPIKE_TARGET_BACK_PX)
 	if hdir == -toward_net:
 		return enemy_front
 	if hdir == toward_net:
 		return enemy_back
 	return (enemy_front + enemy_back) / 2
+
+static func _opponent_return_incoming_pct(char_id: int) -> int:
+	if Chars.has_trait(char_id, Chars.Profile.TRAIT_TOSS_GOOD):
+		return OPPONENT_RETURN_INCOMING_GOOD_PCT
+	if Chars.has_trait(char_id, Chars.Profile.TRAIT_TOSS_BAD):
+		return OPPONENT_RETURN_INCOMING_BAD_PCT
+	return OPPONENT_RETURN_INCOMING_NORMAL_PCT
+
+static func opponent_return_vx(ball_x: int, ball_y: int, incoming_vx: int,
+		team: int, char_id: int, cfg) -> int:
+	var dir: int = SimStateScript._dir_of_team(team)
+	var d_px: int = FP.to_int(absi(ball_x - cfg.net_x))
+	var h_px: int = FP.to_int(cfg.floor_y - ball_y)
+	# 6.4.2の500px/s実測式は、既存520px/s地上球と470px/s空中球の
+	# 共通安全帯から外れた。6.4.5の全組合せ検査で引き直した安全側の帯。
+	var lower_px_s: int = 25 + d_px * 7 / 5
+	var upper_px_s: int = 248 + d_px * 9 / 8 - (h_px - 20) / 2
+	upper_px_s = maxi(upper_px_s, lower_px_s)
+	var lower: int = FP.from_int(lower_px_s) / cfg.tick_rate
+	var upper: int = FP.from_int(upper_px_s) / cfg.tick_rate
+	var base: int = (lower + upper) / 2
+	var incoming_pct: int = _opponent_return_incoming_pct(char_id)
+	var relative_incoming: int = incoming_vx * dir
+	var relative_vx: int = clampi(
+		base + relative_incoming * incoming_pct / 100, lower, upper)
+	return relative_vx * dir
 
 static func _flight_ticks(start_y: int, launch_vy: int, target_y: int, gravity: int) -> int:
 	var y: int = start_y
@@ -475,10 +504,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			ground_toss_hdir = dir
 		var desired_vx: int = 0
 		var desired_vy: int = 0
+		var returns_to_opponent: bool = intent_kind == INTENT_GROUND_TOSS \
+			and ground_toss_hdir == dir
 		if intent_kind == INTENT_GROUND_TOSS:
 			desired_vy = -cfg.bump_up_speed
-			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
-				toss_target_x(team, ground_toss_hdir, cfg), cfg)
+			if returns_to_opponent:
+				var return_incoming_vx: int = 0 if serve_strike else s.ball_vx
+				desired_vx = opponent_return_vx(
+					s.ball_x, s.ball_y, return_incoming_vx, team, p.char_id, cfg)
+			else:
+				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
+					toss_target_x(team, ground_toss_hdir, cfg), cfg)
 			if intent[3] != 0:
 				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
 			p.hit_kind = 1
@@ -494,7 +530,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				-cfg.receive_vx_max, cfg.receive_vx_max)
 			p.hit_kind = 0
 		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS
-		if is_ground_toss:
+		if is_ground_toss and not returns_to_opponent:
 			if toss_bad:
 				desired_vy = toss_vy_for_apex_pct(desired_vy, cfg.gravity,
 					_toss_apex_pct(s, i, p.char_id))
@@ -509,11 +545,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
-		s.ball_vx = desired_vx * aim_pct / 100 \
-			if toss_good and is_ground_toss \
-			else desired_vx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
+		if returns_to_opponent:
+			s.ball_vx = desired_vx
+		else:
+			s.ball_vx = desired_vx * aim_pct / 100 \
+				if toss_good and is_ground_toss \
+				else desired_vx * aim_pct / 100 \
+					- s.ball_vx * inertia / cfg.hit_inertia_den
 		# トスの高さは入力と技能だけで決める。素レシーブは従来どおり縦の勢いも返す。
-		if p.hit_kind == 0:
+		if returns_to_opponent:
+			s.ball_vy = desired_vy
+		elif p.hit_kind == 0:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		else:
 			s.ball_vy = desired_vy * aim_pct / 100
@@ -558,7 +600,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		else:
 			svy = (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200
 		svx = toss_aim_vx(s.ball_x, s.ball_y, svy,
-			air_target_x(team, hdir, cfg), cfg)
+			spike_target_x(team, hdir, cfg), cfg)
 		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		if special == Chars.SUPER_FLAME_ATTACK:
@@ -581,25 +623,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	else:
 		s.ball_guard_damage = 0
 		s.ball_defense_class = Chars.DEFENSE_NONE
-		# 空中ニュートラル段は横3種とも敵陣の前面/中央/後面へトスする。
+		# 空中トスも落下点を置かず、地上の敵陣返球と同じ固定速度式を使う。
 		var avy: int = -cfg.toss_fwd_vy
-		var avx: int = toss_aim_vx(s.ball_x, s.ball_y, avy,
-			air_target_x(team, hdir, cfg), cfg)
-		var is_air_toss := true
-		var toss_bad_low: bool = false
-		if is_air_toss:
-			if toss_bad:
-				var apex_pct: int = _toss_apex_pct(s, i, p.char_id)
-				toss_bad_low = apex_pct < 100
-				if toss_bad_low:
-					avy = toss_vy_for_apex_pct(avy, cfg.gravity, apex_pct)
-			if toss_good:
-				avx = toss_aim_vx(s.ball_x, s.ball_y, avy,
-					air_target_x(team, hdir, cfg), cfg)
-		s.ball_vx = avx * aim_pct / 100 if toss_good and is_air_toss \
-			else avx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = avy * aim_pct / 100 if is_air_toss and (toss_good or toss_bad_low) \
-			else avy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		var air_return_incoming_vx: int = 0 if serve_strike else s.ball_vx
+		s.ball_vx = opponent_return_vx(
+			s.ball_x, s.ball_y, air_return_incoming_vx, team, p.char_id, cfg)
+		s.ball_vy = avy
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if s.serve_ball == 1 and team != s.serving_team:

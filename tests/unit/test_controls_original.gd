@@ -34,7 +34,7 @@ func test_up_alone_is_jump_and_not_ground_aim() -> void:
 	check_eq(intent[1], 0, "上入力は地上トスの横方向を変えない")
 
 
-func test_ground_action_has_three_horizontal_toss_targets() -> void:
+func test_ground_action_has_three_intents_and_two_own_toss_targets() -> void:
 	var cfg = SimConfig.new()
 	for team in 2:
 		var forward := SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
@@ -48,9 +48,6 @@ func test_ground_action_has_three_horizontal_toss_targets() -> void:
 				"後ろ/なし/前をチーム相対方向へ正規化: team=%d" % team)
 		check(HitResolver.toss_target_x(team, -SimState._dir_of_team(team), cfg)
 			!= HitResolver.toss_target_x(team, 0, cfg), "後ろとニュートラルは別目標")
-		check(HitResolver.toss_target_x(team, 0, cfg)
-			!= HitResolver.toss_target_x(team, SimState._dir_of_team(team), cfg),
-			"ニュートラルと前は別目標")
 
 
 func test_ground_down_action_is_receive_with_existing_reach_rules() -> void:

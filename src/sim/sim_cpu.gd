@@ -511,12 +511,12 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 		return SimInput.IN_ACTION
 	return 0
 
-# 空中の配球(TARGET_IQ>=2): スパイク/緩い返し/遠い山なりの3候補の着弾点を計算し、
+# 空中の配球(TARGET_IQ>=2): スパイク3方向と安全返球の着弾点を計算し、
 # 相手2人から最も遠い所へ落ちる打ち方を選ぶ。「反応でなく判断で強い」の芯
 static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 	var dir: int = 1 if team == 0 else -1
 	var target_y: int = cfg.floor_y - cfg.ball_radius
-	# 候補: [入力ビット, vx, vy]。後ろ/なし/前を敵陣の前面/中央/後面へ対応させる。
+	# 候補: [入力ビット, vx, vy]。スパイクの後ろ/なし/前は従来の3着弾点を保つ。
 	var cands: Array = []
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	var back_key: int = SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
@@ -530,15 +530,13 @@ static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
 			var relative: int = 1 if row[0] == fwd_key else (-1 if row[0] == back_key else 0)
 			var spike_vx: int = HitResolver.toss_aim_vx(
 				s.ball_x, s.ball_y, spike_vy,
-				HitResolver.air_target_x(team, relative * dir, cfg), cfg)
+				HitResolver.spike_target_x(team, relative * dir, cfg), cfg)
 			cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | row[0],
 				spike_vx - rvx, spike_vy - rvy, true])
-	for key in [back_key, 0, fwd_key]:
-		var toss_vy: int = -cfg.toss_fwd_vy
-		var relative: int = 1 if key == fwd_key else (-1 if key == back_key else 0)
-		var toss_vx: int = HitResolver.toss_aim_vx(s.ball_x, s.ball_y, toss_vy,
-			HitResolver.air_target_x(team, relative * dir, cfg), cfg)
-		cands.append([SimInput.IN_ACTION | key, toss_vx, toss_vy, false])
+	var toss_vy: int = -cfg.toss_fwd_vy
+	var toss_vx: int = HitResolver.opponent_return_vx(
+		s.ball_x, s.ball_y, s.ball_vx, team, p.char_id, cfg)
+	cands.append([SimInput.IN_ACTION, toss_vx, toss_vy, false])
 	var best_input: int = SimInput.IN_ACTION
 	var best_score: int = -1
 	var best_is_attack := false

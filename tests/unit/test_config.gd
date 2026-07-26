@@ -120,15 +120,14 @@ func test_m1a_keys_loaded() -> void:
 	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
 	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
 	# 2026-07-26: 原作どおり壁際(ボール1個ぶん内側=14)にする決定はあるが、
-	# 14にするとCPUのサーブがネットを越えなくなることを実測したため第2段へ送った。
-	# 経緯は docs/superpowers/specs/2026-07-26-return-over-net-design.md 6.3。
-	check_eq(cfg.serve_line, FP.from_int(31), "サーブ位置(第2段で14へ下げる予定)")
+	# 14にするとCPUのアタックサーブがネットに当たる。原因はスパイクの横速度が
+	# 打つ位置で決まる作りにあり、先に 2026-07-26-spike-fixed-velocity-design.md を
+	# 入れる必要がある。経緯は 2026-07-26-return-over-net-design.md 6.3。
+	check_eq(cfg.serve_line, FP.from_int(31), "サーブ位置(スパイク修正後に14へ下げる)")
 	check_eq(cfg.spawn_back_px, 72, "spawn_back_px")
 	check_eq(cfg.spawn_front_px, 202, "spawn_front_px")
 	check_eq(cfg.toss_zone_back_px, 136, "自陣後方トスは原作位置")
 	check_eq(cfg.toss_zone_front_px, 248, "自陣前方トスは原作位置")
-	check_eq(cfg.opponent_toss_zone_front_px, 374, "敵陣前方ゾーン")
-	check_eq(cfg.opponent_toss_zone_back_px, 504, "敵陣後方ゾーン")
 
 func test_values_are_int() -> void:
 	var cfg = SimConfig.new()
