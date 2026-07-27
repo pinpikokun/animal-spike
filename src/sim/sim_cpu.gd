@@ -6,13 +6,14 @@
 # プレイヤーごとにstate.players[i].cpu(8bit x 7欄)で強さの次元を個別に持つ:
 #   能力フラグ(戦略層) + 反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ(反応・実行層)
 # 憲法: 相手チームの入力・照準は読まない(観測可能な物理状態のみ)。物理性能は強化しない。
-# 乱数は逐次PRNG禁止、stateless keyed hash(salt+last_hit_tick+actor)のみ。
-# 確率は「タッチ1回につき1抽選」(last_hit_tickがタッチ毎に変わりタッチ間は不変であることを利用)
+# 乱数は逐次PRNG禁止、stateless keyed hashのみ。
+# 通常抽選はlast_hit_tickで「タッチ1回につき1抽選」、役割抽選はrally_seqでラリー中不変。
 extends RefCounted
 
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
@@ -53,6 +54,8 @@ const P_TIQ := 48    # 配球知能(0=そのまま返す..3=相手から遠い�
 const SALT_AIM := 1
 const SALT_MISS := 2
 const SALT_SWEET := 3
+# 本体では未使用。テストが成功するキーを探してlast_hit_tickを固定するために使う。
+# 削除すると他saltの出目も変わるため#86では維持し、初期乱数状態を直接与える是正は#88で行う。
 const SALT_RECEIVE := 4
 const SALT_SUPER := 5
 const SALT_ATTACK := 6
@@ -101,15 +104,11 @@ static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
 static func prof_byte(profile: int, shift: int) -> int:
 	return (profile >> shift) & 0xFF
 
-# stateless keyed hash。キーの主軸はlast_hit_tick(タッチ毎に変わりタッチ間は不変)なので
-# 「タッチ1回につき1抽選」が構造的に保証される。負数はマスクで排除
+# 共通混合式への互換入口。keyの意味は呼び出し側が決める。
 static func _noise(salt: int, key: int, actor: int) -> int:
-	var z: int = key + salt * 1000003 + actor * 998244353
-	z = (z ^ (z >> 16)) * 2246822519
-	z = (z ^ (z >> 13)) * 3266489917
-	z = z ^ (z >> 16)
-	return z & 0x7FFFFFFFFFFFFFFF
+	return SimRng.keyed_hash(key, salt, actor)
 
+# last_hit_tickはタッチ毎に変わりタッチ間は不変なので、1タッチにつき1抽選になる。
 static func _roll(salt: int, s, actor: int) -> int:
 	return _noise(salt, s.last_hit_tick, actor)
 

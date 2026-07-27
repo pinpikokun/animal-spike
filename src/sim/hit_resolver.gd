@@ -4,6 +4,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
@@ -643,13 +644,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	s.last_touch_idx = i
 	_advance_cpu_positioning_after_hit(s)
 
-# ばらつき用の決定論乱数: stateless keyed hash(sim_cpuと同方式)。-100..100を返す。
-# キーはヒット確定tick+actor+salt=1ヒットにつき1抽選、両ピア同値、ロールバック再現
+# ヒット解決側のフレーム単位の決定論乱数。s.tickは原作のRND系列に対応する。
+# actor + 1の補正を維持し、両ピア同値かつロールバック再現可能にする。
 static func _keyed_hash(s, actor: int, salt: int) -> int:
-	var z: int = s.tick + salt * 1000003 + (actor + 1) * 998244353
-	z = (z ^ (z >> 16)) * 2246822519
-	z = (z ^ (z >> 13)) * 3266489917
-	return (z ^ (z >> 16)) & 0x7FFFFFFFFFFFFFFF
+	return SimRng.keyed_hash(s.tick, salt, actor + 1)
 
 static func _scatter(s, actor: int, salt: int) -> int:
 	return _keyed_hash(s, actor, salt) % 201 - 100
