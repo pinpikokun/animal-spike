@@ -27,11 +27,11 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != d.state_hash(), "回復ディレイ差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick + rng + aitick(3) + プレイヤー4体x36(回復ディレイを含む)
+	# tick + rng + aitick + role roll 2チーム分(5) + プレイヤー4体x36(回復ディレイを含む)
 	# + 全体37(CPU打球回数/後衛役を含む) + エンティティ8スロットx8欄
-	# 3 + 4x36 + 37 + 8x8 = 248
-	# 先頭の3は tick + rng + aitick。STATE-001でrngとaitickをtickの直後に置くため
-	check_eq(SimState.new().to_int_array().size(), 248,
+	# 5 + 4x36 + 37 + 8x8 = 250
+	# 先頭の5は tick + rng + aitick + rally_role_roll_team0 + rally_role_roll_team1
+	check_eq(SimState.new().to_int_array().size(), 250,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:

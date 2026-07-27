@@ -23,11 +23,14 @@ func _select_successful_roll(s, actor: int, salt: int, threshold: int) -> void:
 			return
 
 func _set_rally_attacker(s, idx: int) -> void:
-	for seq in 1000:
-		s.rally_seq = seq
-		if SimCpu._is_rally_attacker(s, idx):
-			return
-	check(false, "狙ったアタッカー役になるrally_seqが見つかる")
+	var team: int = idx / 2
+	var role_roll: int = 0 if idx % 2 == 0 else 2
+	if team == 0:
+		s.rally_role_roll_team0 = role_roll
+	else:
+		s.rally_role_roll_team1 = role_roll
+	check(SimCpu._is_rally_attacker(s, idx),
+		"分岐表の保存rollで指定slotがアタッカー役になる")
 
 func _air_attack_world(char_id: int, profile: int) -> Array:
 	var w := _world()

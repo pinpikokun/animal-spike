@@ -12,6 +12,9 @@ static func advance_hit(aitick: int, rng: int) -> int:
 static func advance_role_swap(aitick: int) -> int:
 	return (aitick + 1) & WORD_MASK
 
+static func advance_role_roll(rng: int) -> int:
+	return (rng * 2 + 1) & WORD_MASK
+
 static func keyed_hash(key: int, salt: int, actor_term: int) -> int:
 	var z: int = key + salt * 1000003 + actor_term * 998244353
 	z = (z ^ (z >> 16)) * 2246822519

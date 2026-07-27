@@ -383,6 +383,10 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.touches = 0
 	s.last_touch_team = -1
 	s.rally_seq += 1
+	s.rng = SimRng.advance_role_roll(s.rng)
+	s.rally_role_roll_team0 = s.rng % 9
+	s.rng = SimRng.advance_role_roll(s.rng)
+	s.rally_role_roll_team1 = s.rng % 9
 	s.last_touch_idx = -1
 	s.timer = cfg.serve_delay_ticks
 	s.ball_vx = 0

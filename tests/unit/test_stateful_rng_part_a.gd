@@ -15,12 +15,6 @@ func _match(seed: int = 0) -> Array:
 	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, seed)
 	return [s, cfg]
 
-func _gameplay_snapshot(s) -> Array[int]:
-	var out: Array[int] = s.to_int_array()
-	out[1] = 0
-	out[2] = 0
-	return out
-
 func _prepare_ground_hit(s, cfg) -> void:
 	s.phase = SimState.PHASE_RALLY
 	var p = s.players[0]
@@ -68,21 +62,29 @@ func test_rng_fields_roundtrip_and_affect_hash() -> void:
 	check(rng_changed.state_hash() != base.state_hash(), "rngが同期ハッシュへ入る")
 	check(aitick_changed.state_hash() != base.state_hash(), "aitickが同期ハッシュへ入る")
 
-func test_reset_match_seeds_both_words_and_reset_rally_preserves_them() -> void:
+func test_reset_match_seeds_both_words_and_reset_rally_advances_rng_only() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0x12345)
-	check_eq(s.rng, 0x2345, "reset_matchでrngを16bit seedへ初期化")
+	var initial_step1: int = SimRng.advance_role_roll(0x2345)
+	var initial_step2: int = SimRng.advance_role_roll(initial_step1)
+	check_eq(s.rng, initial_step2,
+		"reset_matchは16bit seedから初回ラリー役割を2回抽選")
 	check_eq(s.aitick, 0x2345, "reset_matchでaitickを同じseedへ初期化")
 
 	s.rng = 0x1111
 	s.aitick = 0x2222
+	var rally_step1: int = SimRng.advance_role_roll(0x1111)
+	var rally_step2: int = SimRng.advance_role_roll(rally_step1)
 	Simulation.reset_rally(s, cfg, 1)
-	check_eq(s.rng, 0x1111, "reset_rallyはrngを維持")
+	check_eq(s.rng, rally_step2, "reset_rallyはrngを役割抽選2回分だけ進める")
 	check_eq(s.aitick, 0x2222, "reset_rallyはaitickを維持")
 
 	Simulation.reset_match(s, cfg, 1, Chars.ROSTER, -1)
-	check_eq(s.rng, 0xFFFF, "次の試合だけrngを再初期化")
+	var next_match_step1: int = SimRng.advance_role_roll(0xFFFF)
+	var next_match_step2: int = SimRng.advance_role_roll(next_match_step1)
+	check_eq(s.rng, next_match_step2,
+		"次の試合だけrng系列を新しい16bit seedから再開")
 	check_eq(s.aitick, 0xFFFF, "次の試合だけaitickを再初期化")
 
 func test_tick_advances_only_rng_once_during_normal_freeze_and_slow_ticks() -> void:
@@ -149,25 +151,51 @@ func test_hit_and_role_swap_update_aitick_in_fixed_order() -> void:
 	check_eq(role_swap[0].aitick, 31, "打球加算の後に役割周期の+1を1回")
 	check_eq(role_swap[0].cpu_back_role_mask, 0xF, "両CPUチームの位置取り役を入れ替える")
 
-func test_rng_scaffold_keeps_cpu_inputs_and_gameplay_state_seed_independent() -> void:
-	var cfg = SimConfig.new()
-	var a = SimState.new()
-	var b = SimState.new()
-	Simulation.reset_match(a, cfg, 0, Chars.ROSTER, 0x0000)
-	Simulation.reset_match(b, cfg, 0, Chars.ROSTER, 0xFFFF)
-	a.controlled_l = 1
-	b.controlled_l = 1
-	a.controlled_r = 1
-	b.controlled_r = 1
+func test_reset_rally_consumes_two_role_rolls_in_team_order() -> void:
+	var w := _match(0x1234)
+	var s = w[0]
+	var cfg = w[1]
+	var before: int = s.rng
+	var expected_team0_rng: int = SimRng.advance_role_roll(before)
+	var expected_team1_rng: int = SimRng.advance_role_roll(expected_team0_rng)
+	var expected_after_three: int = SimRng.advance_role_roll(expected_team1_rng)
 
-	for t in 120:
-		var cpu_a: Array[int] = []
-		var cpu_b: Array[int] = []
-		for i in SimState.PLAYER_COUNT:
-			cpu_a.append(SimCpu.decide(a, i, cfg))
-			cpu_b.append(SimCpu.decide(b, i, cfg))
-		check_eq(cpu_a, cpu_b, "seed差でCPU入力を変えない tick=%d" % t)
-		Simulation.tick(a, [0, 0], cfg)
-		Simulation.tick(b, [0, 0], cfg)
-		check_eq(_gameplay_snapshot(a), _gameplay_snapshot(b),
-			"seed差で既存ゲーム状態を変えない tick=%d" % t)
+	Simulation.reset_rally(s, cfg, 1)
+
+	check_eq(s.rng, expected_team1_rng, "reset_rallyはrngを正確に2回進める")
+	check(s.rng != expected_team0_rng, "rngの1回消費を拒否")
+	check(s.rng != expected_after_three, "rngの3回消費を拒否")
+	check_eq(s.rally_role_roll_team0, expected_team0_rng % 9,
+		"team0は1回目の更新値を使う")
+	check_eq(s.rally_role_roll_team1, expected_team1_rng % 9,
+		"team1は2回目の更新値を使う")
+	check(s.rally_role_roll_team0 != s.rally_role_roll_team1,
+		"2チームのrollを同じ値へ固定しない")
+
+func test_role_rolls_roundtrip_and_rollback_restore() -> void:
+	var w := _match(0x1234)
+	var s = w[0]
+	var cfg = w[1]
+	var saved: Array[int] = s.to_int_array().duplicate()
+	var saved_hash: int = s.state_hash()
+	var saved_rng: int = s.rng
+	var saved_aitick: int = s.aitick
+	var saved_rally_seq: int = s.rally_seq
+	var saved_team0: int = s.rally_role_roll_team0
+	var saved_team1: int = s.rally_role_roll_team1
+
+	Simulation.reset_rally(s, cfg, 1)
+	s.load_int_array(saved)
+
+	check_eq(s.rng, saved_rng, "ロールバックでrngを復元")
+	check_eq(s.aitick, saved_aitick, "ロールバックでaitickを復元")
+	check_eq(s.rally_seq, saved_rally_seq, "ロールバックでrally_seqを復元")
+	check_eq(s.rally_role_roll_team0, saved_team0, "ロールバックでteam0 roleを復元")
+	check_eq(s.rally_role_roll_team1, saved_team1, "ロールバックでteam1 roleを復元")
+	check_eq(s.state_hash(), saved_hash, "ロールバックで同期ハッシュを復元")
+
+	var restored = SimState.new()
+	restored.load_int_array(saved)
+	check_eq(restored.rally_role_roll_team0, saved_team0, "別状態へteam0 roleを復元")
+	check_eq(restored.rally_role_roll_team1, saved_team1, "別状態へteam1 roleを復元")
+	check_eq(restored.state_hash(), saved_hash, "別状態への復元でも同期ハッシュ一致")

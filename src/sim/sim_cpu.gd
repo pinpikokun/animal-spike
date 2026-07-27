@@ -59,6 +59,7 @@ const SALT_SWEET := 3
 const SALT_RECEIVE := 4
 const SALT_SUPER := 5
 const SALT_ATTACK := 6
+# unused now that role lottery moved to the new stateful method
 const SALT_ROLE := 7
 
 const WAIT_PHASE_COUNT := 9
@@ -112,11 +113,12 @@ static func _noise(salt: int, key: int, actor: int) -> int:
 static func _roll(salt: int, s, actor: int) -> int:
 	return _noise(salt, s.last_hit_tick, actor)
 
-# ラリー番号とチームだけから役を引く。状態には保存せず、同じラリー中は常に同じ役。
+# ラリー開始時に保存したチーム別role rollを読む。同じラリー中は常に同じ役。
 static func _is_rally_attacker(s, idx: int) -> bool:
 	var team: int = idx / 2
 	var slot: int = idx % 2
-	var role_roll: int = _noise(SALT_ROLE, s.rally_seq, team) % 9
+	var role_roll: int = s.rally_role_roll_team0 \
+		if team == 0 else s.rally_role_roll_team1
 	match role_roll:
 		0, 1, 5, 8:
 			return slot == 0
@@ -126,7 +128,8 @@ static func _is_rally_attacker(s, idx: int) -> bool:
 static func _is_rally_blocker(s, idx: int) -> bool:
 	var team: int = idx / 2
 	var slot: int = idx % 2
-	var role_roll: int = _noise(SALT_ROLE, s.rally_seq, team) % 9
+	var role_roll: int = s.rally_role_roll_team0 \
+		if team == 0 else s.rally_role_roll_team1
 	match role_roll:
 		0, 2, 5, 8:
 			return true

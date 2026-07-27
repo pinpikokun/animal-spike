@@ -70,6 +70,8 @@ class Player:
 var tick: int = 0
 var rng: int = 0
 var aitick: int = 0
+var rally_role_roll_team0: int = 0
+var rally_role_roll_team1: int = 0
 var players: Array[Player] = []
 var ball_x: int = 0
 var ball_y: int = 0
@@ -140,7 +142,9 @@ func _init() -> void:
 		entities.append(Ent.new())
 
 func to_int_array() -> Array[int]:
-	var out: Array[int] = [tick, rng, aitick]
+	var out: Array[int] = [
+		tick, rng, aitick, rally_role_roll_team0, rally_role_roll_team1,
+	]
 	for p in players:
 		out.append(p.char_id)
 		out.append(p.x)
@@ -232,6 +236,8 @@ func load_int_array(arr: Array) -> void:
 	tick = arr[k]; k += 1
 	rng = arr[k]; k += 1
 	aitick = arr[k]; k += 1
+	rally_role_roll_team0 = arr[k]; k += 1
+	rally_role_roll_team1 = arr[k]; k += 1
 	for p in players:
 		p.char_id = arr[k]; k += 1
 		p.x = arr[k]; k += 1

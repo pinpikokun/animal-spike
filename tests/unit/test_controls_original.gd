@@ -122,13 +122,9 @@ func test_cpu_emits_new_toss_receive_and_block_inputs() -> void:
 	attacker.y = p.y
 	s.ball_x = attacker.x
 	s.ball_y = attacker.y
-	var blocker_role_found := false
-	for seq in 1000:
-		s.rally_seq = seq
-		if SimCpu._is_rally_blocker(s, 1):
-			blocker_role_found = true
-			break
-	check(blocker_role_found, "空中CPUがブロッカー役になるrally_seqが見つかる")
+	s.rally_role_roll_team0 = 0
+	check(SimCpu._is_rally_blocker(s, 1),
+		"roll=0の両者ブロッカー枝で空中CPUがブロッカー役になる")
 	var block_input: int = SimCpu._decide_block(
 		s, 1, p, cfg, 0, SimCpu.AB_BLOCK, 0)
 	check(block_input & SimInput.IN_ACTION, "空中CPUブロックはボタンを押す")
