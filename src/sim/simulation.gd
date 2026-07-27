@@ -5,6 +5,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const SimRng := preload("res://src/sim/sim_rng.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
@@ -82,6 +83,7 @@ static func team_of(i: int) -> int:
 # 公開API: チーム単位入力(人間2系統)から各プレイヤー入力を組み立てて1tick進める
 # CPU相方の入力はsim_cpu.gdが決定論的に生成する
 static func tick(state, team_inputs: Array[int], cfg) -> void:
+	state.rng = SimRng.advance_frame(state.rng, state.aitick)
 	var in_l: int = team_inputs[0] if team_inputs.size() > 0 else 0
 	var in_r: int = team_inputs[1] if team_inputs.size() > 1 else 0
 	_handle_switch(state, in_l, in_r)
@@ -429,7 +431,8 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	srv.hit_cooldown = 0
 	_hold_ball_on_server(s, cfg)
 
-static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER) -> void:
+static func reset_match(s, cfg, serving_team: int,
+		roster: Array = Chars.ROSTER, seed: int = 0) -> void:
 	# 試合開始時のみキャラを初期配置に置く。rosterは試合セットアップの一部
 	# (ネット対戦では開始時に両者で同じ配列を渡すこと=決定論安全)
 	var back: int = FP.from_int(cfg.spawn_back_px)
@@ -468,6 +471,9 @@ static func reset_match(s, cfg, serving_team: int, roster: Array = Chars.ROSTER)
 	s.last_touch_idx = -1
 	s.cpu_hit_count = 0
 	s.cpu_back_role_mask = SimCpu._back_role_mask_from_positions(s)
+	var word_seed: int = SimRng.normalize_word(seed)
+	s.rng = word_seed
+	s.aitick = word_seed
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

@@ -68,6 +68,8 @@ class Player:
 	var cpu: int = 848543938510975
 
 var tick: int = 0
+var rng: int = 0
+var aitick: int = 0
 var players: Array[Player] = []
 var ball_x: int = 0
 var ball_y: int = 0
@@ -106,7 +108,7 @@ var last_touch_team: int = -1
 var human_team_mask: int = 0  # bit0=team0、bit1=team1に人間がいる
 var rally_seq: int = 0  # 試合内のラリー通し番号
 var last_touch_idx: int = -1  # 最後に打球したplayer index。未接触は-1
-var cpu_hit_count: int = 0  # CPU位置取りの位相を進める打球回数。原作aitick相当
+var cpu_hit_count: int = 0  # CPU位置取りの入替周期だけを進める打球回数
 var cpu_back_role_mask: int = 0  # bit i=1ならplayer iが後衛。打球間は役を保持
 var timer: int = 0
 var controlled_l: int = 0
@@ -138,7 +140,7 @@ func _init() -> void:
 		entities.append(Ent.new())
 
 func to_int_array() -> Array[int]:
-	var out: Array[int] = [tick]
+	var out: Array[int] = [tick, rng, aitick]
 	for p in players:
 		out.append(p.char_id)
 		out.append(p.x)
@@ -228,6 +230,8 @@ func load_int_array(arr: Array) -> void:
 	# to_int_arrayの逆。順序を変えるときは必ず両方同時に変える
 	var k := 0
 	tick = arr[k]; k += 1
+	rng = arr[k]; k += 1
+	aitick = arr[k]; k += 1
 	for p in players:
 		p.char_id = arr[k]; k += 1
 		p.x = arr[k]; k += 1

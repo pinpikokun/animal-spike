@@ -78,8 +78,15 @@ and the finding side by side and judge them together.
 
 ## Golden hash: one green tree, one reason, one commit
 
-The combined golden hash is only evidence if you can point at the tree it came
-from. On 2026-07-27 that trace was lost: two updates were written into a single
+**"The golden hash" is not one test.** Several tests pin `state_hash()` —
+`test_sync.gd.test_golden_hash_regression` and
+`test_refactor_characterization.gd.test_hit_chain_second_golden` at least. Change
+the shape of `SimState` and they all move at once. That is not a rule violation;
+it is the same cause reaching every pin. Re-take them together in one commit,
+**after** confirming they share one cause and that nothing else is red.
+
+A golden hash is only evidence if you can point at the tree it came from. On
+2026-07-27 that trace was lost: two updates were written into a single
 uncommitted hunk on a tree that still held a broken feature, and the value ended
 up in no commit at all (`git log --all -S<value>` returned zero). It had to be
 retaken and the old value declared void. Rules, so it does not happen twice:

@@ -110,7 +110,15 @@ const TICKS := 3600
 # 可能性を排除できない。
 # #102・CPUサーブ打点上昇・CPU反応遅延だけを残し、ゴールデン以外432/432緑を
 # 確認した状態の実測値を、新しい追跡可能な基準とする。
-const GOLDEN_COMBINED_HASH := 6286455164936831101
+# 2026-07-28 (第8回) #88a で SimState へ rng と aitick を追加したため更新。実測値。
+# 状態の形が変わればこの値は必ず動く。ゲームプレイ判断は変えていない。
+# 440本中、状態ハッシュを固定するこの検査と test_hit_chain_second_golden の
+# 2本だけが赤で、残り438本は緑だった。とくに双子検査
+# (test_rng_scaffold_keeps_cpu_inputs_and_gameplay_state_seed_independent) が緑で、
+# seed を 0x0000 と 0xFFFF に分けた120tickでCPU入力列と全状態が一致している
+# =seed差がゲームプレイへ漏れていない。既存の抽選は1つも新状態を読んでいない。
+# #88b で抽選の乱数源を切り替えるとき、もう1回だけ更新する予定。
+const GOLDEN_COMBINED_HASH := 662244764542134062
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
