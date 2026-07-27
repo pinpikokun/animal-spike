@@ -16,6 +16,48 @@ func _world() -> Array:
 		STANDARD_CHAR, STANDARD_CHAR])
 	return [s, cfg]
 
+func _cpu_jump_serve_result(cfg, score_l: int, score_r: int,
+		serving_team: int, receiver_formation: int) -> Array[int]:
+	var s = SimState.new()
+	var roster: Array[int] = [
+		STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR,
+	]
+	roster[serving_team * 2] = Chars.CHAR_CARBY
+	Simulation.reset_match(s, cfg, serving_team, roster)
+	s.score_l = score_l
+	s.score_r = score_r
+	if serving_team == 0:
+		s.controlled_l = 1
+	else:
+		s.controlled_r = 1
+	var receiver_team: int = 1 - serving_team
+	var left_front: int = FP.from_int(cfg.spawn_front_px)
+	var left_back: int = FP.from_int(cfg.spawn_back_px)
+	var receiver_front: int = left_front if receiver_team == 0 \
+		else cfg.court_width - left_front
+	var receiver_back: int = left_back if receiver_team == 0 \
+		else cfg.court_width - left_back
+	var receiver_positions: Array[int]
+	if receiver_formation == 0:
+		receiver_positions = [receiver_front, receiver_front]
+	elif receiver_formation == 1:
+		receiver_positions = [receiver_back, receiver_back]
+	else:
+		receiver_positions = [receiver_front, receiver_back]
+	for i in cfg.serve_delay_ticks + 180:
+		for slot in 2:
+			var receiver = s.players[receiver_team * 2 + slot]
+			receiver.x = receiver_positions[slot]
+		Simulation.tick(s, [0, 0], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			var land: int = SimCpu._land_x_from(
+				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
+				cfg.floor_y - cfg.ball_radius, 3)
+			var clears_net: int = 1 if SimCpu._clears_net(
+				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg) else 0
+			return [land, clears_net]
+	return []
+
 func test_cpu_chases_ball_on_own_side() -> void:
 	var w := _world()
 	var s = w[0]
@@ -111,6 +153,32 @@ func test_cpu_serve_crosses_net() -> void:
 			break
 	check(crossed, "CPUのサーブがネットを越え相手コートへ渡る(自滅しない)")
 
+func test_cpu_jump_serve_strikes_in_upper_reach() -> void:
+	# 最大到達帯の上半分で打つ。旧「トスと同時に跳ぶ」はCARBYでここを下回る。
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	Simulation.reset_match(s, cfg, 0, [Chars.CHAR_CARBY, STANDARD_CHAR,
+		STANDARD_CHAR, STANDARD_CHAR])
+	s.controlled_l = 1
+	var served := false
+	var strike_y: int = cfg.floor_y
+	for i in cfg.serve_delay_ticks + 180:
+		var ball_y_before_tick: int = s.ball_y
+		Simulation.tick(s, [0, 0], cfg)
+		if s.phase == SimState.PHASE_RALLY:
+			served = true
+			strike_y = ball_y_before_tick
+			break
+	check(served, "CPUがジャンプサーブを打つ")
+	var p = s.players[0]
+	var jump_height: int = FP.from_int(Chars.Profile.jump_height_px(
+		Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)))
+	var upper_reach_floor: int = jump_height + cfg.player_reach / 2
+	check(cfg.floor_y - strike_y > upper_reach_floor,
+		"サーブ打点が最大到達帯の上半分: %dpx > %dpx" % [
+			FP.to_int(cfg.floor_y - strike_y), FP.to_int(upper_reach_floor)])
+
 func test_cpu_serve_crosses_net_right_team() -> void:
 	# 右チーム(serving_team=1)のCPUサーブも鏡像でネットを越え左コートへ渡る
 	# (_serve_xやトス方向の符号ミスをゴールデンハッシュ頼みにしない直接検証)
@@ -137,6 +205,21 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 		if s.phase != SimState.PHASE_RALLY:
 			break
 	check(crossed, "右CPUのサーブがネットを越え左コートへ渡る")
+
+func test_cpu_jump_serve_all_variations_clear_net() -> void:
+	var cfg = SimConfig.new()
+	for serving_team in 2:
+		for score_l in cfg.points_to_win:
+			for score_r in cfg.points_to_win:
+				for formation in 3:
+					var result: Array[int] = _cpu_jump_serve_result(
+						cfg, score_l, score_r, serving_team, formation)
+					check_eq(result.size(), 2,
+						"全得点・全配置でCPUジャンプサーブが成立する")
+					if result.size() != 2:
+						continue
+					check_eq(result[1], 1,
+						"全得点・全配置でCPUジャンプサーブがネットを越える")
 
 func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, tiq := 0) -> int:
 	# テスト用: 誤差・ミス・遅延のない純粋な能力プロファイル(既定)
@@ -305,9 +388,9 @@ func test_cpu_jumps_for_own_toss_with_cpu_mate() -> void:
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(127, 13, 15, 13, 153, 2, 2)
+	var prof: int = SimCpu.make_profile(127, 6, 15, 13, 153, 2, 2)
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 127, "能力")
-	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 13, "遅延")
+	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 6, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_MISS), 13, "ミス率")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_SWEET), 153, "ジャスト率")

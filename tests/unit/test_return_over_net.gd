@@ -14,6 +14,11 @@ const NEAREST_HIT_D_PX := 40
 const GROUND_HIT_H_PX := 20
 
 
+func _fast_incoming_vx(cfg) -> int:
+	var standard_spike_vx: int = cfg.spike_vx * cfg.spike_normal_pct / 100
+	return maxi(standard_spike_vx, cfg.serve_power)
+
+
 func _descending_samples(high: int, low: int) -> Array[int]:
 	var result: Array[int] = []
 	var value: int = high
@@ -73,7 +78,7 @@ func test_every_return_sample_lands_cleanly_in_opponent_court() -> void:
 		FARTHEST_HIT_D_PX, NEAREST_HIT_D_PX)
 	var highest_h: int = Chars.Profile.jump_height_px(Chars.Profile.RANK_A)
 	var heights: Array[int] = _ascending_samples(GROUND_HIT_H_PX, highest_h)
-	var incoming_max: int = maxi(cfg.spike_vx, cfg.serve_power)
+	var incoming_max: int = _fast_incoming_vx(cfg)
 	var incoming_speeds: Array[int] = [-incoming_max, 0, incoming_max]
 	var traits: Array[int] = [
 		Chars.CHAR_MARIO,
@@ -115,7 +120,7 @@ func test_opponent_return_is_deterministic() -> void:
 	var cfg = SimConfig.new()
 	var start_x: int = cfg.net_x - FP.from_int(120)
 	var start_y: int = cfg.floor_y - FP.from_int(80)
-	var incoming_vx: int = -maxi(cfg.spike_vx, cfg.serve_power)
+	var incoming_vx: int = -_fast_incoming_vx(cfg)
 	var first: int = HitResolver.opponent_return_vx(
 		start_x, start_y, incoming_vx, 0, Chars.CHAR_PANDA, cfg)
 	var second: int = HitResolver.opponent_return_vx(
@@ -135,7 +140,7 @@ func test_air_toss_uses_same_opponent_return_formula() -> void:
 		p.y = cfg.floor_y - FP.from_int(80)
 		s.ball_x = cfg.net_x - dir * FP.from_int(120)
 		s.ball_y = p.y
-		s.ball_vx = -dir * maxi(cfg.spike_vx, cfg.serve_power)
+		s.ball_vx = -dir * _fast_incoming_vx(cfg)
 		var expected_vx: int = HitResolver.opponent_return_vx(
 			s.ball_x, s.ball_y, s.ball_vx, team, p.char_id, cfg)
 		HitResolver._apply_hit(s, actor, cfg, SimInput.IN_ACTION, 0)
@@ -154,7 +159,7 @@ func test_ground_opponent_return_ignores_mangled_aim_reduction() -> void:
 	s.ball_power = 1
 	s.ball_x = cfg.net_x - FP.from_int(120)
 	s.ball_y = cfg.floor_y - FP.from_int(20)
-	s.ball_vx = -maxi(cfg.spike_vx, cfg.serve_power)
+	s.ball_vx = -_fast_incoming_vx(cfg)
 	var expected_vx: int = HitResolver.opponent_return_vx(
 		s.ball_x, s.ball_y, s.ball_vx, 0, p.char_id, cfg)
 	HitResolver._apply_hit(
@@ -170,7 +175,7 @@ func test_toss_good_and_bad_land_differently_but_both_stay_in() -> void:
 	var cfg = SimConfig.new()
 	var start_x: int = cfg.ball_radius
 	var start_y: int = cfg.floor_y - FP.from_int(20)
-	var incoming_vx: int = maxi(cfg.spike_vx, cfg.serve_power)
+	var incoming_vx: int = _fast_incoming_vx(cfg)
 	var good_vx: int = HitResolver.opponent_return_vx(
 		start_x, start_y, incoming_vx, 0, Chars.CHAR_MARIO, cfg)
 	var bad_vx: int = HitResolver.opponent_return_vx(

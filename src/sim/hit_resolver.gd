@@ -563,8 +563,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
 		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
-		# 打ち分け: 下のみ=鋭角(手前に鋭く落ちる。近距離でないと自陣落ちのリスク)、
-		# 下+横=緩角(遠くまで届くが軌道が浅く取られやすい)。飛ぶ向きは常にネット方向。
+		# 打ち分け: ネット逆方向=遅く急、横なし=中間、ネット方向=速く浅い。
+		# 横速度は入力ごとの固定値で、飛ぶ向きは常にネット方向。
 		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
@@ -594,13 +594,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		var svy: int
 		var relative_hdir: int = hdir * dir
 		if relative_hdir < 0:
+			svx = dir * cfg.spike_steep_vx * pct / 100
 			svy = cfg.spike_steep_vy * pct / 100
 		elif relative_hdir > 0:
+			svx = dir * cfg.spike_vx * pct / 100
 			svy = cfg.spike_vy * pct / 100
 		else:
+			svx = dir * cfg.spike_mid_vx * pct / 100
 			svy = (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200
-		svx = toss_aim_vx(s.ball_x, s.ball_y, svy,
-			spike_target_x(team, hdir, cfg), cfg)
 		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
 		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		if special == Chars.SUPER_FLAME_ATTACK:

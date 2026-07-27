@@ -22,6 +22,15 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.spike_power_pct, 40, "ジャストアタック速度40%(パワーC基準)")
 	check_eq(cfg.spike_sweet_pct, 45, "ジャスト判定はリーチ45%以内")
 
+func test_spike_horizontal_speed_rules_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.spike_steep_vx, FP.from_int(1554) / cfg.tick_rate,
+		"ネット逆方向のスパイク設定値1554px/s")
+	check_eq(cfg.spike_mid_vx, FP.from_int(2331) / cfg.tick_rate,
+		"中央のスパイク設定値2331px/s")
+	check_eq(cfg.spike_vx, FP.from_int(2720) / cfg.tick_rate,
+		"ネット方向のスパイク設定値2720px/s")
+
 func test_receive_rules_loaded() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.receive_offset_gain_pct, 100, "レシーブ接触オフセット倍率100%")

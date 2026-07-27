@@ -65,7 +65,7 @@ class Player:
 	var quake_stun: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
-	var cpu: int = 848543938514047
+	var cpu: int = 848543938510975
 
 var tick: int = 0
 var players: Array[Player] = []

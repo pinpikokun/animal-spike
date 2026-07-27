@@ -44,9 +44,10 @@ var hit_inertia_just_num: int  # ジャストミート時の慣性(芯で捉え�
 # 支配権切替: この速さ未満の緩い球は慣性ゼロ=完全に狙い通り打てる
 # (リアルバレー準拠: 強打はぎりぎり捕球で流されるが、緩球は自分の支配下)
 var inertia_min_speed: int
-var spike_vx: int        # 緩角スパイク(下+横): 遠くへ低く=後面狙い
+var spike_vx: int        # ネット方向入力のスパイク横速度(倍率適用前)
 var spike_vy: int
-var spike_steep_vx: int  # 鋭角スパイク(下のみ): 手前へ鋭く=前面狙い
+var spike_mid_vx: int    # 横入力なしのスパイク横速度(倍率適用前)
+var spike_steep_vx: int  # ネット逆方向入力のスパイク横速度(倍率適用前)
 var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_normal_pct: int  # 通常アタックの速度倍率(%)
@@ -149,6 +150,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	inertia_min_speed = FP.from_int(_int_of(raw, "inertia_min_speed_px_s")) / tick_rate
 	spike_vx = FP.from_int(_int_of(raw, "spike_vx_px_s")) / tick_rate
 	spike_vy = FP.from_int(_int_of(raw, "spike_vy_px_s")) / tick_rate
+	spike_mid_vx = FP.from_int(_int_of(raw, "spike_mid_vx_px_s")) / tick_rate
 	spike_steep_vx = FP.from_int(_int_of(raw, "spike_steep_vx_px_s")) / tick_rate
 	spike_steep_vy = FP.from_int(_int_of(raw, "spike_steep_vy_px_s")) / tick_rate
 	spike_sweet_pct = _int_of(raw, "spike_sweet_pct")

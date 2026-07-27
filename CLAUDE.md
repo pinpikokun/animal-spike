@@ -1,115 +1,101 @@
 # Animal Spike Claude Code instructions
 
-Before starting work, read `docs/project-memory.md` and the relevant files in
-`docs/superpowers/specs/`.
+Remake of the PC-98 freeware "VOLLEY BALL 2on2".
+Disassembly: `C:\work\PC98\vb2211-analysis\`.
 
-## Role split: Claude Code directs, Codex implements
+## Before starting
 
-- Claude Code is the director. Understand the request, decide the approach,
-  write the task contract, and verify the result.
-- Delegate implementation to Codex through the Codex plugin (`/codex:rescue`,
-  or the `codex:codex-rescue` subagent). Do not hand-write implementation code
-  that can be delegated.
-- Always pass `--effort high` when invoking Codex (updated 2026-07-25: the user
-  moved to the Pro plan and judged `high` the best value, so the earlier
-  cost-driven `low` default no longer applies). Change it only when the user
-  explicitly asks.
+Read `docs/remaining-tasks.md` — it holds the current work and is the single
+source of truth for tasks. Read `docs/project-memory.md` and the one relevant
+spec in `docs/superpowers/specs/` only when the task needs them.
+
+Later tasks live in `docs/tasks-backlog.md` and past history in `docs/archive/`.
+Do not read those unless the task calls for them.
+
+**Specs are large — several run past 20 KB.** When you are only looking
+something up, grep for the section you need instead of reading the file whole.
+
+**The exception is the spec you are about to approve. Read that one in full.**
+Approving it is the review step in Role split below, and you cannot review what
+you skimmed.
+
+## Role split
+
+You decide the approach and the content of the design. Codex writes the spec
+file. **You review and approve that spec. Only then does Codex implement it.**
+You then verify the result (see **Verifying the work**) and commit. Codex never
+commits, and a "done" or "fixed it" report is never accepted as evidence.
+
+    you decide -> Codex writes the spec -> you approve and pin it
+      -> Codex implements -> you verify -> you commit
+
+**Review the spec before implementation, not after.** If you wait for the diff,
+a misreading is already baked into the spec, the code, and the tests at once —
+and the diff will look consistent with all three.
+
+**Know what your review can and cannot catch.** You decided the content, so you
+are not a neutral judge of whether the decision itself is right — only of
+whether the spec says what you decided. You are neutral on implementation
+convenience; Codex is not, because Codex implements next. For the decision
+itself, ask Codex or the user.
+
+When delegating to Codex, pass `--effort high` unless the user says otherwise.
+Narrow the scope you allow it to read; an open-ended investigation can run 20
+minutes without reaching a conclusion.
+
+**An approved spec is frozen until the implementation lands.** Pin the version
+(line count + SHA-256) when you approve it and hand that over. Do not edit it in
+the meantime — not while Codex is reading it, not while Codex is implementing
+from it. If it has to change, stop the implementation, change it, and approve it
+again with a new pin.
 
 ## Original fidelity is the default
 
-This game is a remake of the PC-98 freeware "VOLLEY BALL 2on2". The disassembly
-lives in `C:\work\PC98\vb2211-analysis\`.
+**If the original has a value or a mechanism, use it. Do not ask.**
 
-**If the original has a value or a mechanism, use it. Do not ask.** Asking
-whether to follow the original is not a question; the answer is already yes.
+Bring a proposal only when the deviation makes the game better or more
+distinctly ours, and say in one sentence what changes for the player.
 
-**Bring a proposal to the user only when the deviation makes the game better or
-more distinctly ours.** State in one sentence what changes for the player. If
-you cannot state that, it is not a design question and must not be raised.
+**Never reasons to deviate:** convenience, performance, maintainability, your
+own uncertainty, "the code already works this way", "keeping it is safer"
+(keeping is itself a deviation). Cover your risk with a loud failing test, not
+by changing what the game does.
 
-**These are never reasons to deviate:**
+**When the original genuinely has nothing** (drive gauge, just-timing, ranks),
+say so and decide it with the user. Per-second values cannot be converted at
+all (the original's frame rate is unknown) and are settled by playing.
 
-- implementation convenience, performance, or maintainability
-- your own uncertainty that a formula or value is right
-- "the current code already works this way"
-- "keeping the current value is the safe choice" — keeping is itself a deviation
-
-Your own risk is covered by tests, not by changing what the game does. When you
-are unsure a derived value is correct, write an exhaustive test that fails
-loudly, and keep the original mechanism.
-
-**When the original genuinely has nothing** (drive gauge, just-timing, character
-ranks, anything invented for this project), say so explicitly, and decide it
-with the user. Values that cannot be converted at all — anything per-second,
-because the original's frame rate is unknown — are settled by playing, not by
-arithmetic.
-
-The user has had to restate this rule repeatedly. Treat a violation as a serious
-error, not a style note.
-
-## Writing the task contract
-
-Every delegation states four things, plus explicit acceptance criteria:
-
-1. Objective - what outcome counts as done.
-2. Output format - what Codex must report back.
-3. Tools and sources - which files, specs, and commands to use.
-4. Task boundary - what is explicitly out of scope.
-
-Make the contract self-contained. Codex does not inherit this conversation, so
-spell out target paths, assumptions, and constraints every time, even when they
-feel obvious from the discussion here.
-
-In a long back-and-forth, restate the original requirements in each new
-contract. Requirements drift and get quietly dropped across turns.
+The user has restated this repeatedly. A violation is a serious error.
 
 ## Verifying the work
 
-- A "done" report is not evidence. Ask for evidence and read it yourself.
-- Evidence ranks: environment state > tool call records > what the agent says.
-  Read the real `git diff`, the real test output, the real build result.
-- Require the full test suite, not a few relevant tests. Never declare success
-  after seeing one or two tests pass.
-- Never approve on confident-sounding prose. Approve only on output you read.
+Read the real `git diff`, the real test output, the real build result. Require
+the full test suite; never declare success on one or two tests.
 
-## Look again, deeper
+Evidence ranks: environment state > tool call records > what the agent says. A
+long, confident rebuttal is not proof the finding was wrong — put the rebuttal
+and the finding side by side and judge them together.
 
-A first pass that finds nothing is not a clean bill of health. Once the work
-looks fine, go back and check again, harder:
+## Golden hash: one green tree, one reason, one commit
 
-- Re-read the actual diff line by line, not your summary of it.
-- Ask what the change could break elsewhere, not only whether it works here.
-- Confirm the tests actually exercise the changed behaviour instead of passing
-  around it.
-- Re-check the parts you skimmed the first time because they looked routine.
+The combined golden hash is only evidence if you can point at the tree it came
+from. On 2026-07-27 that trace was lost: two updates were written into a single
+uncommitted hunk on a tree that still held a broken feature, and the value ended
+up in no commit at all (`git log --all -S<value>` returned zero). It had to be
+retaken and the old value declared void. Rules, so it does not happen twice:
 
-Report it as done only after that second, deeper pass. "It looked fine" is not
-a verdict.
+- **Re-take only from a tree where everything except the golden test is green.**
+  One compile error or one unrelated red and the value is not evidence.
+- **One logical change per re-take, one commit.** Never batch two reasons into
+  one value. If two changes both moved it, land them separately.
+- **Record old value, new value, reason, test count, and failure count** in the
+  commit. Afterwards confirm `git log -S<new value>` finds that commit.
+- **Never edit the value to make a test pass.** A mismatch is a finding: either
+  the change was not the one you intended, or something else moved with it.
+- When other unrelated work is uncommitted, take the value in a separate
+  worktree instead of from the mixed tree.
 
-## No deference
+## Speaking up
 
-- Do not state a judgement as fact unless you have checked it. If it rests on
-  nothing but your own intuition, say so plainly.
-- Agree or disagree on evidence, never on who said it. Verify before agreeing
-  with the user or with Codex.
-- If the user's instruction or premise looks wrong, say so before acting on it.
-  Never go along with something you believe is mistaken.
-
-## Commit policy
-
-- Codex never commits. Committing is Claude Code's job.
-- Every commit is preceded by a Claude Code review of the actual change.
-
-## Disagreement
-
-- If the review turns up something wrong, questionable, or unexplained, ask
-  Codex about it instead of silently fixing it yourself.
-- When Codex pushes back, do not accept the rebuttal as it arrives. Put its
-  argument and the original finding side by side and judge them together. A
-  long, confident explanation is not proof that the finding was wrong.
-- Codex is expected to stop and consult when it hits something unexpected.
-  Answer those questions properly; never tell it to proceed on its own judgment.
-
-Treat existing uncommitted changes as work from Codex or the user: inspect them,
-preserve them, and continue from the documented state instead of reverting or
-duplicating the work.
+If the user's instruction or premise looks wrong, say so before acting.
+When a judgement call is hard, consult Codex.

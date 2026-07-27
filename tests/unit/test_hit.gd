@@ -8,6 +8,10 @@ const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const STANDARD_CHAR := 99
+const SPIKE_SAMPLE_STEP_PX := 20
+const SPIKE_NEAREST_D_PX := 30
+const SPIKE_FARTHEST_D_PX := 270
+const SPIKE_SAMPLE_HEIGHTS_PX: Array[int] = [80, 140]
 
 func _rally_world() -> Array:
 	var cfg = SimConfig.new()
@@ -22,6 +26,31 @@ func _rally_world() -> Array:
 	s.players[2].x = cfg.net_x + FP.from_int(156)
 	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
+
+func _normal_spike_vx(team: int, relative_hdir: int,
+		distance_px: int, height_px: int) -> int:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = team * 2
+	var dir: int = SimState._dir_of_team(team)
+	var p = s.players[actor]
+	p.on_ground = 0
+	s.ball_x = cfg.net_x - dir * FP.from_int(distance_px)
+	s.ball_y = cfg.floor_y - FP.from_int(height_px)
+	p.x = s.ball_x
+	p.y = s.ball_y + cfg.player_reach
+	s.ball_vx = 0
+	s.ball_vy = 0
+	var hdir: int = relative_hdir * dir
+	var input: int = Simulation.IN_ACTION | Simulation.IN_DOWN
+	if hdir < 0:
+		input |= Simulation.IN_LEFT
+	elif hdir > 0:
+		input |= Simulation.IN_RIGHT
+	HitResolver._apply_hit(
+		s, actor, cfg, input, cfg.player_reach * cfg.player_reach)
+	return s.ball_vx
 
 func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 	var normal := _rally_world()
@@ -837,20 +866,20 @@ func test_reach_is_tighter_vertically() -> void:
 	check_eq(s2.touches, 1, "横なら同じ距離で届く")
 
 func test_spike_in_air() -> void:
-	# 下のみ=鋭角スパイク(前面へ鋭く落とす)
+	# 下のみ=中央スパイク。横速度は中央専用値を使う
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
 	p.on_ground = 0
 	p.y = cfg.floor_y - FP.from_int(60)
-	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = p.y - FP.from_int(5)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "スパイク(空中+下)は下向き")
 	check(s.ball_vx > 0, "左チームのスパイクは右向き")
-	check(HitResolver.spike_target_x(0, 0, cfg) > cfg.net_x,
-		"中央入力は敵陣中央を狙う")
+	check_eq(s.ball_vx, cfg.spike_mid_vx * cfg.spike_power_pct / 100,
+		"中央入力は中央専用の固定横速度を使う")
 	# 「急角度」は緩角との比較で定義する(縦/横の比が緩角より大きい)。
 	# 整数のまま比較: steep_vy*flat_vx > flat_vy*steep_vx
 	check(cfg.spike_steep_vy * cfg.spike_vx > cfg.spike_vy * cfg.spike_steep_vx,
@@ -864,13 +893,13 @@ func test_flat_spike_goes_farther() -> void:
 	var p = s.players[0]
 	p.on_ground = 0
 	p.y = cfg.floor_y - FP.from_int(60)
-	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = p.y - FP.from_int(5)
+	s.ball_x = p.x + FP.from_int(2)
+	s.ball_y = p.y - FP.from_int(2)
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check(s.ball_vy > 0, "緩角スパイクも下向き")
-	check_eq(HitResolver.spike_target_x(0, 1, cfg),
-		FP.from_int(504), "前入力は従来どおり敵陣後面を狙う")
+	check_eq(s.ball_vx, cfg.spike_vx * cfg.spike_power_pct / 100,
+		"ネット方向入力は専用の固定横速度を使う")
 	check(s.ball_vx > 0, "後面アタックも敵陣方向へ飛ぶ")
 	check(s.ball_vy < cfg.spike_steep_vy, "緩角の縦速度は鋭角より浅い")
 
@@ -887,6 +916,65 @@ func test_flat_spike_direction_is_always_net() -> void:
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "左チームのスパイクは左キーでも右(ネット方向)へ飛ぶ")
+
+func test_spike_horizontal_speed_is_independent_of_contact_position() -> void:
+	var cases := 0
+	for team in 2:
+		for relative_hdir in [-1, 0, 1]:
+			var reference_vx: int = 0
+			var has_reference := false
+			for height_px in SPIKE_SAMPLE_HEIGHTS_PX:
+				var previous_distance := -1
+				for distance_px in range(
+						SPIKE_NEAREST_D_PX,
+						SPIKE_FARTHEST_D_PX + 1,
+						SPIKE_SAMPLE_STEP_PX):
+					if previous_distance >= 0 and distance_px > previous_distance:
+						check(distance_px - previous_distance <= SPIKE_SAMPLE_STEP_PX,
+							"打点距離の刻みは20px以下")
+					previous_distance = distance_px
+					var vx: int = _normal_spike_vx(
+						team, relative_hdir, distance_px, height_px)
+					if not has_reference:
+						reference_vx = vx
+						has_reference = true
+					check_eq(vx, reference_vx,
+						("同じ入力なら打点距離・高さによらず横速度一定: "
+						+ "team=%d dir=%d distance=%d height=%d") % [
+							team, relative_hdir, distance_px, height_px,
+						])
+					cases += 1
+	check(cases > 0, "位置・高さの網羅検査が1通り以上を実行する")
+
+func test_standard_normal_spike_final_speeds_px_s() -> void:
+	var cfg = SimConfig.new()
+	for team in 2:
+		var dir: int = SimState._dir_of_team(team)
+		for row in [
+			[-1, 388],
+			[0, 582],
+			[1, 679],
+		]:
+			var vx: int = _normal_spike_vx(team, row[0], 120, 80)
+			var actual_px_s: int = (absi(vx) * cfg.tick_rate) >> 16
+			check_eq(actual_px_s, row[1],
+				"通常25%後の実横速度を固定: team=%d relative_dir=%d" % [
+					team, row[0],
+				])
+			check(vx * dir > 0,
+				"スパイクは常にネット方向へ飛ぶ: team=%d dir=%d" % [
+					team, row[0],
+				])
+
+func test_spike_horizontal_speed_is_deterministic() -> void:
+	for team in 2:
+		for relative_hdir in [-1, 0, 1]:
+			var first: int = _normal_spike_vx(team, relative_hdir, 120, 80)
+			var second: int = _normal_spike_vx(team, relative_hdir, 120, 80)
+			check_eq(second, first,
+				"同じ状態と入力なら横速度が完全一致: team=%d dir=%d" % [
+					team, relative_hdir,
+				])
 
 func test_perfect_spike_boosts_power() -> void:
 	# ジャストミート(スイートスポット内)のスパイクは速度ボーナス+パワーボール化
@@ -1289,7 +1377,8 @@ func test_air_neutral_sends_soft_over() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(s.ball_vy < 0, "空中ニュートラルは上向きの緩い弧")
 	check(s.ball_vx > 0, "左チームはネット方向(右)へ送る")
-	check(s.ball_vx < cfg.spike_vx, "スパイクより遅い")
+	check(s.ball_vx < cfg.spike_mid_vx * cfg.spike_normal_pct / 100,
+		"通常の中央スパイクより遅い")
 
 func test_air_side_tosses_far_arc() -> void:
 	# 空中+横: きつめの角度の山なりで遠くへ

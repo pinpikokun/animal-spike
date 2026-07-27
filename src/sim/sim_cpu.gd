@@ -74,16 +74,22 @@ const RECEIVER_YIELD_OFFSET_PX := 64
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく
 #   読み(予測深度)・技(ブロック/ジャスト)・判断(配球IQ)で出す
 # - 味方同士の役割分担は全段共通。予測深度・精度・技術判断の差は各段に残す。
-const PRESET_WEAK := AB_ROLES | (24 << P_DELAY) | (40 << P_AIM) \
+# 反応遅延は原作 VB22.EXE へ合わせた(2026-07-26)。原作は打球時に10のカウンタを
+# 立てて毎コマ1減らし、難易度別のしきい値まで下がるまで思考ごと止める
+# (0x809E / 0x0E72)。止まるコマ数は 7 / 6 / 4 / 0。原作のフレームレートは
+# 未確認のため30コマ/秒と仮定して秒へ直し、切りのよい 0.30/0.20/0.10/0 秒を
+# 採った(ユーザー決定)。本作は60コマ/秒なので 18/12/6/0 コマになる。
+# 最強が0=打った瞬間に反応するのは原作どおり。
+const PRESET_WEAK := AB_ROLES | (18 << P_DELAY) | (40 << P_AIM) \
 	| (64 << P_MISS) | (26 << P_SWEET)
 const PRESET_NORMAL := (AB_PREDICT | AB_ROLES | AB_ATTACK) \
-	| (16 << P_DELAY) | (25 << P_AIM) \
+	| (12 << P_DELAY) | (25 << P_AIM) \
 	| (13 << P_MISS) | (0 << P_SWEET) | (1 << P_TIQ)
 const PRESET_STRONG := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET \
-	| AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (13 << P_DELAY) \
+	| AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (6 << P_DELAY) \
 	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
 const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
-	| (12 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
+	| (0 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
 const PRESETS: Array[int] = [PRESET_WEAK, PRESET_NORMAL, PRESET_STRONG, PRESET_MAX]
 
 static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
@@ -343,7 +349,9 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 
 # 地上の現在位置から、未来の球位置へ芯距離で会合できる離陸待ちtickと会合xを返す。
 # 戻り値[0]が0なら今跳ぶ。-1なら現在の球筋では芯会合を作れない。
-static func _sweet_jump_plan(s, p, cfg, sweet_r: int) -> Array[int]:
+# prefer_highestはサーブ用。同じ芯会合候補から最も高い球位置を優先する。
+static func _sweet_jump_plan(s, p, cfg, sweet_r: int,
+		prefer_highest: bool = false) -> Array[int]:
 	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
 	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
 	var up_ticks: int = PlayerMovement._jump_ticks(true)
@@ -367,6 +375,7 @@ static func _sweet_jump_plan(s, p, cfg, sweet_r: int) -> Array[int]:
 	var speed: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
 	var best_delay: int = 999
 	var best_x: int = p.x
+	var best_y: int = cfg.floor_y
 	# 高い味方トスは頂点から接触まで80tickを超えるため、着地まで十分に探索する。
 	for future in 180:
 		var contact_tick: int = future + 1
@@ -382,10 +391,15 @@ static func _sweet_jump_plan(s, p, cfg, sweet_r: int) -> Array[int]:
 			var remaining_dx: int = maxi(absi(bx - p.x) - speed * launch_delay, 0)
 			if remaining_dx * remaining_dx + dy_n * dy_n > sweet_r * sweet_r:
 				continue
-			if launch_delay < best_delay:
+			var better_plan: bool = launch_delay < best_delay
+			if prefer_highest:
+				better_plan = by < best_y \
+					or (by == best_y and launch_delay < best_delay)
+			if better_plan:
 				best_delay = launch_delay
 				best_x = bx
-		if best_delay == 0:
+				best_y = by
+		if not prefer_highest and best_delay == 0:
 			break
 		bvy += cfg.gravity
 		bx += bvx
@@ -473,8 +487,8 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 	if idx != SimStateScript._server_index(s):
 		return 0
 	if s.serve_tossed == 1:
-		# 2段階サーブの2段目: トスの落下点へ歩き、落ち際に前トス打ちで
-		# 確実にネットを越す(トス直後は自分のhit_cooldownが再打撃を防ぐ)
+		# 2段階サーブの2段目: トスの落下点へ歩き、芯会合の最も高い打点へ
+		# 離陸を合わせる(トス直後は自分のhit_cooldownが再打撃を防ぐ)。
 		var p = s.players[idx]
 		var reach: int = cfg.player_reach
 		var dx: int = s.ball_x - p.x
@@ -483,11 +497,24 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 		var fwd: int = SimInput.IN_RIGHT if s.serving_team == 0 else SimInput.IN_LEFT
 		var attack_serve: bool = prof_byte(prof, P_TIQ) >= 2 \
 			and _attack_ok(s, idx, prof)
-		if attack_serve and p.on_ground == 1 and _jump_will_meet(s, p, cfg, reach):
+		if attack_serve and p.on_ground == 1:
 			var attack_land: int = _land_x_from(
 				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
 				cfg.floor_y - cfg.player_reach_up / 2, 0)
-			return _walk_to(p, attack_land, cfg.player_reach / 4) | SimInput.IN_JUMP
+			var sweet_r: int = reach * cfg.spike_sweet_pct \
+				* Chars.stat(p.char_id, "just_window") / (100 * 100)
+			var jump_plan: Array[int] = _sweet_jump_plan(
+				s, p, cfg, sweet_r, true)
+			if jump_plan[0] >= 0:
+				var attack_input: int = _walk_to(
+					p, jump_plan[1], sweet_r / 2)
+				if jump_plan[0] == 0:
+					attack_input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
+					attack_input |= SimInput.IN_JUMP
+				return attack_input
+			if _jump_will_meet(s, p, cfg, reach):
+				return _walk_to(p, attack_land,
+					cfg.player_reach / 4) | SimInput.IN_JUMP
 		if dx * dx + dy_n * dy_n <= reach * reach:
 			if attack_serve and p.on_ground == 0:
 				return SimInput.IN_ACTION | SimInput.IN_DOWN | fwd

@@ -1,82 +1,91 @@
 # Animal Spike agent instructions
 
-Before starting work, read `docs/project-memory.md` and the relevant files in
-`docs/superpowers/specs/`.
+Remake of the PC-98 freeware "VOLLEY BALL 2on2".
 
-## Role split: Codex implements, Claude Code directs
+## Role split
 
-Codex is normally invoked by Claude Code through the Codex plugin to carry out
-implementation work. Follow the task contract you are given, implement the
-change, and report what you changed and how you verified it.
+Claude Code decides the content of the design. You write the spec file under
+`docs/superpowers/specs/`, then **hand it over and wait for Claude Code to
+approve it. Do not start implementing the moment the spec is written** — a
+misreading that goes straight into code lands in the spec, the code, and the
+tests at once, and the diff then looks consistent with all three.
 
-## Original fidelity is the default
+After approval you implement it and report what you changed and how you
+verified it. **Before you start, check the spec against the line count and
+SHA-256 Claude Code pinned when approving it.** If it does not match, stop and
+report it — never implement from a spec that changed after it was approved.
 
-This game is a remake of the PC-98 freeware "VOLLEY BALL 2on2". Where the
-contract cites the original (a disassembly address, an original value, an
-original mechanism), **implement it as written.**
+**Never commit** — leave the work in the worktree.
 
-**Do not substitute a different approach because it is simpler, faster, safer,
-or closer to how the current code already works.** If you believe the original
-approach cannot work, stop and report it. Do not implement your alternative.
+Writing the spec does not make the design yours.
 
-**Do not invent numbers.** Every gameplay value must come from the contract or
-the spec it points to. If you need a value that is not there, stop and ask in
-your report. A value you chose yourself is a defect even if the tests pass.
+Read `docs/project-memory.md` only when the task needs it. **When you implement
+from a spec, read that spec in full** — even one you wrote yourself, because
+you wrote it in a different session and do not remember it.
 
-When the contract marks a value as a provisional starting point to be tuned by
-play, keep it in one named place with a comment saying so.
+## Writing the spec
+
+Write it so it can be implemented without guessing. For each behaviour state
+the trigger condition, its priority against the others, the state transitions,
+the formula, and the exceptions.
+
+- **Separate what comes from the original from what we decided ourselves**, and
+  say which is which.
+- **Point at the code** where it already holds a constant or a formula. Copied
+  values drift. Never write the same number in two places.
+- **Say what must never happen**, not only the normal path.
+- **Give the verification method and the pass condition.**
+- **Write an open question as a stop, not as a blank.** A blank invites the
+  implementer to guess; a stop makes them come back.
+- **Make every decision findable by search.** Length is not the problem —
+  decisions buried in prose are. Keep background and rules apart.
+
+## Stop and consult
+
+Stop and ask Claude Code when the contract is incomplete or contradictory, when
+it does not fit the code, or when the work would grow beyond the requested
+scope. Do not decide alone and keep going.
+
+This applies while you are **writing the spec** as much as while you are
+implementing. A gap in what you were told is a stop, not something to fill in.
+
+## Do not substitute your own approach
+
+Do not replace what the contract asks for because it is simpler, faster, safer,
+or closer to the current code. If you believe it cannot work, stop and report
+it. Do not implement your alternative.
+
+**Do not invent numbers.** Every gameplay value comes from the contract or the
+spec it points to. A value you chose yourself is a defect even if tests pass.
+When the contract marks a value as provisional, keep it in one named place with
+a comment saying so.
 
 ## Stay inside the contract
 
-The contract defines the scope. Do not widen it, and do not fold in unrelated
-improvements you happen to notice. Report them instead and let Claude Code
-decide.
+Do not widen the scope or fold in unrelated improvements. Report them and let
+Claude Code decide.
+
+**Never touch the golden hash.** `GOLDEN_COMBINED_HASH` in `tests/unit/test_sync.gd`
+is a regression alarm, not a value to keep in sync with the code. If it goes red,
+that is a finding — report it and stop. Editing it to make the suite pass destroys
+the only evidence that the change was the one intended. Claude Code re-takes it,
+from a tree where everything else is green, in its own commit.
 
 ## Reporting and evidence
 
-Never report "done" on its own. Every completion report carries evidence:
+Never report "done" on its own. List every change, not a summary, and state
+plainly what you did not verify.
 
-- the `git diff` of what you changed,
-- the output of the full test suite, not a selected subset,
-- the build or run result where relevant.
+**Handing over a spec for review** — report the version you produced (line count
++ SHA-256) and every change you made. There is no diff and no test output at
+this stage. Do not manufacture one.
 
-Do not declare success after one or two tests pass; run everything. State
-plainly what you did not verify rather than implying full coverage. If something
-is unverified, broken, or uncertain, say so directly instead of closing with
-reassuring language.
-
-## Check your own work twice
-
-Once the change looks correct, check it again more deeply before reporting it.
-Re-read your own diff line by line, consider what it could break elsewhere, and
-confirm the tests actually cover the behaviour you changed. A first pass that
-found nothing is not a clean bill of health.
+**Reporting a finished implementation** — carry the `git diff`, the output of
+the **full** test suite (not a subset), and the build or run result where
+relevant.
 
 ## No deference
 
-If the contract or the instruction itself looks wrong, say so before
-implementing it. Do not quietly follow an instruction you believe is mistaken.
-Concede when a finding against your work is right, and push back with evidence
-when it is not. Never agree just to end the exchange.
-
-## Commit policy
-
-Never commit. Leave the work in the worktree and report it. Claude Code reviews
-the change and commits it.
-
-## Stop and consult when something is unexpected
-
-If you hit anything unexpected, stop and consult Claude Code before going
-further. That includes: the task contract does not fit what the code actually
-looks like, an assumption turns out to be wrong, the code contradicts the spec,
-or the fix would grow beyond the requested scope.
-
-Do not decide alone and keep implementing. Report the situation and wait for
-direction.
-
-Claude Code will come back with questions from its review. Answer them with
-concrete evidence rather than assurances.
-
-Treat existing uncommitted changes as work from Claude Code or the user: inspect
-them, preserve them, and continue from the documented state instead of reverting
-or duplicating the work.
+If the contract or instruction looks wrong, say so before implementing it.
+Concede when a finding against your work is right; push back with evidence when
+it is not. Never agree just to end the exchange.
