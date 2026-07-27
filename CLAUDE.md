@@ -78,12 +78,27 @@ and the finding side by side and judge them together.
 
 ## Golden hash: one green tree, one reason, one commit
 
-**"The golden hash" is not one test.** Several tests pin `state_hash()` —
-`test_sync.gd.test_golden_hash_regression` and
-`test_refactor_characterization.gd.test_hit_chain_second_golden` at least. Change
-the shape of `SimState` and they all move at once. That is not a rule violation;
-it is the same cause reaching every pin. Re-take them together in one commit,
-**after** confirming they share one cause and that nothing else is red.
+**"The golden hash" is not one test, and it is not a fixed list either.** Several
+tests pin behaviour to a hard-coded value. When one cause reaches several of them
+they all move at once — that is not a rule violation, it is the same cause
+reaching every pin. Re-take those together in one commit, **after** confirming
+they share one cause and that nothing else is red.
+
+**Work out which pins your change reaches, every time. Do not trust a list.**
+This file used to name two tests as "the group that pins `state_hash()`". #88b-2
+proved that framing wrong in both directions at once:
+`test_hit_chain_second_golden` does pin `state_hash()` but **did not move**, and
+`test_scatter_stream_snapshot` does not pin `state_hash()` but **did**. The first
+one runs entirely at `tick=0 / rng=0 / aitick=0`, so the old and new RNG source
+produce identical values and it cannot detect that class of change at all.
+
+So the question is never "is this test in the golden list". It is "does this
+change reach what this test actually pins". Answer it from the cause, and say in
+the commit which pins you expected to move and which you did not.
+
+**Never re-take a value that did not move.** If a pin you expected to move stayed
+green, that is a finding about the test, not a formality to tidy up. Writing a
+fresh value into it puts a number in the tree that no failure ever produced.
 
 A golden hash is only evidence if you can point at the tree it came from. On
 2026-07-27 that trace was lost: two updates were written into a single

@@ -65,11 +65,19 @@ a comment saying so.
 Do not widen the scope or fold in unrelated improvements. Report them and let
 Claude Code decide.
 
-**Never touch the golden hash.** `GOLDEN_COMBINED_HASH` in `tests/unit/test_sync.gd`
-is a regression alarm, not a value to keep in sync with the code. If it goes red,
-that is a finding — report it and stop. Editing it to make the suite pass destroys
-the only evidence that the change was the one intended. Claude Code re-takes it,
-from a tree where everything else is green, in its own commit.
+**Never touch a hard-coded expected value that pins behaviour.**
+`GOLDEN_COMBINED_HASH` in `tests/unit/test_sync.gd` is the obvious one, but it is
+not the only one — `test_scatter_stream_snapshot` pins a 60-element RNG stream,
+and other tests pin fixed arrays or hashes. All of them are regression alarms,
+not values to keep in sync with the code. If one goes red, that is a finding:
+report it and stop. Editing it to make the suite pass destroys the only evidence
+that the change was the one intended. Claude Code re-takes them, from a tree where
+everything else is green, in its own commit.
+
+This also applies to values that are *not* hard-coded but are computed inside the
+test from the same helper the production code uses. If the test recomputes the
+expected result, it can agree with a broken implementation. Say so and stop
+rather than papering over it.
 
 ## Reporting and evidence
 
