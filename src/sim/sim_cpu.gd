@@ -6,8 +6,9 @@
 # プレイヤーごとにstate.players[i].cpu(8bit x 7欄)で強さの次元を個別に持つ:
 #   能力フラグ(戦略層) + 反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ(反応・実行層)
 # 憲法: 相手チームの入力・照準は読まない(観測可能な物理状態のみ)。物理性能は強化しない。
-# 乱数は逐次PRNG禁止、stateless keyed hashのみ。
-# 通常抽選はlast_hit_tickで「タッチ1回につき1抽選」、役割抽選はrally_seqでラリー中不変。
+# 乱数契約: 原作対応の許可判定は生のaitickを読む。
+# 本作独自抽選はaitick・actor・用途IDの読み取り専用派生値を使う。
+# 役割判断はラリー開始時に保存したrollを使い、CPU判断は乱数状態を書き換えない。
 extends RefCounted
 
 const FP := preload("res://src/sim/fp.gd")
@@ -50,17 +51,14 @@ const P_SWEET := 32  # ジャスト成功率(0-255)
 const P_DEPTH := 40  # 弾道予測の壁反射深度(0=放物線のみ..3=無制限)
 const P_TIQ := 48    # 配球知能(0=そのまま返す..3=相手から遠い着弾を選ぶ)
 
-# 乱数のsalt(判定種別の分離)
+# 乱数の用途ID。廃止済み番号は予約欠番として再利用しない。
 const SALT_AIM := 1
 const SALT_MISS := 2
-const SALT_SWEET := 3
-# 本体では未使用。テストが成功するキーを探してlast_hit_tickを固定するために使う。
-# 削除すると他saltの出目も変わるため#86では維持し、初期乱数状態を直接与える是正は#88で行う。
-const SALT_RECEIVE := 4
+# 用途ID 3は廃止済みの予約番号。再利用禁止。
+# 用途ID 4は廃止済みの予約番号。再利用禁止。
 const SALT_SUPER := 5
-const SALT_ATTACK := 6
-# unused now that role lottery moved to the new stateful method
-const SALT_ROLE := 7
+# 用途ID 6は廃止済みの予約番号。再利用禁止。
+# 用途ID 7は廃止済みの予約番号。再利用禁止。
 
 const WAIT_PHASE_COUNT := 9
 # 原作0x8406〜0x85CFの相方動作中待機位置表。原作の目盛り(40/64/16)×4。1目盛り=画面4ドット
@@ -104,14 +102,6 @@ static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
 
 static func prof_byte(profile: int, shift: int) -> int:
 	return (profile >> shift) & 0xFF
-
-# 共通混合式への互換入口。keyの意味は呼び出し側が決める。
-static func _noise(salt: int, key: int, actor: int) -> int:
-	return SimRng.keyed_hash(key, salt, actor)
-
-# last_hit_tickはタッチ毎に変わりタッチ間は不変なので、1タッチにつき1抽選になる。
-static func _roll(salt: int, s, actor: int) -> int:
-	return _noise(salt, s.last_hit_tick, actor)
 
 # aitickは打球間で固定される。本作独自抽選を状態消費なしで用途・actorごとに分離する。
 static func _derived_roll(salt: int, s, actor: int) -> int:

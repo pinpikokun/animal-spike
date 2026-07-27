@@ -84,7 +84,7 @@ var ball_guard_damage: int = 0
 var ball_defense_class: int = 0
 var ball_ghost: int = 0  # 1=相手コートへ渡るまで表示層で点滅するゴーストボール
 var ball_flame: int = 0  # 1=ガードダメージ強化と赤色表示を持つ燃えるアタック球
-var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と乱数キーの主軸
+var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と打撃発生の観測に使う
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
 var serve_tossed: int = 0  # 2段階サーブ: 0=構え(照準中)、1=トス済み(打撃待ち)
