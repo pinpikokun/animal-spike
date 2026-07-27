@@ -21,3 +21,8 @@ static func keyed_hash(key: int, salt: int, actor_term: int) -> int:
 	z = (z ^ (z >> 13)) * 3266489917
 	z = z ^ (z >> 16)
 	return z & 0x7FFFFFFFFFFFFFFF
+
+static func derived_value(
+		aitick: int, actor_term: int, purpose_id: int) -> int:
+	var aitick_word: int = aitick & WORD_MASK
+	return keyed_hash(aitick_word, purpose_id, actor_term)

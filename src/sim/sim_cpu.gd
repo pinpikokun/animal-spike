@@ -113,6 +113,10 @@ static func _noise(salt: int, key: int, actor: int) -> int:
 static func _roll(salt: int, s, actor: int) -> int:
 	return _noise(salt, s.last_hit_tick, actor)
 
+# aitickは打球間で固定される。本作独自抽選を状態消費なしで用途・actorごとに分離する。
+static func _derived_roll(salt: int, s, actor: int) -> int:
+	return SimRng.derived_value(s.aitick, actor, salt)
+
 # ラリー開始時に保存したチーム別role rollを読む。同じラリー中は常に同じ役。
 static func _is_rally_attacker(s, idx: int) -> bool:
 	var team: int = idx / 2
@@ -687,7 +691,7 @@ static func decide(s, idx: int, cfg) -> int:
 	# ミス抽選が出たタッチでは振りも一拍遅れる(ボールが体の中心を過ぎるまで
 	# 打たない=接触窓が狭まり、位置ずれと合わさって「惜しい後逸」になる)
 	var late_swing: bool = s.last_touch_team >= 0 and s.last_touch_team != team \
-		and _roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS) and dy < 0
+		and _derived_roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS) and dy < 0
 	if d2 <= reach * reach and not late_swing:
 		if p.on_ground == 0:
 			input |= _decide_air_hit(s, idx, p, cfg, team, prof, d2, dy)
@@ -764,12 +768,12 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 	if aim_err > 0 and not just_receive_plan:
 		var half: int = reach * aim_err / 100
 		if half > 0:
-			land_x += _roll(SALT_AIM, s, idx) % (2 * half + 1) - half
+			land_x += _derived_roll(SALT_AIM, s, idx) % (2 * half + 1) - half
 	# ミス(惜しい失敗): 相手からの球に対しタッチ毎1抽選で「半歩深めにずれる」。
 	# リーチの縁で拾えたり拾えなかったりする=人間くさい崩れ方になる
 	var receiving: bool = s.last_touch_team >= 0 and s.last_touch_team != team
 	var miss_roll: bool = receiving \
-		and _roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS)
+		and _derived_roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS)
 	if miss_roll and not just_receive_plan:
 		land_x += -reach * 3 / 4 if team == 0 else reach * 3 / 4
 	var mate_slot: int = 1 - idx % 2
@@ -995,7 +999,7 @@ static func _sweet_ok(s, idx: int, prof: int) -> bool:
 	# 最強(TIQ3)は精密行動を確実に選ぶ。確率ゲートで一試合すべて通常化するのを防ぐ。
 	if prof_byte(prof, P_TIQ) >= 3:
 		return true
-	return _roll(SALT_SWEET, s, idx) % 256 < prof_byte(prof, P_SWEET)
+	return s.aitick % 256 < prof_byte(prof, P_SWEET)
 
 static func _attack_ok(s, idx: int, prof: int) -> bool:
 	if not (prof_byte(prof, P_AB) & AB_ATTACK):
@@ -1003,7 +1007,7 @@ static func _attack_ok(s, idx: int, prof: int) -> bool:
 	var tiq: int = prof_byte(prof, P_TIQ)
 	if tiq >= 3:
 		return true
-	return _roll(SALT_ATTACK, s, idx) % 256 < tiq * 64
+	return s.aitick % 256 < tiq * 64
 
 static func _plans_just_receive(s, idx: int, p, team: int, prof: int) -> bool:
 	var ab: int = prof_byte(prof, P_AB)
@@ -1061,7 +1065,7 @@ static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
 	if p.on_ground == 1 or p.y >= cfg.net_top_y:
 		return false
 	return prof_byte(prof, P_TIQ) >= 3 \
-		or _roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
+		or _derived_roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
 
 # 空中ヒットの打ち分け。ネット遠方のスパイクは自陣に落ちて自滅するため打たない
 static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, dy: int) -> int:

@@ -158,8 +158,9 @@ func test_scatter_stream_snapshot() -> void:
 	var w: Array = _world()
 	var s = w[0]
 	var actual: Array[int] = []
-	for tick in [0, 1, 17, 999, 123456]:
-		s.tick = tick
+	# 123456は16bit正規化で0xE240へ折り返す契約も同じ列で固定する。
+	for aitick in [0, 1, 17, 999, 123456]:
+		s.aitick = aitick
 		for actor in [0, 1, 3]:
 			for salt in [11, 13, 17, 19]:
 				actual.append(HitResolver._scatter(s, actor, salt))
@@ -168,8 +169,8 @@ func test_scatter_stream_snapshot() -> void:
 		-42, -97, -85, 94, -73, -16, -93, 42, -61, -41, -87, 55,
 		-89, -25, 9, 20, 25, 94, 18, 61, -92, -54, 25, 38,
 		-64, 58, -50, -74, 71, -5, 35, -7, 3, 84, 31, -91,
-		32, 6, -65, 42, 47, -73, 7, 24, -90, -58, -44, -80,
-	], "固定tick/actor/saltの乱数列")
+		-69, 40, 93, -31, 29, 35, 57, -69, 80, -22, 0, -32,
+	], "固定aitick/actor/saltの乱数列")
 
 func _chain_hashes() -> Array[int]:
 	var w: Array = _world()

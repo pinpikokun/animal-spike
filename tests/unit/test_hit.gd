@@ -480,15 +480,15 @@ func test_mura_roll_is_deterministic_and_has_10_80_10_distribution() -> void:
 	var s = w[0]
 	var counts := {50: 0, 100: 0, 150: 0}
 	var seen := {}
-	for tick in 100000:
-		s.tick = tick
+	for aitick in 100000:
+		s.aitick = aitick
 		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_MURA)
 		if not seen.has(roll):
 			seen[roll] = true
 			var pct: int = HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA)
 			counts[pct] += 1
 			check_eq(pct, HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA),
-				"同じtickとactorならむらっけ結果が同じ")
+				"同じaitickとactorならむらっけ結果が同じ")
 			if seen.size() == 100:
 				break
 	check_eq(seen.size(), 100, "決定論サンプルが全ロール値を覆う")
@@ -497,18 +497,18 @@ func test_mura_roll_is_deterministic_and_has_10_80_10_distribution() -> void:
 	check_eq(HitResolver._mura_power_pct(s, 0, Chars.CHAR_MARIO), 100,
 		"むらっけ無しは常に100%")
 
-func _tick_for_mura_pct(target_pct: int) -> int:
+func _aitick_for_mura_pct(target_pct: int) -> int:
 	var w := _rally_world()
 	var s = w[0]
-	for tick in 10000:
-		s.tick = tick
+	for aitick in 10000:
+		s.aitick = aitick
 		if HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA) == target_pct:
-			return tick
+			return aitick
 	return -1
 
 func test_mura_applies_to_normal_just_and_attack_serve() -> void:
-	var tick := _tick_for_mura_pct(150)
-	check(tick >= 0, "150%の決定論tickが見つかる")
+	var aitick := _aitick_for_mura_pct(150)
+	check(aitick >= 0, "150%の決定論aitickが見つかる")
 	for sweet in [false, true]:
 		var w := _rally_world()
 		var s = w[0]
@@ -516,7 +516,7 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 		var p = s.players[0]
 		p.char_id = Chars.CHAR_PANDA
 		p.on_ground = 0
-		s.tick = tick
+		s.aitick = aitick
 		var d2: int = 0 if sweet else cfg.player_reach * cfg.player_reach
 		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, d2)
 		# むらっけは通常/ジャスト共に最終pctへ1回だけ乗る。横速度は着地点から
@@ -534,7 +534,7 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	var cfgs = ws[1]
 	ss.phase = SimState.PHASE_SERVE
 	ss.serve_tossed = 1
-	ss.tick = tick
+	ss.aitick = aitick
 	ss.players[0].char_id = Chars.CHAR_PANDA
 	var safe_vx: int = HitResolver.opponent_return_vx(
 		ss.ball_x, ss.ball_y, 0, 0, ss.players[0].char_id, cfgs)
@@ -545,7 +545,7 @@ func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	var cfga = wa[1]
 	sa.phase = SimState.PHASE_SERVE
 	sa.serve_tossed = 1
-	sa.tick = tick
+	sa.aitick = aitick
 	sa.players[0].char_id = Chars.CHAR_PANDA
 	sa.players[0].on_ground = 0
 	HitResolver._apply_hit(sa, 0, cfga, Simulation.IN_ACTION | Simulation.IN_DOWN,
@@ -750,8 +750,8 @@ func test_toss_bad_is_exactly_30_percent_and_targets_70_percent_apex() -> void:
 	var cfg = w[1]
 	var seen := {}
 	var low_count := 0
-	for tick in 100000:
-		s.tick = tick
+	for aitick in 100000:
+		s.aitick = aitick
 		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_TOSS_BAD)
 		if not seen.has(roll):
 			seen[roll] = true

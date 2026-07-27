@@ -646,10 +646,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	s.aitick = SimRng.advance_hit(s.aitick, s.rng)
 	_advance_cpu_positioning_after_hit(s)
 
-# ヒット解決側のフレーム単位の決定論乱数。s.tickは原作のRND系列に対応する。
-# actor + 1の補正を維持し、両ピア同値かつロールバック再現可能にする。
+# ヒット解決側の読み取り専用派生値。aitickは打球間で固定される。
+# actor + 1の補正を維持し、状態を進めずロールバック再現可能にする。
 static func _keyed_hash(s, actor: int, salt: int) -> int:
-	return SimRng.keyed_hash(s.tick, salt, actor + 1)
+	return SimRng.derived_value(s.aitick, actor + 1, salt)
 
 static func _scatter(s, actor: int, salt: int) -> int:
 	return _keyed_hash(s, actor, salt) % 201 - 100

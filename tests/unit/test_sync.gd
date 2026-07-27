@@ -124,7 +124,21 @@ const TICKS := 3600
 # 役割の決まり方そのものが変わるのでCPUの入力列が動く。分岐表は1文字も変えていない。
 # 442本中、状態ハッシュを固定するこの検査と test_hit_chain_second_golden の2本だけが
 # 赤で、残り440本は緑。#88b-2 で残りの抽選を切り替えるとき、もう1回更新する予定。
-const GOLDEN_COMBINED_HASH := -6955139922794912817
+#   旧値 -6955139922794912817
+#
+# 2026-07-28 (第10回) #88b-2 で残存抽選の乱数源を切り替えたため更新。実測値。
+#   旧値 -6955139922794912817 -> 新値 148595592752712713
+# 許可抽選(_sweet_ok/_attack_ok)が生の aitick を読むようになり、本作独自の抽選7箇所が
+# aitick・actor・用途IDの読み取り専用派生値へ移った。抽選の存廃・確率・発火条件・法・
+# 閾値は一つも変えていない。変えたのは乱数源だけ。
+# 再採取前 447本中この1本だけが赤、残り446本は緑。再採取後 447 tests, 0 failed。
+#
+# 第9回の予告と違い、test_hit_chain_second_golden は今回赤にならなかったので触っていない。
+# あの検査は _world() が SimState.new() だけを使い Simulation.tick() を通らないため、
+# 全過程で tick=0/rng=0/aitick=0 のまま動く。旧 keyed_hash(s.tick=0,..) と
+# 新 keyed_hash(aitick=0,..) が同一値になるので、乱数源の変更を原理的に検出できない。
+# 代わりに test_refactor_characterization.gd.test_scatter_stream_snapshot が捉えた。
+const GOLDEN_COMBINED_HASH := 148595592752712713
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
