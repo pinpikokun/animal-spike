@@ -846,20 +846,6 @@ func test_predict_depth_zero_ignores_wall_bounce() -> void:
 	var shallow: int = SimCpu._predict_landing_x(s, cfg, cfg.floor_y, 0)
 	check(deep > shallow, "深い予測は反射後(右)、浅い予測は壁際で止まる")
 
-func test_miss_roll_is_stable_within_touch() -> void:
-	# 乱数はタッチ毎1抽選: 同じlast_hit_tickなら何tick経っても同じ値(震えない)
-	var w := _world()
-	var s = w[0]
-	s.last_hit_tick = 777
-	var a: int = SimCpu._roll(SimCpu.SALT_AIM, s, 1)
-	s.tick += 30
-	var b: int = SimCpu._roll(SimCpu.SALT_AIM, s, 1)
-	check_eq(a, b, "タッチ内で値が変わらない")
-	s.last_hit_tick = 778
-	check(SimCpu._roll(SimCpu.SALT_AIM, s, 1) != a, "次のタッチでは変わる")
-	check(SimCpu._roll(SimCpu.SALT_MISS, s, 1) != SimCpu._roll(SimCpu.SALT_AIM, s, 1),
-		"saltで判定種別が分離される")
-
 func test_serve_variation_reaches_target_and_crosses() -> void:
 	# サーブ多様化: スコアで狙いが変わり、選んだ角度/威力は安全域(24..40/100..125)。
 	# 実際にその照準までスイープしてサーブし、ネットを越える

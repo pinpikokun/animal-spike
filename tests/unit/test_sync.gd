@@ -4,6 +4,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 const TICKS := 3600
 
@@ -152,7 +153,7 @@ func _run_once() -> Array[int]:
 	# 全入力ビット(0-127)を含み、切替・ヒット・トス照準・CPU相方も検証対象に入る
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0)
 	var hashes: Array[int] = []
 	var rng := 123456789
 	for t in TICKS:
@@ -197,7 +198,7 @@ func _run_endgame() -> Array[int]:
 	# GAME_OVERフェーズの決定論はこの終盤戦シナリオで別途検証する
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0)
 	# 14-0開始: CPU同士は点の取り合いが交互に近く、僅差デュースだと決着しないため
 	# 大差から確実に勝利遷移へ到達させる(左の1点で15点・2点差以上が確定する)
 	s.score_l = cfg.points_to_win - 1

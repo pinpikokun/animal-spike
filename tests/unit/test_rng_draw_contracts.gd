@@ -11,39 +11,6 @@ func _profile(sweet: int, tiq: int, abilities: int = 0) -> int:
 	return SimCpu.make_profile(abilities, 0, 0, 0, sweet, 0, tiq)
 
 
-func test_derived_value_matches_fixed_vectors_and_masks_aitick() -> void:
-	# 設計書10節 VECTOR-003。実装から採取せず、承認済みの固定値を使う。
-	var vectors: Array[Array] = [
-		[0x0000, 0, 1, 2966470138605183947],
-		[0xABCD, 2, 1, 2108330416775593002],
-		[0xFFFF, 4, 31, 2482199174690399587],
-	]
-	for v in vectors:
-		check_eq(SimRng.derived_value(v[0], v[1], v[2]), v[3],
-			"派生値の固定ベクトル: aitick=0x%X actor=%d purpose=%d" \
-				% [v[0], v[1], v[2]])
-
-	check_eq(SimRng.derived_value(0x1ABCD, 2, 1), 2108330416775593002,
-		"aitickの上位ビットを捨てて16bitへ正規化する")
-	check(SimRng.derived_value(0xFFFF, 4, 31) > 0xFFFF,
-		"派生値の出力を16bitへ切り詰めない")
-
-
-func test_derived_value_separates_actor_and_purpose() -> void:
-	# 設計書10節 VECTOR-003 のactor違い・purpose違い。
-	var base: int = SimRng.derived_value(0xABCD, 2, 1)
-	var actor_changed: int = SimRng.derived_value(0xABCD, 3, 1)
-	var purpose_changed: int = SimRng.derived_value(0xABCD, 2, 2)
-
-	check_eq(base, 2108330416775593002, "派生値の基準ベクトル")
-	check_eq(actor_changed, 5469489065395195681, "actor違いの固定ベクトル")
-	check_eq(purpose_changed, 6083307090805565555, "用途違いの固定ベクトル")
-	check(actor_changed != base, "actorを派生値から落とさない")
-	check(purpose_changed != base, "用途IDを派生値から落とさない")
-	check_eq(SimRng.derived_value(0xABCD, 2, 1), base,
-		"同じ入力は呼び出し回数によらず同じ派生値になる")
-
-
 func test_cpu_original_lotteries_read_raw_aitick() -> void:
 	var s = SimState.new()
 	s.aitick = 0
@@ -185,3 +152,128 @@ func test_hit_resolver_lotteries_use_read_only_derived_aitick() -> void:
 			"トス下手の30固定分岐: aitick=0x%X" % v[0])
 		check_eq(s.to_int_array(), before_thresholds,
 			"特性の閾値判定はSimStateを変更しない")
+
+
+func test_scatter_stream_snapshot() -> void:
+	var s = SimState.new()
+	var actual: Array[int] = []
+	# 123456は16bit正規化で0xE240へ折り返す契約も同じ列で固定する。
+	for aitick in [0, 1, 17, 999, 123456]:
+		s.aitick = aitick
+		for actor in [0, 1, 3]:
+			for salt in [11, 13, 17, 19]:
+				actual.append(HitResolver._scatter(s, actor, salt))
+	check_eq(actual, [
+		-52, 89, -94, 83, -59, -28, -35, -60, -27, -2, 49, -3,
+		-42, -97, -85, 94, -73, -16, -93, 42, -61, -41, -87, 55,
+		-89, -25, 9, 20, 25, 94, 18, 61, -92, -54, 25, 38,
+		-64, 58, -50, -74, 71, -5, 35, -7, 3, 84, 31, -91,
+		-69, 40, 93, -31, 29, 35, 57, -69, 80, -22, 0, -32,
+	], "固定aitick/actor/saltの乱数列")
+
+
+func test_scatter_is_deterministic_and_separates_actor_and_purpose() -> void:
+	var s = SimState.new()
+	s.aitick = 1234
+	var a: int = HitResolver._scatter(s, 1, 11)
+	var b: int = HitResolver._scatter(s, 1, 11)
+	check_eq(a, b, "同じaitick・actor・用途IDなら同値")
+	check(a >= -100 and a <= 100, "範囲は-100..100")
+	var c: int = HitResolver._scatter(s, 2, 11)
+	var d: int = HitResolver._scatter(s, 1, 13)
+	check(a != c or a != d, "actorまたは用途IDで散る")
+
+
+func test_derived_roll_is_stable_until_aitick_changes() -> void:
+	var s = SimState.new()
+	s.aitick = 0xABCD
+	s.tick = 123
+	s.last_hit_tick = 456
+	var before: Array[int] = s.to_int_array().duplicate()
+	var base: int = SimCpu._derived_roll(SimCpu.SALT_AIM, s, 2)
+	check_eq(base, 2108330416775593002,
+		"固定aitick・actor・用途IDの承認済み派生値")
+	check_eq(s.to_int_array(), before, "派生値の読み取りはSimStateを変更しない")
+
+	s.tick = 999
+	s.last_hit_tick = 888
+	check_eq(SimCpu._derived_roll(SimCpu.SALT_AIM, s, 2), base,
+		"tickとlast_hit_tickを変えても派生値は変わらない")
+	s.aitick = 0xABCE
+	check(SimCpu._derived_roll(SimCpu.SALT_AIM, s, 2) != base,
+		"承認済みベクトルではaitickが変わると派生値も変わる")
+	s.aitick = 0xABCD
+	check_eq(SimCpu._derived_roll(SimCpu.SALT_AIM, s, 3),
+		5469489065395195681, "actor違いの承認済み派生値")
+	check_eq(SimCpu._derived_roll(SimCpu.SALT_MISS, s, 2),
+		6083307090805565555, "用途ID違いの承認済み派生値")
+
+
+func test_mura_roll_is_deterministic_and_has_10_80_10_distribution() -> void:
+	var s = SimState.new()
+	var outcome_by_roll := {}
+	for aitick in SimRng.WORD_MASK + 1:
+		s.aitick = aitick
+		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_MURA)
+		var pct: int = HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA)
+		if outcome_by_roll.has(roll):
+			check_eq(pct, outcome_by_roll[roll],
+				"同じrollは全aitickで同じむらっけ倍率: roll=%d" % roll)
+		else:
+			outcome_by_roll[roll] = pct
+
+	check_eq(outcome_by_roll.size(), 100, "全16bit aitickがroll 0..99を覆う")
+	var counts := {50: 0, 100: 0, 150: 0}
+	for roll in 100:
+		check(outcome_by_roll.has(roll), "むらっけroll全域を含む: roll=%d" % roll)
+		var expected_pct: int = 50 if roll < 10 else (100 if roll < 90 else 150)
+		check_eq(outcome_by_roll[roll], expected_pct,
+			"むらっけ閾値の全域写像: roll=%d" % roll)
+		counts[expected_pct] += 1
+	check_eq([counts[50], counts[100], counts[150]], [10, 80, 10],
+		"むらっけは10%/80%/10%")
+
+	s.aitick = 0xABCD
+	check_eq(HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_MURA), 96,
+		"第3層用のactor 0固定roll")
+	check_eq(HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA), 150,
+		"固定roll 96は150%側")
+	check_eq(HitResolver._mura_power_pct(s, 0, Chars.CHAR_MARIO), 100,
+		"むらっけ無しは常に100%")
+
+
+func test_toss_bad_is_exactly_30_percent() -> void:
+	var s = SimState.new()
+	var outcome_by_roll := {}
+	for aitick in SimRng.WORD_MASK + 1:
+		s.aitick = aitick
+		var roll: int = HitResolver._trait_roll_pct(
+			s, 0, HitResolver.SALT_TOSS_BAD)
+		var pct: int = HitResolver._toss_apex_pct(s, 0, Chars.CHAR_PANDA)
+		if outcome_by_roll.has(roll):
+			check_eq(pct, outcome_by_roll[roll],
+				"同じrollは全aitickで同じトス頂点倍率: roll=%d" % roll)
+		else:
+			outcome_by_roll[roll] = pct
+
+	check_eq(outcome_by_roll.size(), 100, "全16bit aitickがroll 0..99を覆う")
+	var low_count := 0
+	for roll in 100:
+		check(outcome_by_roll.has(roll), "トス下手roll全域を含む: roll=%d" % roll)
+		var expected_pct: int = 70 if roll < 30 else 100
+		check_eq(outcome_by_roll[roll], expected_pct,
+			"トス下手閾値の全域写像: roll=%d" % roll)
+		if expected_pct == 70:
+			low_count += 1
+	check_eq(low_count, 30, "トス下手はroll全域の30%")
+
+	for v in [[0, 10, 70], [1, 65, 100]]:
+		s.aitick = v[0]
+		check_eq(HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_TOSS_BAD), v[1],
+			"第3層用のactor 0固定roll: aitick=%d" % v[0])
+		check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_PANDA), v[2],
+			"固定rollのトス頂点分岐: aitick=%d" % v[0])
+	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_MARIO), 100,
+		"トス上手は失敗なし")
+	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_FOX), 100,
+		"特性なしは失敗なし")

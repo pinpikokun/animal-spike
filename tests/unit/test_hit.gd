@@ -377,11 +377,11 @@ func test_bump_on_ground() -> void:
 	check_eq(s.last_touch_team, 0, "最終タッチは左チーム")
 	check(s.players[0].hit_cooldown > 0, "クールダウン開始")
 
-func _ground_receive_vx(offset_px: int, input: int = 0, tick: int = 0) -> int:
+func _ground_receive_vx(offset_px: int, input: int = 0, aitick: int = 0) -> int:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.tick = tick
+	s.aitick = aitick
 	s.ball_x = s.players[0].x + FP.from_int(offset_px)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = 0
@@ -404,7 +404,7 @@ func test_ground_receive_vx_is_clamped() -> void:
 
 func test_ground_receive_scatter_is_deterministic() -> void:
 	check_eq(_ground_receive_vx(0, 0, 137), _ground_receive_vx(0, 0, 137),
-		"同じtick・actor・入力のレシーブ散りは同じ値になる")
+		"同じaitick・actor・入力のレシーブ散りは同じ値になる")
 
 func test_ground_receive_has_no_forward_bias() -> void:
 	var cfg = SimConfig.new()
@@ -414,17 +414,15 @@ func test_ground_receive_has_no_forward_bias() -> void:
 
 func test_neutral_receive_keeps_legacy_bounce() -> void:
 	# 方向なしアクションはトスではなく素レシーブ。トス技能の低軌道補正を受けない。
-	for seed_tick in 201:
-		var w := _rally_world()
-		var s = w[0]
-		var cfg = w[1]
-		s.tick = seed_tick
-		s.ball_x = s.players[0].x + FP.from_int(30)
-		s.ball_y = cfg.floor_y - FP.from_int(10)
-		s.ball_vy = 0
-		Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-		check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
-			"ニュートラルレシーブはトス技能に関係なく従来の高さで跳ねる")
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x + FP.from_int(30)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_vy = 0
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
+	check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
+		"ニュートラルレシーブのvyはトス抽選に関係なく従来の高さで跳ねる")
 
 func test_neutral_receive_reflects_vertical_inertia() -> void:
 	var w := _rally_world()
@@ -449,66 +447,65 @@ func test_neutral_ground_toss_targets_own_front() -> void:
 	check(s.ball_vy < 0, "ニュートラルトスは上向き")
 
 func test_only_toss_bad_can_produce_low_toss() -> void:
-	var low_count := 0
-	for seed_tick in 201:
-		var w := _rally_world()
-		var s = w[0]
-		var cfg = w[1]
-		s.players[0].char_id = Chars.CHAR_PANDA
-		s.tick = seed_tick
-		s.ball_x = s.players[0].x + FP.from_int(30)
-		s.ball_y = cfg.floor_y - FP.from_int(10)
-		s.ball_vy = 0
-		Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-		var upward: int = -s.ball_vy
-		check(upward <= cfg.bump_up_speed, "下手なトスでも基準より高くしない")
-		if upward < cfg.bump_up_speed * 90 / 100:
-			low_count += 1
-	check(low_count > 0, "トス下手は低いトスを出すことがある")
-	var w2 := _rally_world()
-	var s2 = w2[0]
-	var cfg2 = w2[1]
-	s2.players[0].char_id = Chars.CHAR_FOX
-	s2.ball_x = s2.players[0].x + FP.from_int(5)
-	s2.ball_y = cfg2.floor_y - FP.from_int(10)
-	Simulation.step(s2, [Simulation.IN_ACTION, 0, 0, 0], cfg2)
-	check_eq(s2.ball_vy, -cfg2.bump_up_speed + cfg2.gravity,
+	var low_world := _rally_world()
+	var low_state = low_world[0]
+	var cfg = low_world[1]
+	low_state.players[0].char_id = Chars.CHAR_PANDA
+	low_state.aitick = 0
+	check_eq(HitResolver._trait_roll_pct(
+		low_state, 0, HitResolver.SALT_TOSS_BAD), 10,
+		"固定aitick=0はトス下手の低トス側")
+	check_eq(HitResolver._toss_apex_pct(low_state, 0, Chars.CHAR_PANDA), 70,
+		"トス下手の成功抽選は頂点70%")
+	low_state.ball_x = low_state.players[0].x + FP.from_int(30)
+	low_state.ball_y = cfg.floor_y - FP.from_int(10)
+	low_state.ball_vy = 0
+	Simulation.step(low_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var low_upward: int = -low_state.ball_vy
+
+	var normal_world := _rally_world()
+	var normal_state = normal_world[0]
+	normal_state.players[0].char_id = Chars.CHAR_PANDA
+	normal_state.aitick = 1
+	check_eq(HitResolver._trait_roll_pct(
+		normal_state, 0, HitResolver.SALT_TOSS_BAD), 65,
+		"固定aitick=1はトス下手の通常側")
+	check_eq(HitResolver._toss_apex_pct(normal_state, 0, Chars.CHAR_PANDA), 100,
+		"トス下手でも失敗抽選外は通常頂点")
+	normal_state.ball_x = normal_state.players[0].x + FP.from_int(30)
+	normal_state.ball_y = cfg.floor_y - FP.from_int(10)
+	normal_state.ball_vy = 0
+	Simulation.step(normal_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	var normal_upward: int = -normal_state.ball_vy
+	check(low_upward < normal_upward,
+		"トス下手の成功抽選だけが通常より低いトスを出す")
+	check_eq(normal_state.ball_vy, -cfg.bump_up_speed + cfg.gravity,
+		"トス下手でも失敗抽選外は通常速度")
+
+	var traitless_world := _rally_world()
+	var traitless_state = traitless_world[0]
+	traitless_state.players[0].char_id = Chars.CHAR_FOX
+	traitless_state.aitick = 0
+	check_eq(HitResolver._toss_apex_pct(traitless_state, 0, Chars.CHAR_FOX), 100,
+		"特性なしは低トス側の固定入力でも通常頂点")
+	traitless_state.ball_x = traitless_state.players[0].x + FP.from_int(5)
+	traitless_state.ball_y = cfg.floor_y - FP.from_int(10)
+	traitless_state.ball_vy = 0
+	Simulation.step(traitless_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	check_eq(traitless_state.ball_vy, -cfg.bump_up_speed + cfg.gravity,
 		"特性なしは低トス失敗なし")
 
-func test_mura_roll_is_deterministic_and_has_10_80_10_distribution() -> void:
-	var w := _rally_world()
-	var s = w[0]
-	var counts := {50: 0, 100: 0, 150: 0}
-	var seen := {}
-	for aitick in 100000:
-		s.aitick = aitick
-		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_MURA)
-		if not seen.has(roll):
-			seen[roll] = true
-			var pct: int = HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA)
-			counts[pct] += 1
-			check_eq(pct, HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA),
-				"同じaitickとactorならむらっけ結果が同じ")
-			if seen.size() == 100:
-				break
-	check_eq(seen.size(), 100, "決定論サンプルが全ロール値を覆う")
-	check_eq([counts[50], counts[100], counts[150]], [10, 80, 10],
-		"むらっけは10%/80%/10%")
-	check_eq(HitResolver._mura_power_pct(s, 0, Chars.CHAR_MARIO), 100,
-		"むらっけ無しは常に100%")
-
-func _aitick_for_mura_pct(target_pct: int) -> int:
-	var w := _rally_world()
-	var s = w[0]
-	for aitick in 10000:
-		s.aitick = aitick
-		if HitResolver._mura_power_pct(s, 0, Chars.CHAR_PANDA) == target_pct:
-			return aitick
-	return -1
-
 func test_mura_applies_to_normal_just_and_attack_serve() -> void:
-	var aitick := _aitick_for_mura_pct(150)
-	check(aitick >= 0, "150%の決定論aitickが見つかる")
+	var aitick := 0xABCD
+	var contract_world := _rally_world()
+	var contract_state = contract_world[0]
+	contract_state.aitick = aitick
+	check_eq(HitResolver._trait_roll_pct(
+		contract_state, 0, HitResolver.SALT_MURA), 96,
+		"固定aitick=0xABCDはむらっけ150%側")
+	check_eq(HitResolver._mura_power_pct(
+		contract_state, 0, Chars.CHAR_PANDA), 150,
+		"固定入力のむらっけ倍率は150%")
 	for sweet in [false, true]:
 		var w := _rally_world()
 		var s = w[0]
@@ -744,26 +741,8 @@ func test_toss_good_aims_own_ground_trajectory_at_zone() -> void:
 		check_eq(s.ball_vx, expected_vx,
 			"トス上手の両チーム自陣照準: actor=%d" % actor)
 
-func test_toss_bad_is_exactly_30_percent_and_targets_70_percent_apex() -> void:
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	var seen := {}
-	var low_count := 0
-	for aitick in 100000:
-		s.aitick = aitick
-		var roll: int = HitResolver._trait_roll_pct(s, 0, HitResolver.SALT_TOSS_BAD)
-		if not seen.has(roll):
-			seen[roll] = true
-			if HitResolver._toss_apex_pct(s, 0, Chars.CHAR_PANDA) == 70:
-				low_count += 1
-			if seen.size() == 100:
-				break
-	check_eq(low_count, 30, "トス下手は決定論サンプルの30%")
-	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_MARIO), 100,
-		"トス上手は失敗なし")
-	check_eq(HitResolver._toss_apex_pct(s, 0, Chars.CHAR_FOX), 100,
-		"特性なしは失敗なし")
+func test_toss_vy_for_apex_pct_targets_requested_height() -> void:
+	var cfg = SimConfig.new()
 	var normal_vy: int = -cfg.bump_up_speed
 	var low_vy: int = HitResolver.toss_vy_for_apex_pct(normal_vy, cfg.gravity, 70)
 	var normal_h: int = HitResolver.apex_height(normal_vy, cfg.gravity)

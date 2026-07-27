@@ -4,7 +4,6 @@ const FP := preload("res://src/sim/fp.gd")
 const Cfg := preload("res://src/sim/sim_config.gd")
 const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
-const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
@@ -108,15 +107,3 @@ func test_standard_weight_gives_same_airtime() -> void:
 	var frog := _measure_full_jump(Chars.CHAR_FROG)
 	check_eq(panda.slice(1), mario.slice(1), "パンダとマリオの滞空時間は同じ")
 	check_eq(mario.slice(1), frog.slice(1), "マリオとカエルの滞空時間は同じ")
-
-func test_scatter_is_deterministic() -> void:
-	# 同じtick/actor/saltなら同じ値(両ピア同値・ロールバック再現の土台)
-	var s = St.new()
-	s.tick = 1234
-	var a: int = HitResolver._scatter(s, 1, 11)
-	var b: int = HitResolver._scatter(s, 1, 11)
-	check_eq(a, b, "同キーで同値")
-	check(a >= -100 and a <= 100, "範囲は-100..100")
-	var c: int = HitResolver._scatter(s, 2, 11)
-	var d: int = HitResolver._scatter(s, 1, 13)
-	check(a != c or a != d, "actor/saltで散る(縮退していない)")

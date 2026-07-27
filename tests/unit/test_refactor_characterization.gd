@@ -154,24 +154,6 @@ func test_collision_order_hit_move_net_block() -> void:
 		[19669538, 13897090, -926941, 134530, 1, 1, 14, 14],
 		"同tickのヒット→移動→ネット→ブロック順")
 
-func test_scatter_stream_snapshot() -> void:
-	var w: Array = _world()
-	var s = w[0]
-	var actual: Array[int] = []
-	# 123456は16bit正規化で0xE240へ折り返す契約も同じ列で固定する。
-	for aitick in [0, 1, 17, 999, 123456]:
-		s.aitick = aitick
-		for actor in [0, 1, 3]:
-			for salt in [11, 13, 17, 19]:
-				actual.append(HitResolver._scatter(s, actor, salt))
-	check_eq(actual, [
-		-52, 89, -94, 83, -59, -28, -35, -60, -27, -2, 49, -3,
-		-42, -97, -85, 94, -73, -16, -93, 42, -61, -41, -87, 55,
-		-89, -25, 9, 20, 25, 94, 18, 61, -92, -54, 25, 38,
-		-64, 58, -50, -74, 71, -5, 35, -7, 3, 84, 31, -91,
-		-69, 40, 93, -31, 29, 35, 57, -69, 80, -22, 0, -32,
-	], "固定aitick/actor/saltの乱数列")
-
 func _chain_hashes() -> Array[int]:
 	var w: Array = _world()
 	var s = w[0]
@@ -221,7 +203,10 @@ func _chain_hashes() -> Array[int]:
 			out.append(s.state_hash())
 	return out
 
-func test_hit_chain_second_golden() -> void:
+func test_hit_chain_physics_state_transition_golden() -> void:
+	# _world() は SimState.new() だけを使い Simulation.tick() を通らないため、
+	# 全過程で tick=0 / rng=0 / aitick=0 のまま進む。旧tick=0と新aitick=0の
+	# 派生値は同一なので、これは物理・状態遷移の固定検査であり乱数源切替は検査対象外。
 	# 2026-07-25: serve_ball フィールドを SimState へ追加したため全7値が変化した。
 	# state_hash は全 int フィールドを畳むので、値が0でもフィールドが増えれば
 	# すべてのハッシュがずれる。挙動の異常ではない。実測値。

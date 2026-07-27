@@ -13,14 +13,8 @@ func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0)
 	return [s, cfg]
-
-func _select_successful_roll(s, actor: int, salt: int, threshold: int) -> void:
-	for key in 900:
-		if SimCpu._noise(salt, key, actor) % 256 < threshold:
-			s.last_hit_tick = key
-			return
 
 func _set_rally_attacker(s, idx: int) -> void:
 	var team: int = idx / 2
@@ -91,8 +85,12 @@ func _incoming_attack_world(profile: int) -> Array:
 	s.ball_y = p.y - cfg.player_reach_up - FP.from_int(6)
 	s.ball_vx = 0
 	s.ball_vy = FP.from_int(1)
-	_select_successful_roll(s, 1, SimCpu.SALT_RECEIVE,
-		SimCpu.prof_byte(profile, SimCpu.P_SWEET))
+	if SimCpu.prof_byte(profile, SimCpu.P_TIQ) < 3:
+		check(SimCpu.prof_byte(profile, SimCpu.P_SWEET) > 0,
+			"無条件成功でないプロファイルは正のsweet閾値を持つ")
+	s.aitick = 0
+	check(SimCpu._sweet_ok(s, 1, profile),
+		"固定aitick=0はレシーブsweet成功側")
 	return [s, cfg]
 
 func test_max_cpu_presses_receive_inside_predicted_timing_window() -> void:
@@ -150,8 +148,9 @@ func test_max_cpu_keeps_walking_when_horizontal_range_hides_ellipse_miss() -> vo
 	receiver.vx = 0
 	receiver.vy = 0
 	receiver.on_ground = 1
-	_select_successful_roll(s, receiver_idx, SimCpu.SALT_RECEIVE,
-		SimCpu.prof_byte(receiver.cpu, SimCpu.P_SWEET))
+	s.aitick = 0
+	check(SimCpu._sweet_ok(s, receiver_idx, receiver.cpu),
+		"固定aitick=0はレシーブsweet成功側")
 	var land_x: int = SimCpu._receive_target_x(s, cfg, receiver.cpu)
 	var receive_reach: int = SimCpu._hit_reach(
 		receiver.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
@@ -299,9 +298,9 @@ func _check_attack_serve(profile: int, label: String) -> void:
 	var w := _serve_attack_world(profile)
 	var s = w[0]
 	var cfg = w[1]
-	if profile == SimCpu.PRESET_STRONG:
-		_select_successful_roll(s, 0, SimCpu.SALT_ATTACK,
-			SimCpu.prof_byte(profile, SimCpu.P_TIQ) * 64)
+	s.aitick = 0
+	check(SimCpu._attack_ok(s, 0, profile),
+		label + "の固定aitick=0はアタックサーブ成功側")
 	var jump_input: int = SimCpu.decide(s, 0, cfg)
 	check(jump_input & Simulation.IN_JUMP, label + "は高いサーブトスへジャンプする")
 	var p = s.players[0]
@@ -322,7 +321,7 @@ func test_max_mirror_offense_and_just_receive_kpi() -> void:
 	cfg.points_to_win = 999
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0)
 	for p in s.players:
 		p.cpu = SimCpu.PRESET_MAX
 	var attacks := 0
