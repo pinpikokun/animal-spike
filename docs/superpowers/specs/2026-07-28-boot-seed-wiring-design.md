@@ -12,11 +12,84 @@
   - `docs/tasks/107.md`
   - `docs/tasks/88.md` の (d)
 - 設計入力を確定したコミット: `e35fa65`
-- 現在の基準: 448 tests, 0 failed
+- 実装前の基準: 448 tests, 0 failed
 - この文書は設計契約である。本文を書いただけでは実装を開始しない。
 - Claude Code が全文を査読し、行数と SHA-256 を固定して承認した後にだけ実装へ進む。
 - Codex はコミットしない。
-- この設計書作成段階ではテストも Godot も実行しない。
+- 初版作成時と今回の改訂作業では、Codex はテストも Godot も実行しない。
+- REVISION-105-001 の実測値は Claude Code が実行したフルテストの報告である。
+
+### REVISION-105-001: 初回実装後の改訂理由
+
+初回実装後のフルテストで次を実測した。
+
+```text
+461 tests, 8 failed
+SCRIPT ERROR: 17 occurrence(s)
+Godot exit code: 1
+```
+
+既存テストの失敗は 0 であり、既存のゴールデン hash、固定乱数列、
+固定配列、既知ベクタは一つも動かなかった。
+
+失敗原因は次の二つに分離された。
+
+1. `boot_seed_handshake.gd` の ACK 比較結果を `:=` で推論しようとしたため、
+   `Variant` を含む式から型を決定できずパースに失敗した
+2. `tests/run_tests.gd::_init()` の実行中は
+   `Engine.get_main_loop()` がまだ登録されておらず `null` だった
+
+二つ目は STOP-105-002 に該当する。
+この改訂版が新しい行数と SHA-256 で承認されるまで実装を再開しない。
+
+### REVISION-105-002: 改訂で変えない契約
+
+追加テスト関数は 13 本、合計は 461 本のままとする。
+
+原文走査、production と同じ式からの expected 再計算、
+`main.tscn` だけによる代用へは退避しない。
+
+`boot_seed` の production 契約、ネット合意手順、固定値不変契約、
+#106 との境界は変更しない。
+
+### REVISION-105-003: _initialize 改訂後の再実測
+
+REVISION-105-001 の修正後、Claude Code は次を実測した。
+
+```text
+godot --headless --script res://tests/run_tests.gd
+  461 tests, 0 failed
+  exit code 0
+
+powershell -File run_tests.ps1
+  exit code 1
+  SCRIPT ERROR 2件
+```
+
+HANDSHAKE-002A の明示的な `bool` により原因 A は解消し、
+ネット合意状態機械テスト 6 本はすべて成功した。
+
+一方、`tests/run_tests.gd::_initialize()` では
+`Engine.get_main_loop()` と `SceneTree.root` は取得できるが、
+実測で `root.is_inside_tree()` は `false` だった。
+この段階で追加した対象ノードの `_ready()` は発火せず、
+TEST-L1-002 第3項は `state == null` のまま本命検査へ進んで
+SCRIPT ERROR になった。
+
+テストメソッドは、事前ガードの `check()` を 2 回成功させた後に中断した。
+そのため既存の `checks_run == 0` 防御は作動せず、
+直接起動したランナーは当該テストを `PASS` と誤表示した。
+
+`run_tests.ps1` の `SCRIPT ERROR` 検査はこの偽の緑を拒否した。
+よって、この改訂では次を設計契約にする。
+
+1. 全テスト本体は `SceneTree.root` がツリーへ入った最初の `_process()` で一回だけ実行する
+2. 対象ノードは同じ `_process()` 呼び出し内で追加、検査、同期解放まで完了する
+3. #105 のフルテスト合否は `run_tests.ps1` の終了コードを正とする
+4. `checks_run > 0` の後にランタイムエラーで中断すると偽 PASS になり得る一般問題は、
+   #105 へ広げず別タスクで扱う
+
+この改訂版が新しい行数と SHA-256 で承認されるまで実装を再開しない。
 
 ## 2. 範囲
 
@@ -667,6 +740,23 @@ RPC や `SyncManager` を直接呼ばない状態機械を置く。
 `net_match.gd` はこの状態機械の結果に従う。
 同じ分岐条件を `net_match.gd` とテストへ二重実装してはならない。
 
+### HANDSHAKE-002A: Variant を含む比較結果の型を明示する
+
+開始情報と ACK の RPC 境界は、不正な型も状態機械で停止できるように
+受信値を `Variant` として扱ってよい。
+
+その `Variant` を含む一致判定の結果は、`:=` による型推論へ任せない。
+ACK の三点照合は次と同等に `bool` を明示する。
+
+```gdscript
+var matches: bool = sender_id == expected_peer_id \
+	and seed == agreed_seed \
+	and hash_value == initial_hash
+```
+
+照合式、照合対象、失敗時の停止契約は変更しない。
+これは状態遷移の設計変更ではなく、GDScript のパースを成立させる実装制約である。
+
 ### HANDSHAKE-003: root への通知
 
 join が開始情報を初めて正常適用したとき、
@@ -970,9 +1060,13 @@ start の回数または不一致入力の拒否を証明しない。
   - host / join の stdout と stderr を別ファイルへ保存
   - 合意値、開始回数、異常行を機械判定
   - 判定結果を終了コード 0 / 1 で返す
+- `run_tests.ps1`
+  - Godot の出力にテスト集計行が正確に一つあることを検査
+  - 最初の `_process()` でスイートが実行されず蒸発した場合を成功扱いにしない
+  - `SCRIPT ERROR` を含む Godot の偽の緑を成功扱いにしない
 
-このファイルのコメントは、既存契約どおり PowerShell 5.1 での文字化けを避けるため
-ASCII のままにする。
+これらの PowerShell ファイルのコメントは、
+既存契約どおり PowerShell 5.1 での文字化けを避けるため ASCII のままにする。
 
 ### FILE-003: 変更するテストファイル
 
@@ -983,6 +1077,10 @@ ASCII のままにする。
 - `tests/unit/test_sim_root.gd`
   - `setup()` の既定 seed 0
   - 新品 state 転写、参照同一性、転写後設定
+- `tests/run_tests.gd`
+  - テスト本体の実行場所を `_init()` から最初の `_process()` へ移す
+  - `SceneTree.root` がツリーへ入った段階で全テストを一回だけ同期実行する
+  - 一回実行を守る内部フラグを持つ
 
 ### FILE-004: 意図的に変更しないファイル
 
@@ -1073,6 +1171,167 @@ SCRIPT ERROR summary: 0 occurrence(s)
 証明できない順序を原文走査テストで代用し、
 実行時テストであるかのように扱ってはならない。
 
+### TEST-RUNNER-001: 全スイートを最初の _process で実行する
+
+`tests/run_tests.gd` は `SceneTree` を継承し、
+Godot の `--script res://tests/run_tests.gd` で main loop として起動される。
+
+`Object._init()` の実行中は、このオブジェクトがまだ
+`Engine.get_main_loop()` へ登録されていない。
+実測では `_init()` 中の `Engine.get_main_loop()` は `null` であり、
+`_initialize()` では同じオブジェクトが `SceneTree` として取得でき、
+`root` も存在した。
+
+しかし `_initialize()` の実測では `root.is_inside_tree()` は `false` であり、
+そこへ追加したノードの `_ready()` は発火しなかった。
+
+最初の `_process()` の実測では `root.is_inside_tree()` は `true` であり、
+同じ callback 内の `add_child()` で対象ノードの `_ready()` が同期発火した。
+
+したがって、現在 `_initialize()` にあるテスト列挙、実行、集計、`quit()` の本体を
+名前付きの内部関数へそのまま移し、最初の `_process()` から一回だけ呼ぶ。
+
+```gdscript
+var _suite_ran := false
+
+func _process(_delta: float) -> bool:
+	if _suite_ran:
+		return true
+	_suite_ran = true
+	_run_suite()
+	return true
+
+func _run_suite() -> void:
+	# 現在の _initialize() にある全テスト実行本体
+```
+
+テストの選別、順序、FAIL 集計、`checks_run == 0` 防御、
+`total == 0` 防御、終了コードの決定は変更しない。
+
+`_process()` から `super()` は呼ばない。
+`quit(code)` は `_run_suite()` の既存経路で要求し、
+その終了コードがプロセスへ伝播することは Godot 4.6 の使い捨てプローブで実測済みである。
+
+`_suite_ran` は二回目の実行を防ぐ安全弁である。
+正常経路では最初の `_process()` 内で `quit()` を要求し、二回目へ進まない。
+
+### TEST-RUNNER-002: サポートする起動経路
+
+サポートするフルテスト起動経路は現在と同じ次の一つである。
+
+```text
+godot --headless --path . --script res://tests/run_tests.gd
+```
+
+リポジトリ内でこの起動を行う正式な入口は `run_tests.ps1` である。
+
+`tests/run_tests.gd` を通常の script として `load()` し、
+`script.new()` だけでテストを起動する経路はサポートしない。
+その経路では main loop の lifecycle hook である `_process()` が呼ばれないためである。
+
+Godot はコマンドラインで渡された MainLoop script を main loop として初期化し、
+root をツリーへ入れた後に `_process()` を呼ぶ。
+今回の Godot 4.6 実測でも同じ起動経路で最初の `_process()`、
+同期的な `_ready()`、`quit(code)` の終了コード伝播を確認済みである。
+
+### TEST-RUNNER-003: スイート蒸発を外側でも検出する
+
+`total == 0` 防御は `_run_suite()` が呼ばれた後のテスト発見失敗には有効だが、
+最初の `_process()` または `_run_suite()` 自体が呼ばれない事故の証拠にはならない。
+
+そのため `run_tests.ps1` は、従来の Godot 終了コードと
+`SCRIPT ERROR` 検査に加えて、次の形式の集計行が正確に一つ存在することを要求する。
+
+```text
+<正の整数> tests, <0以上の整数> failed
+```
+
+集計行が 0 件または 2 件以上なら、Godot の終了コードが 0 でも
+`run_tests.ps1` は終了コード 1 にする。
+
+この外側の検査は「最初の `_process()` から `_run_suite()` が呼ばれ、
+最後の集計まで到達した」ことを証明する。
+461 本という #105 固有の本数と failed 0 は、
+従来どおり TEST-COUNT-001 と VERIFY-002 で別に照合する。
+将来テストを追加するたびに PowerShell の固定本数を更新する設計にはしない。
+
+### TEST-RUNNER-004: lifecycle を後ろへ移す影響
+
+全テストは従来の `_init()` より後の最初の `_process()` で走る。
+この時点では `SceneTree.root` と project の autoload がツリーへ入っている。
+
+「最初の `_process()` の時点でツリーには root しかいない」とは扱わない。
+`project.godot` は `SyncManager` を autoload しており、
+その `_ready()` は `PingTimer`、`SpawnManager`、`SoundManager` を追加する。
+
+ただし現在の `SyncManager` は同期開始前の `_started == false` であり、
+`SyncManager.gd::_process()` と `_physics_process()` は先頭で即時 return する。
+テスト開始前の一反復で rollback tick やゲーム sim は進まない。
+
+autoload の timer 等が一反復分の engine 時間を受け得ることまで
+「副作用ゼロ」とは主張しない。
+#105 が要求する保証は次に限定する。
+
+- テスト対象ノードは runner の最初の `_process()` callback 内で初めて追加する
+- `add_child()` で `_ready()` を同期実行する
+- 同じ callback 内で検査し、`remove_child()` と `free()` で同期解放する
+- runner が engine へ制御を返す時点では対象ノードを残さない
+- 対象ノード自身の engine 駆動 `_process()` / `_physics_process()` は一度も発火させない
+- 同じ callback 内で `quit()` を要求し、テスト用の二回目の frame を待たない
+
+この lifecycle の差で既存 448 本の結果または固定値が一つでも変わった場合は、
+テスト環境変更による発見として停止する。
+期待値やゴールデンを書き換えて通してはならない。
+
+将来、autoload の構成または `SyncManager` の開始前処理が変わり、
+最初の `_process()` までにゲーム状態を進めるようになった場合も停止する。
+
+### TEST-RUNNER-005: 採らない代案
+
+次は採らない。
+
+- 対象 scene の `_ready()` を直接呼ぶ
+  - 子ノードの ready、scene tree 所属、resource 初期化を証明しない
+- `_init()` から `SceneTree.new()` を作る
+  - Engine が所有する現在の main loop と root を再現しない
+- `_initialize()` で全テストを実行する
+  - `root` は存在してもツリーへ入っておらず、対象ノードの `_ready()` が発火しない
+- `call_deferred()`、二回目以降の `_process()`、frame 待ちへ送る
+  - TEST-RUNNER-001 が必要とする一反復を超えて engine 時間を進める
+- 第3項と第4項だけを別の Godot subprocess または別ランナーへ分離する
+  - テスト数、終了コード、SCRIPT ERROR の証拠が二系統に割れる
+- runner が特定のテスト名だけを識別して二段階実行する
+  - 共通ランナーへ #105 固有のテスト名を焼き付ける
+- 原文走査または `main.tscn` 第4項だけで代用する
+  - TEST-L1-002 と STOP-105-002 の証拠契約を満たさない
+
+最初の `_process()` は、REVISION-105-003 の実測により
+TEST-L1-002 の実シーン `_ready()` を成立させる最小の lifecycle 境界だと判明した。
+したがって、旧版 TEST-RUNNER-005 の一律な不採用判断を撤回し、
+TEST-RUNNER-001 と TEST-RUNNER-004 の限定条件で採用する。
+
+### TEST-RUNNER-006: checks_run 防御の既知の限界
+
+`checks_run == 0` 防御が証明するのは、
+テストメソッド内で `check()` が一回も完了しないまま中断した事故だけである。
+
+次の事故は防げない。
+
+1. 事前条件用の `check()` が一回以上成功する
+2. その後、本命の式評価中に GDScript ランタイムエラーが起きる
+3. テストメソッドが中断し、`failures` は空のまま戻る
+4. runner が `checks_run > 0` かつ `failures.is_empty()` を `PASS` と表示する
+
+REVISION-105-003 でこの偽 PASS を実測した。
+これは全テストに関わる汎用ランナーの検出契約であり、
+boot seed 配線そのものではないため #105 では修正しない。
+課題番号をこの設計書で発明せず、別タスクとして起票して扱う。
+
+#105 では既存の二段目の防御を正式な合否境界にする。
+すなわち `run_tests.ps1` が全出力の `SCRIPT ERROR` を検出し、
+一件でもあれば終了コード 1 にする。
+直接 Godot を起動したランナーの `PASS` 表示だけを合格証拠にしてはならない。
+
 ### TEST-HARNESS-001: シーンを実行する方法
 
 `tests/test_case.gd` は `RefCounted` なので、
@@ -1125,18 +1384,22 @@ fixture_root.free()
 `GameView._ready()` を実行する。
 
 `queue_free()` は使わない。
-現在の `tests/run_tests.gd` は `_init()` 内で全テストを同期実行して `quit()` し、
-解放キューを処理する次フレームがないためである。
+改訂後の `tests/run_tests.gd` は最初の `_process()` 内で全テストを同期実行して
+`quit()` を要求し、解放キューを処理する次の反復を待たないためである。
 
 正常経路の後始末は `remove_child()` と `free()` で同期的に完了させる。
 各対象ノードは別の fixture root で実行し、前のシーンのノードを次の検査へ残さない。
 
-### TEST-HARNESS-002: フレームを進めない
+### TEST-HARNESS-002: 対象ノードのフレームを進めない
 
 `fixture_root.add_child(target)` による `_ready()` は同期的に実行される。
 
-一方、`tests/run_tests.gd::_init()` はフレームを返さず全テストを実行するため、
-対象ノードの `_process()` と `_physics_process()` は発火しない。
+runner 自身は `SceneTree.root` がツリーへ入るために最初の `_process()` を一回受ける。
+これは旧版の「process / physics frame は一つも発火しない」という契約を置き換える。
+
+対象ノードは、その runner callback の途中で追加し、
+callback から戻る前に同期解放する。
+したがって対象ノード自身の engine 駆動 `_process()` と `_physics_process()` は発火しない。
 
 テストのために次を行ってはならない。
 
@@ -1144,6 +1407,7 @@ fixture_root.free()
 - 物理フレームの手動進行
 - timer 待ち
 - `_physics_process()` の直接呼び出し
+- 二回目の runner `_process()` を待つ
 
 第3項と第4項が検査するのは `_ready()` による初期状態だけである。
 
@@ -1247,19 +1511,41 @@ fixture_root.free()
 - seed 提示 RPC は authority / call_remote / reliable
 - ACK RPC は any_peer / call_remote / reliable
 - ACK 受信処理が `get_remote_sender_id()` を検査する
+- ACK の `Variant` を含む一致判定結果に明示的な `bool` 型がある
 - 生の既存 state への `reset_match()` 呼び直しをしていない
 - 転写後に `_team_inputs = [0, 0]` がある
 - 仮 state の `p.cpu` を保存、復元していない
+- `tests/run_tests.gd` のテスト実行本体は最初の `_process()` から一回だけ呼ばれ、
+  `_init()` と `_initialize()` からテストを実行しない
+- runner の `_process()` に二回実行防止フラグがある
+- `project.godot` の autoload と `SyncManager` の開始前 process が
+  TEST-RUNNER-004 の停止中境界を満たす
+- `run_tests.ps1` はテスト集計行が正確に一つない場合に終了コード 1
+- `run_tests.ps1` は `SCRIPT ERROR` が一件でもあれば終了コード 1
+- フルテストの正規合否を `run_tests.ps1` 自身の終了コードで判定する
 
 ### VERIFY-002: フルテスト
 
-承認後の実装担当はフルテストを一回通し、
+承認後の実装担当は正式な入口でフルテストを一回通す。
+
+```text
+powershell -File run_tests.ps1
+```
+
+合否を決める正規の終了コードは `run_tests.ps1` 自身の終了コードである。
+内部で起動した Godot の終了コードや、直接 Godot を起動したときの
+`461 tests, 0 failed` 表示だけを合格証拠にしてはならない。
+
 次を全件報告する。
 
+- `run_tests.ps1` の終了コード 0
 - 実行テスト数 461
 - failed 0
 - SCRIPT ERROR 0
-- exit code 0
+- `<正の整数> tests, <0以上の整数> failed` 形式の集計行が正確に一つ
+
+Godot が `461 tests, 0 failed` と表示して終了コード 0 を返しても、
+`run_tests.ps1` が SCRIPT ERROR その他の外側検査で終了コード 1 を返した場合は不合格である。
 
 部分テストだけで完了としてはならない。
 
@@ -1415,6 +1701,13 @@ Claude Code がこの設計書の全文、行数、SHA-256 を承認するまで
   `add_child()` して `_ready()` を実行できない
 - `GameView` または `main.tscn` の headless `_ready()` 実行で
   SCRIPT ERROR が一つでも出る
+- `tests/run_tests.gd` の最初の `_process()` が正式な `--script` 起動で呼ばれない
+- 最初の `_process()` で `Engine.get_main_loop()` または `SceneTree.root` を取得できない
+- 最初の `_process()` でも `root.is_inside_tree()` が `false`
+- 最初の `_process()` 内の `add_child()` で対象ノードの `_ready()` が同期発火しない
+- autoload または同期開始前の `SyncManager` が最初の `_process()` までに
+  rollback tick、ゲーム sim、テスト固定値を進める
+- lifecycle の移動だけで既存テストまたは固定値が一つでも変化する
 - #106 の二ワード所有契約がないと #105 を実装できない
 
 このシーン実行検査が成立しない場合も、
@@ -1429,7 +1722,8 @@ Claude Code がこの設計書の全文、行数、SHA-256 を承認するまで
 - フルテストが 461 本でない
 - failed が 1 件以上
 - SCRIPT ERROR が 1 件以上
-- Godot の終了コードが非 0
+- `run_tests.ps1` の終了コードが非 0
+- Godot 直接起動の集計が緑でも `run_tests.ps1` が赤
 - 既存固定値が一つでも変化
 - ネット初期 hash が不一致
 - ACK 前に同期開始
@@ -1469,6 +1763,10 @@ Claude Code がこの設計書の全文、行数、SHA-256 を承認するまで
 23. `NET_ACK_VERIFIED` が ACK 全件一致後、同期開始前に一回だけ記録される
 24. `-VerifyBootSeed` が保存ログを機械判定し、終了コード 0
 25. ネット二プロセス検証が mismatch 0
+26. 全テスト本体が `SceneTree.root` のツリー所属後、最初の `_process()` で一回だけ同期実行される
+27. `run_tests.ps1` がテスト集計行の欠落または重複を成功扱いにしない
+28. フルテストの正規合否は `run_tests.ps1` の終了コードで判定され、
+    SCRIPT ERROR を伴う Godot の偽 PASS を成功扱いにしない
 
 ### DONE-105-002: 未達のまま残す性質
 
