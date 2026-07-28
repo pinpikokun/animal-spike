@@ -13,7 +13,7 @@ func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	return [s, cfg]
 
 func _cpu_jump_serve_result(cfg, score_l: int, score_r: int,
@@ -23,7 +23,7 @@ func _cpu_jump_serve_result(cfg, score_l: int, score_r: int,
 		STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR,
 	]
 	roster[serving_team * 2] = Chars.CHAR_CARBY
-	Simulation.reset_match(s, cfg, serving_team, roster)
+	Simulation.reset_match(s, cfg, serving_team, roster, 0, 0)
 	s.score_l = score_l
 	s.score_r = score_r
 	if serving_team == 0:
@@ -119,7 +119,7 @@ func test_cpu_team_serves_via_team_input() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.reset_match(s, cfg, 1, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	var served := false
 	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
@@ -159,7 +159,7 @@ func test_cpu_jump_serve_strikes_in_upper_reach() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.reset_match(s, cfg, 0, [Chars.CHAR_CARBY, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	s.controlled_l = 1
 	var served := false
 	var strike_y: int = cfg.floor_y
@@ -186,7 +186,7 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	Simulation.reset_match(s, cfg, 1, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR])
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	var served := false
 	for i in cfg.serve_delay_ticks + 180:
 		var cpu_r: int = SimCpu.decide(s, 2 + s.controlled_r, cfg)
@@ -235,7 +235,7 @@ func test_rally_roles_are_deterministic() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR], 0x1234)
+		STANDARD_CHAR, STANDARD_CHAR], 0x1234, 0x1234)
 	var first_rolls: Array[int] = [
 		s.rally_role_roll_team0, s.rally_role_roll_team1,
 	]

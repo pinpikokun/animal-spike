@@ -436,7 +436,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	_hold_ball_on_server(s, cfg)
 
 static func reset_match(s, cfg, serving_team: int,
-		roster: Array = Chars.ROSTER, seed: int = 0) -> void:
+		roster: Array, rng_word: int, aitick_word: int) -> void:
 	# 試合開始時のみキャラを初期配置に置く。rosterは試合セットアップの一部
 	# (ネット対戦では開始時に両者で同じ配列を渡すこと=決定論安全)
 	var back: int = FP.from_int(cfg.spawn_back_px)
@@ -475,9 +475,8 @@ static func reset_match(s, cfg, serving_team: int,
 	s.last_touch_idx = -1
 	s.cpu_hit_count = 0
 	s.cpu_back_role_mask = SimCpu._back_role_mask_from_positions(s)
-	var word_seed: int = SimRng.normalize_word(seed)
-	s.rng = word_seed
-	s.aitick = word_seed
+	s.rng = SimRng.normalize_word(rng_word)
+	s.aitick = SimRng.normalize_word(aitick_word)
 	reset_rally(s, cfg, serving_team)
 
 static func _serve_x(s, cfg) -> int:

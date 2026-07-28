@@ -24,7 +24,7 @@ func setup(seed: int = 0) -> void:
 	# テストとnet_matchの両方から呼ぶ初期化(表示なし)
 	cfg = SimConfig.new()
 	state = SimState.new()
-	Simulation.reset_match(state, cfg, 0, Chars.ROSTER, seed)
+	Simulation.reset_match(state, cfg, 0, Chars.ROSTER, seed, seed)
 
 func apply_agreed_start(
 		agreed_serving_team: int,
@@ -33,7 +33,8 @@ func apply_agreed_start(
 		human_team_mask: int
 	) -> int:
 	var fresh := SimState.new()
-	Simulation.reset_match(fresh, cfg, agreed_serving_team, agreed_roster, agreed_seed)
+	Simulation.reset_match(fresh, cfg, agreed_serving_team, agreed_roster,
+		agreed_seed, agreed_seed)
 	state.load_int_array(fresh.to_int_array())
 	state.human_team_mask = human_team_mask
 	_team_inputs = [0, 0]

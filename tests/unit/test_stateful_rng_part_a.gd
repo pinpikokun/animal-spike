@@ -12,7 +12,7 @@ const Chars := preload("res://src/sim/chars.gd")
 func _match(seed: int = 0) -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, seed)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, seed, seed)
 	return [s, cfg]
 
 func _prepare_ground_hit(s, cfg) -> void:
@@ -62,30 +62,23 @@ func test_rng_fields_roundtrip_and_affect_hash() -> void:
 	check(rng_changed.state_hash() != base.state_hash(), "rngが同期ハッシュへ入る")
 	check(aitick_changed.state_hash() != base.state_hash(), "aitickが同期ハッシュへ入る")
 
-func test_reset_match_seeds_both_words_and_reset_rally_advances_rng_only() -> void:
+func test_reset_match_uses_two_words_and_reset_rally_advances_rng_only() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0x12345)
-	var initial_step1: int = SimRng.advance_role_roll(0x2345)
-	var initial_step2: int = SimRng.advance_role_roll(initial_step1)
-	check_eq(s.rng, initial_step2,
-		"reset_matchは16bit seedから初回ラリー役割を2回抽選")
-	check_eq(s.aitick, 0x2345, "reset_matchでaitickを同じseedへ初期化")
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0x12345, 0x12345)
+	check_eq(s.rng, 0x8D17,
+		"reset_matchは16bit rng_wordから初回ラリー役割を2回抽選")
+	check_eq(s.aitick, 0x2345, "reset_matchはaitick_wordを個別に16bit化")
 
 	s.rng = 0x1111
 	s.aitick = 0x2222
-	var rally_step1: int = SimRng.advance_role_roll(0x1111)
-	var rally_step2: int = SimRng.advance_role_roll(rally_step1)
 	Simulation.reset_rally(s, cfg, 1)
-	check_eq(s.rng, rally_step2, "reset_rallyはrngを役割抽選2回分だけ進める")
+	check_eq(s.rng, 0x4447, "reset_rallyはrngを役割抽選2回分だけ進める")
 	check_eq(s.aitick, 0x2222, "reset_rallyはaitickを維持")
 
-	Simulation.reset_match(s, cfg, 1, Chars.ROSTER, -1)
-	var next_match_step1: int = SimRng.advance_role_roll(0xFFFF)
-	var next_match_step2: int = SimRng.advance_role_roll(next_match_step1)
-	check_eq(s.rng, next_match_step2,
-		"次の試合だけrng系列を新しい16bit seedから再開")
-	check_eq(s.aitick, 0xFFFF, "次の試合だけaitickを再初期化")
+	Simulation.reset_match(s, cfg, 1, Chars.ROSTER, -1, -1)
+	check_eq(s.rng, 0xFFFF, "負数rng_wordを16bit化して役割抽選を2回進める")
+	check_eq(s.aitick, 0xFFFF, "負数aitick_wordを個別に16bit化")
 
 func test_tick_advances_only_rng_once_during_normal_freeze_and_slow_ticks() -> void:
 	var normal := _match(0x1234)

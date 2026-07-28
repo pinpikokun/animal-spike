@@ -35,7 +35,7 @@ func test_apply_agreed_start_replaces_state_contents_and_resets_app_inputs() -> 
 	r.set_team_input(1, 7)
 
 	var expected := SimState.new()
-	Simulation.reset_match(expected, r.cfg, 1, Chars.ROSTER, 0x173B)
+	Simulation.reset_match(expected, r.cfg, 1, Chars.ROSTER, 0x173B, 0x173B)
 	expected.human_team_mask = 3
 
 	var returned_hash: int = r.apply_agreed_start(1, Chars.ROSTER, 0x173B, 3)

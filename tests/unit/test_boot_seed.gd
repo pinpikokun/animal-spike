@@ -3,6 +3,7 @@ extends "res://tests/test_case.gd"
 const BootSeed := preload("res://src/app/boot_seed.gd")
 const GameViewScene := preload("res://src/display/game_view.tscn")
 const MainScene := preload("res://src/display/main.tscn")
+const RootScene := preload("res://src/display/root.tscn")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 
@@ -35,9 +36,9 @@ func test_invalid_time_dict_is_rejected() -> void:
 			"不正な時刻辞書を拒否する: %s" % str(clock))
 	_end_completion_guard(completion_guard)
 
-func test_game_view_consumes_boot_seed_and_external_state_is_untouched() -> void:
+func test_game_view_consumes_rng_words_and_external_state_is_untouched() -> void:
 	var completion_guard := _begin_completion_guard(
-		"test_game_view_consumes_boot_seed_and_external_state_is_untouched")
+		"test_game_view_consumes_rng_words_and_external_state_is_untouched")
 	var tree := _scene_tree_or_null()
 	if tree == null:
 		return
@@ -46,12 +47,13 @@ func test_game_view_consumes_boot_seed_and_external_state_is_untouched() -> void
 	tree.root.add_child(local_fixture)
 	var previous_tick_rate := Engine.physics_ticks_per_second
 	var local_view = GameViewScene.instantiate()
-	local_view.boot_seed = 0x173B
+	local_view.rng_word = 0x173B
+	local_view.aitick_word = 0x173B
 	local_fixture.add_child(local_view)
 	check(local_view.state != null, "GameView._ready()がローカルstateを初期化する")
 	if local_view.state != null:
 		check_eq(local_view.state.aitick, 0x173B,
-			"add_child前に設定したboot_seedをローカル初期状態へ使う")
+			"add_child前に設定したaitick_wordをローカル初期状態へ使う")
 	local_fixture.remove_child(local_view)
 	local_view.free()
 	Engine.physics_ticks_per_second = previous_tick_rate
@@ -79,6 +81,54 @@ func test_game_view_consumes_boot_seed_and_external_state_is_untouched() -> void
 	Engine.physics_ticks_per_second = previous_tick_rate
 	tree.root.remove_child(external_fixture)
 	external_fixture.free()
+	_end_completion_guard(completion_guard)
+
+func test_local_rematch_inherits_two_words_and_clears_root_handoff() -> void:
+	var completion_guard := _begin_completion_guard(
+		"test_local_rematch_inherits_two_words_and_clears_root_handoff")
+	var tree := _scene_tree_or_null()
+	if tree == null:
+		return
+
+	var previous_tick_rate := Engine.physics_ticks_per_second
+	var target = RootScene.instantiate()
+	tree.root.add_child(target)
+	check(target.is_inside_tree(), "root.tscnを実際のSceneTreeへ追加する")
+
+	target._start_local_game([])
+	var first_game = target._game
+	check(first_game != null, "最初のローカルGameViewを生成する")
+	if first_game != null:
+		first_game.state.rng = 0x1234
+		first_game.state.aitick = 0x5678
+		target._toggle_debug()
+		target._restart_to_select()
+
+	var handoff_ready: bool = target._pending_rng_word == 0x1234 \
+		and target._pending_aitick_word == 0x5678
+	check_eq(target._pending_rng_word, 0x1234, "破棄する本物のGameViewからrngを回収")
+	check_eq(target._pending_aitick_word, 0x5678, "破棄する本物のGameViewからaitickを回収")
+
+	if handoff_ready:
+		target._start_local_game([])
+		var second_game = target._game
+		check(second_game != null, "回収した2ワードで次のローカルGameViewを生成する")
+		if second_game != null:
+			check_eq(second_game.state.rng, 0x48D3,
+				"継承rngを開始ラリーの役割抽選2回分だけ進める")
+			check_eq(second_game.state.aitick, 0x5678,
+				"継承aitickを開始ラリーで変更しない")
+			check(target._pending_rng_word == null,
+				"GameViewへ渡す前にrootの待機rngをnullへ戻す")
+			check(target._pending_aitick_word == null,
+				"GameViewへ渡す前にrootの待機aitickをnullへ戻す")
+
+	tree.root.remove_child(target)
+	if is_instance_valid(target._debug):
+		target._debug.free()
+		target._debug = null
+	target.free()
+	Engine.physics_ticks_per_second = previous_tick_rate
 	_end_completion_guard(completion_guard)
 
 func test_debug_main_keeps_fixed_seed_zero() -> void:

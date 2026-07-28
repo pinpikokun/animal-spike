@@ -19,7 +19,7 @@ func _run_match(prof_l: int, prof_r: int, serve_first: int, seed: int = 0) -> Ar
 	cfg.points_to_win = 3
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, serve_first, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR], seed)
+		STANDARD_CHAR, STANDARD_CHAR], seed, seed)
 	# 各試合の rng / aitick は明示した match seed から初期化する。
 	for i in 4:
 		s.players[i].cpu = prof_l if i < 2 else prof_r

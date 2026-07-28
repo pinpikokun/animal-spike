@@ -11,7 +11,7 @@ const PlayerMovement := preload("res://src/sim/player_movement.gd")
 func _rally():
 	var cfg = Cfg.new()
 	var s = St.new()
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = St.PHASE_RALLY
 	s.serve_tossed = 1
 	return [s, cfg]
@@ -38,7 +38,7 @@ func test_guard_max_stat_applies_on_reset() -> void:
 	var w = _rally(); var cfg = w[1]
 	var s = St.new()
 	s.players[2].char_id = Chars.CHAR_DEBUG  # stats指定なし枠はguard_max=100%
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	# reset_matchがROSTERでchar_idを上書きするため、既定ロスターは全員100
 	for p in s.players:
 		check_eq(p.guard_max, 100, "既定ロスターは耐久100")
@@ -51,24 +51,24 @@ func test_all_hundred_matches_legacy_values() -> void:
 	check_eq(s.players[0].vx, cfg.move_speed, "speed100=cfg.move_speedそのまま")
 
 func test_reset_match_custom_roster() -> void:
-	# キャラ選択画面が渡すロスターがsimへ通る。省略時は既定ROSTER(挙動不変)
+	# キャラ選択画面が渡すロスターがsimへ通る。既定ROSTERも明示して渡す
 	var cfg = Cfg.new()
 	var s = St.new()
 	var roster: Array = [Chars.CHAR_MARIO, Chars.CHAR_MARIO, Chars.CHAR_PANDA, Chars.CHAR_FROG]
-	Sim.reset_match(s, cfg, 0, roster)
+	Sim.reset_match(s, cfg, 0, roster, 0, 0)
 	for i in 4:
 		check_eq(s.players[i].char_id, roster[i], "slot%dのchar_id" % i)
 	check_eq(s.players[0].has_hat, 1, "マリオ編成は帽子持ち")
 	check_eq(s.players[2].has_hat, 0, "パンダは帽子無し")
 	var s2 = St.new()
-	Sim.reset_match(s2, cfg, 0)
+	Sim.reset_match(s2, cfg, 0, Chars.ROSTER, 0, 0)
 	for i in 4:
-		check_eq(s2.players[i].char_id, Chars.ROSTER[i], "省略時は既定ロスター")
+		check_eq(s2.players[i].char_id, Chars.ROSTER[i], "明示した既定ロスター")
 
 func _measure_full_jump(char_id: int) -> Array[int]:
 	var cfg = Cfg.new()
 	var s = St.new()
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = St.PHASE_POINT_PAUSE
 	s.timer = 1000000
 	var p = s.players[0]

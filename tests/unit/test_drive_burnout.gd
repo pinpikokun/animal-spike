@@ -11,7 +11,7 @@ const PlayerMovement := preload("res://src/sim/player_movement.gd")
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = SimState.PHASE_RALLY
 	return [s, cfg]
 

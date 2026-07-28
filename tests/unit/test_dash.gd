@@ -10,7 +10,7 @@ const PlayerMovement := preload("res://src/sim/player_movement.gd")
 func _rally(char_id: int):
 	var cfg = Cfg.new()
 	var s = St.new()
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = St.PHASE_RALLY
 	s.serve_tossed = 1
 	s.players[0].char_id = char_id

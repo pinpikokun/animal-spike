@@ -13,7 +13,7 @@ func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR], 0)
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	return [s, cfg]
 
 func _set_rally_attacker(s, idx: int) -> void:
@@ -321,7 +321,7 @@ func test_max_mirror_offense_and_just_receive_kpi() -> void:
 	cfg.points_to_win = 999
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
-		STANDARD_CHAR, STANDARD_CHAR], 0)
+		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	for p in s.players:
 		p.cpu = SimCpu.PRESET_MAX
 	var attacks := 0

@@ -7,6 +7,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 var cfg
 var state
@@ -19,7 +20,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	state = SimState.new()
-	Simulation.reset_match(state, cfg, 0)
+	Simulation.reset_match(state, cfg, 0, Chars.ROSTER, 0, 0)
 	state.human_team_mask = 1
 	Engine.physics_ticks_per_second = cfg.tick_rate
 	label = Label.new()

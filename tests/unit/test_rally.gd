@@ -5,11 +5,12 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _serve_world(serving: int) -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, serving)
+	Simulation.reset_match(s, cfg, serving, Chars.ROSTER, 0, 0)
 	return [s, cfg]
 
 func test_reset_match_positions() -> void:
@@ -50,7 +51,7 @@ func test_reset_match_clears_cpu_positioning_state() -> void:
 	s.last_touch_idx = 2
 	s.cpu_hit_count = 99
 	s.cpu_back_role_mask = 15
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	check_eq(s.human_team_mask, 0, "試合初期化で人間チームを消す")
 	check_eq(s.rally_seq, 0, "試合初期化でラリー番号を0に戻す")
 	check_eq(s.last_touch_idx, -1, "試合初期化で打球者を消す")

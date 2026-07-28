@@ -21,6 +21,8 @@ var _settings: Dictionary
 var _select: Node  # キャラ選択画面(試合開始で破棄)
 var _is_net := false  # ネット対戦モード(プロファイル切替の再起動を抑制)
 var boot_seed: Variant = null
+var _pending_rng_word: Variant = null
+var _pending_aitick_word: Variant = null
 var _net_role := ""
 
 func _ready() -> void:
@@ -45,6 +47,8 @@ func _ready() -> void:
 		_viewport.add_child(_game)
 	else:
 		# ローカルプレイはキャラ選択画面から(Escスキップで既定編成)
+		_pending_rng_word = boot_seed
+		_pending_aitick_word = boot_seed
 		_select = preload("res://src/display/char_select.gd").new()
 		_select.done.connect(_start_local_game)
 		_viewport.add_child(_select)
@@ -62,8 +66,8 @@ func _ready() -> void:
 	_apply_settings()
 
 func _start_local_game(roster: Array) -> void:
-	if boot_seed == null:
-		push_error("boot_seed未取得のためローカル試合を開始できない")
+	if boot_seed == null or _pending_rng_word == null or _pending_aitick_word == null:
+		push_error("boot_seedまたは待機中の乱数2ワードが無いためローカル試合を開始できない")
 		get_tree().quit(1)
 		return
 	if _select != null:
@@ -72,7 +76,10 @@ func _start_local_game(roster: Array) -> void:
 		_select = null
 	_game = preload("res://src/display/game_view.tscn").instantiate()
 	_game.roster = roster
-	_game.boot_seed = boot_seed
+	_game.rng_word = _pending_rng_word
+	_game.aitick_word = _pending_aitick_word
+	_pending_rng_word = null
+	_pending_aitick_word = null
 	_viewport.add_child(_game)
 	_apply_cpu_levels()
 	_apply_pause()
@@ -93,6 +100,8 @@ func _restart_to_select() -> void:
 	if _showing_debug:
 		_toggle_debug()
 	if _game != null:
+		_pending_rng_word = _game.state.rng
+		_pending_aitick_word = _game.state.aitick
 		_viewport.remove_child(_game)
 		_game.queue_free()
 		_game = null

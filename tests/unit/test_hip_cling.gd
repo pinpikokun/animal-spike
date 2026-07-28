@@ -4,11 +4,12 @@ const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _rally():
 	var cfg = Cfg.new()
 	var s = St.new()
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = St.PHASE_RALLY
 	s.serve_tossed = 1
 	# 帽子持ち(ヒップアタック可)はマリオ(slot1)のみ。人間入力をslot1へ向ける

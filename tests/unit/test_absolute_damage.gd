@@ -38,7 +38,7 @@ func test_reset_reads_guard_rank_as_absolute_value() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	Simulation.reset_match(s, cfg, 0,
-		[Chars.CHAR_UME, Chars.CHAR_PIYO, Chars.CHAR_PANDA, Chars.CHAR_CARBY])
+		[Chars.CHAR_UME, Chars.CHAR_PIYO, Chars.CHAR_PANDA, Chars.CHAR_CARBY], 0, 0)
 	check_eq(s.players[0].guard_max, 120, "GUARD A")
 	check_eq(s.players[1].guard_max, 80, "GUARD E")
 	check_eq(s.players[2].guard_max, 100, "GUARD C")

@@ -3,11 +3,12 @@ const Cfg := preload("res://src/sim/sim_config.gd")
 const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _rally():
 	var cfg = Cfg.new()
 	var s = St.new()
-	Sim.reset_match(s, cfg, 0)
+	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = St.PHASE_RALLY
 	s.serve_tossed = 1
 	# 帽子持ちはマリオ(slot1)のみ。人間入力がslot1へ届くよう操作スロットを切り替える

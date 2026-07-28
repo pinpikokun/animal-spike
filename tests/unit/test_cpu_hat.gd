@@ -5,11 +5,12 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	return [s, cfg]
 
 # 「敵が敵陣で攻撃を組み立て中」の局面を組む共通セットアップ。

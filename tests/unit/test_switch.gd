@@ -4,11 +4,12 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
-	Simulation.reset_match(s, cfg, 0)
+	Simulation.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	s.phase = SimState.PHASE_RALLY
 	s.ball_x = FP.from_int(420)
 	s.ball_y = FP.from_int(50)

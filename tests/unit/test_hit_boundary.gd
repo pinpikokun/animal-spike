@@ -5,6 +5,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func test_hit_boundary_declares_three_state_results() -> void:
 	check_eq(HitResolver.NO_HIT, -2, "不成立定数")
@@ -42,7 +43,7 @@ func _legacy_expected_hit(s, player_index: int, input: int, d2: int, cfg,
 func test_normal_serve_strike_returns_hit_no_point_and_preserves_state() -> void:
 	var cfg = SimConfig.new()
 	var actual = SimState.new()
-	Simulation.reset_match(actual, cfg, 0)
+	Simulation.reset_match(actual, cfg, 0, Chars.ROSTER, 0, 0)
 	actual.serve_tossed = 1
 	var d2 := _place_ball_on_player(actual, 0, cfg)
 	var expected = _clone_state(actual)
@@ -64,7 +65,7 @@ func test_zero_max_touches_serve_preserves_award_then_transition_order() -> void
 	var cfg = SimConfig.new()
 	cfg.max_touches = 0
 	var actual = SimState.new()
-	Simulation.reset_match(actual, cfg, 0)
+	Simulation.reset_match(actual, cfg, 0, Chars.ROSTER, 0, 0)
 	actual.serve_tossed = 1
 	var d2 := _place_ball_on_player(actual, 0, cfg)
 	var expected = _clone_state(actual)
@@ -90,7 +91,7 @@ func test_zero_max_touches_serve_preserves_award_then_transition_order() -> void
 func test_missed_serve_strike_returns_no_hit_without_state_change() -> void:
 	var cfg = SimConfig.new()
 	var actual = SimState.new()
-	Simulation.reset_match(actual, cfg, 0)
+	Simulation.reset_match(actual, cfg, 0, Chars.ROSTER, 0, 0)
 	actual.serve_tossed = 1
 	actual.ball_x = cfg.net_x
 	actual.ball_y = 0
@@ -105,7 +106,7 @@ func test_missed_serve_strike_returns_no_hit_without_state_change() -> void:
 func test_rally_touch_over_returns_point_and_awards_same_tick() -> void:
 	var cfg = SimConfig.new()
 	var actual = SimState.new()
-	Simulation.reset_match(actual, cfg, 0)
+	Simulation.reset_match(actual, cfg, 0, Chars.ROSTER, 0, 0)
 	actual.phase = SimState.PHASE_RALLY
 	actual.last_touch_team = 0
 	actual.touches = cfg.max_touches
