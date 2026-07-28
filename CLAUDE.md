@@ -43,6 +43,28 @@ When delegating to Codex, pass `--effort high` unless the user says otherwise.
 Narrow the scope you allow it to read; an open-ended investigation can run 20
 minutes without reaching a conclusion.
 
+**Always pass `--write`. Consultations included, no exceptions.** Withholding it
+does not make anything safer — the contract text does that, and you write the
+contract every time ("spec only", "no tests, no Godot, no commit"). What
+withholding it actually buys is a silent stall: on 2026-07-28 a consultation sent
+without `--write` was followed by a spec job that died on "the workspace is
+read-only" after 7 minutes 12 seconds, producing nothing. That was the second
+time. Buy safety with the contract, never with the sandbox.
+
+**`--background` alone gives you no completion notification. Arm a watcher in the
+same breath.** The companion detaches the job from the harness, so Claude Code
+sees only "the command exited" and has no way to learn the job finished. Left
+like that, the user asking "what happened?" becomes the only thing that wakes
+you. Right after launching, start a poll loop that exits when the job leaves
+`running`, via `Bash(run_in_background: true)` — the harness owns that one and
+wakes you when it exits. `status <id> --json` returns `{workspaceRoot, job}`;
+read `job.status`. Do not reach for `Monitor`, which is built for repeated
+events, not a single completion.
+
+**Never touch the tree while Codex is reading it.** Run throwaway experiments in
+a separate worktree. On 2026-07-28 a probe rewrote `simulation.gd` while a Codex
+job was running `git diff` over the same path.
+
 **An approved spec is frozen until the implementation lands.** Pin the version
 (line count + SHA-256) when you approve it and hand that over. Do not edit it in
 the meantime — not while Codex is reading it, not while Codex is implementing
