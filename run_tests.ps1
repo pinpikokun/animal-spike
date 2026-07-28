@@ -10,6 +10,9 @@ $out = & $godot --headless --path $PSScriptRoot --script res://tests/run_tests.g
 $code = $LASTEXITCODE
 $out | ForEach-Object { Write-Host $_ }
 $scriptErrors = @($out | Where-Object { $_ -match "SCRIPT ERROR" })
+$summaryLines = @($out | Where-Object {
+    $_ -match "^[1-9][0-9]* tests, [0-9]+ failed$"
+})
 $locations = @($out | ForEach-Object {
     $match = [regex]::Match($_, "(res://[^():\s]+:\d+)")
     if ($match.Success) {
@@ -17,10 +20,19 @@ $locations = @($out | ForEach-Object {
     }
 } | Group-Object | Sort-Object Count -Descending)
 Write-Host ("SCRIPT ERROR summary: {0} occurrence(s)" -f $scriptErrors.Count)
+$wrapperFailed = $false
 if ($scriptErrors.Count -gt 0) {
     $locations | Select-Object -First 5 | ForEach-Object {
         Write-Host ("  {0}x {1}" -f $_.Count, $_.Name)
     }
+    $wrapperFailed = $true
+}
+# A missing or duplicate summary means the runner did not complete exactly once.
+if ($summaryLines.Count -ne 1) {
+    Write-Host ("TEST SUMMARY check failed: expected 1 line, found {0}" -f $summaryLines.Count)
+    $wrapperFailed = $true
+}
+if ($wrapperFailed) {
     exit 1
 }
 exit $code

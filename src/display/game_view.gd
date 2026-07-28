@@ -86,6 +86,8 @@ var local_team := 0
 # キャラ選択画面が渡すロスター(slot0..3のchar_id)。空なら既定Chars.ROSTER。
 # add_child前に設定すること(_readyのreset_matchで使う)
 var roster: Array = []
+# ローカル本編の起動時計種。rootがadd_child前に設定する。
+var boot_seed: Variant = null
 func attach_external(cfg_in, state_ref) -> void:
 	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
 	external_sim = true
@@ -94,13 +96,17 @@ func attach_external(cfg_in, state_ref) -> void:
 
 func _ready() -> void:
 	if not external_sim:
+		if boot_seed == null:
+			push_error("boot_seed未設定のためローカルGameViewを初期化できない")
+			get_tree().quit(1)
+			return
 		cfg = SimConfig.new()
 		if not cfg.valid:
 			push_error("rules.jsonの読み込みに失敗したため起動を中止する")
 			return
 		state = SimState.new()
 		var r: Array = roster if not roster.is_empty() else Chars.ROSTER
-		Simulation.reset_match(state, cfg, 0, r)
+		Simulation.reset_match(state, cfg, 0, r, int(boot_seed))
 		state.human_team_mask = 1
 	# 表示のみの一括シフト(ScoreUIはCanvasLayerで不動):
 	# コートが画面より狭いぶん中央寄せ。縦は上へ寄せて下端の顔HUD帯(y=332..356)と

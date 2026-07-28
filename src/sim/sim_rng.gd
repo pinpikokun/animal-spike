@@ -1,5 +1,8 @@
 const WORD_MASK := 0xFFFF
 
+static func seed_from_clock(hour: int, minute: int) -> int:
+	return (hour << 8) | minute
+
 static func normalize_word(value: int) -> int:
 	return value & WORD_MASK
 

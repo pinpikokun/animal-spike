@@ -7,7 +7,16 @@ extends SceneTree
 
 const TEST_DIR := "res://tests/unit"
 
-func _init() -> void:
+var _suite_ran := false
+
+func _process(_delta: float) -> bool:
+	if _suite_ran:
+		return true
+	_suite_ran = true
+	_run_suite()
+	return true
+
+func _run_suite() -> void:
 	var failed := 0
 	var total := 0
 	var dir := DirAccess.open(TEST_DIR)

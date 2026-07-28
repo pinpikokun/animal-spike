@@ -6,11 +6,45 @@ extends "res://tests/test_case.gd"
 
 const SimRoot := preload("res://src/net/sim_root.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
+const Simulation := preload("res://src/sim/simulation.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _make_root():
 	var r = SimRoot.new()
 	r.setup()  # cfg/state生成+reset_match(表示なし)
 	return r
+
+func test_setup_default_seed_matches_explicit_zero() -> void:
+	var default_root = SimRoot.new()
+	default_root.setup()
+	var explicit_root = SimRoot.new()
+	explicit_root.setup(0)
+	check_eq(default_root.state.to_int_array(), explicit_root.state.to_int_array(),
+		"引数なしsetupは明示seed 0と同じ初期状態")
+	default_root.free()
+	explicit_root.free()
+
+func test_apply_agreed_start_replaces_state_contents_and_resets_app_inputs() -> void:
+	var r = SimRoot.new()
+	r.setup()
+	var state_ref = r.state
+	r.state.tick = 99
+	r.state.ball_x = -123
+	r.state.players[0].cpu = 987
+	r.set_team_input(0, 15)
+	r.set_team_input(1, 7)
+
+	var expected := SimState.new()
+	Simulation.reset_match(expected, r.cfg, 1, Chars.ROSTER, 0x173B)
+	expected.human_team_mask = 3
+
+	var returned_hash: int = r.apply_agreed_start(1, Chars.ROSTER, 0x173B, 3)
+	check(r.state == state_ref, "既存stateの参照同一性を保つ")
+	check_eq(r.state.to_int_array(), expected.to_int_array(),
+		"新品初期stateと正式なhuman_team_maskの内容へ置き換える")
+	check_eq(r._team_inputs, [0, 0], "直列化外の入力を消去する")
+	check_eq(returned_hash, r.state.state_hash(), "戻りhashは転写後設定の最終state")
+	r.free()
 
 func test_postprocess_advances_one_tick() -> void:
 	var r = _make_root()

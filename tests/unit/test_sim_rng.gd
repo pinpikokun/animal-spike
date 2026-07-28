@@ -2,6 +2,17 @@ extends "res://tests/test_case.gd"
 
 const SimRng := preload("res://src/sim/sim_rng.gd")
 
+func test_seed_from_clock_matches_original_vectors() -> void:
+	var vectors: Array[Array] = [
+		[0, 0, 0x0000],
+		[1, 2, 0x0102],
+		[12, 34, 0x0C22],
+		[23, 59, 0x173B],
+	]
+	for v in vectors:
+		check_eq(SimRng.seed_from_clock(v[0], v[1]), v[2],
+			"時計種: hour=%d minute=%d" % [v[0], v[1]])
+
 func test_advance_frame_matches_original_vectors() -> void:
 	var vectors: Array[Array] = [
 		[0x0000, 0x0000, 0x4017],
