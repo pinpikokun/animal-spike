@@ -8,6 +8,14 @@ const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const STANDARD_CHAR := 99
+const JUMP_RANK_CHARS: Array[int] = [
+	Chars.CHAR_TOME, Chars.CHAR_CARBY, Chars.CHAR_HITO, Chars.CHAR_UME,
+]
+const ATTACK_SERVE_RANK_SAMPLES: Array[Array] = [
+	[Chars.CHAR_TOME, 7, 9, 9, 106],
+	[Chars.CHAR_HITO, 0, 0, 8, 100],
+	[Chars.CHAR_UME, 8, 2, 20, 108],
+]
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
@@ -17,12 +25,13 @@ func _world() -> Array:
 	return [s, cfg]
 
 func _cpu_serve_result(cfg, score_l: int, score_r: int,
-		serving_team: int, receiver_formation: int, profile: int) -> Dictionary:
+		serving_team: int, receiver_formation: int, profile: int,
+		char_id: int = Chars.CHAR_CARBY) -> Dictionary:
 	var s = SimState.new()
 	var roster: Array[int] = [
 		STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR,
 	]
-	roster[serving_team * 2] = Chars.CHAR_CARBY
+	roster[serving_team * 2] = char_id
 	Simulation.reset_match(s, cfg, serving_team, roster, 0, 0)
 	s.players[serving_team * 2].cpu = profile
 	s.score_l = score_l
@@ -236,11 +245,15 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 
 func test_cpu_normal_serve_both_teams_clear_net() -> void:
 	var cfg = SimConfig.new()
-	for serving_team in 2:
-		var result: Dictionary = _cpu_serve_result(
-			cfg, 0, 0, serving_team, 2, SimCpu.PRESET_NORMAL)
-		_check_cpu_serve_result(result, false, cfg,
-			"通常サーブ team=%d" % serving_team)
+	# PRESET_NORMALはAB_SERVE_VARを持たず、得点が照準へ入らないため0-0だけでよい。
+	for char_id in JUMP_RANK_CHARS:
+		var rank_name: String = Chars.Profile.rank_name(
+			Chars.rank(char_id, Chars.Profile.ABILITY_JUMP))
+		for serving_team in 2:
+			var result: Dictionary = _cpu_serve_result(
+				cfg, 0, 0, serving_team, 2, SimCpu.PRESET_NORMAL, char_id)
+			_check_cpu_serve_result(result, false, cfg,
+				"通常サーブ jump=%s team=%d" % [rank_name, serving_team])
 
 func test_cpu_attack_serve_all_variations_clear_net() -> void:
 	var cfg = SimConfig.new()
@@ -251,10 +264,52 @@ func test_cpu_attack_serve_all_variations_clear_net() -> void:
 				for formation in 3:
 					var result: Dictionary = _cpu_serve_result(
 						cfg, score_l, score_r, serving_team, formation,
-						SimCpu.PRESET_MAX)
+						SimCpu.PRESET_MAX, Chars.CHAR_CARBY)
 					_check_cpu_serve_result(result, true, cfg,
 						"アタックサーブ team=%d score=%d-%d formation=%d" % [
 							serving_team, score_l, score_r, formation])
+
+func test_cpu_attack_serve_other_jump_ranks_worst_score_samples_clear_net() -> void:
+	var cfg = SimConfig.new()
+	# Bランク(CARBY)は上の726件で全得点を検査する。A/C/Eは31pxで全得点を
+	# 実測し、ネット通過yが最も低かった得点だけを左右・全3配置で固定する。
+	for sample in ATTACK_SERVE_RANK_SAMPLES:
+		var char_id: int = sample[0]
+		var score_l: int = sample[1]
+		var score_r: int = sample[2]
+		var rank_name: String = Chars.Profile.rank_name(
+			Chars.rank(char_id, Chars.Profile.ABILITY_JUMP))
+		for serving_team in 2:
+			for formation in 3:
+				var result: Dictionary = _cpu_serve_result(
+					cfg, score_l, score_r, serving_team, formation,
+					SimCpu.PRESET_MAX, char_id)
+				_check_cpu_serve_result(result, true, cfg,
+					"アタックサーブ jump=%s team=%d score=%d-%d formation=%d" % [
+						rank_name, serving_team, score_l, score_r, formation])
+
+func test_attack_serve_rank_samples_guard_the_full_target_map() -> void:
+	var s = SimState.new()
+	var weighted: int = 0
+	var quadratic: int = 0
+	var index: int = 1
+	for score_l in 11:
+		for score_r in 11:
+			s.score_l = score_l
+			s.score_r = score_r
+			var target: Array[int] = SimCpu._serve_target(s, 0)
+			var packed: int = target[0] * 1000 + target[1]
+			weighted += packed * index
+			quadratic += packed * index * index
+			index += 1
+	# 写像が変わったら、上のA/C/E最悪得点を全121通りから再測定する。
+	check_eq(weighted, 120585538, "全得点のサーブ照準写像1次指紋")
+	check_eq(quadratic, 9716777288, "全得点のサーブ照準写像2次指紋")
+	for sample in ATTACK_SERVE_RANK_SAMPLES:
+		s.score_l = sample[1]
+		s.score_r = sample[2]
+		check_eq(SimCpu._serve_target(s, 0), [sample[3], sample[4]],
+			"ランク別最悪得点の照準値を固定")
 
 func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, tiq := 0) -> int:
 	# テスト用: 誤差・ミス・遅延のない純粋な能力プロファイル(既定)
@@ -1093,10 +1148,7 @@ func test_sweet_jump_plan_returns_two_values_when_no_plan_exists() -> void:
 
 func test_jump_serve_holds_jump_while_rising() -> void:
 	# 実在するジャンプランクはA/B/C/E。Dのキャラクターは現在存在しない。
-	var rank_chars: Array[int] = [
-		Chars.CHAR_TOME, Chars.CHAR_CARBY, Chars.CHAR_HITO, Chars.CHAR_UME,
-	]
-	for char_id in rank_chars:
+	for char_id in JUMP_RANK_CHARS:
 		var w := _world()
 		var s = w[0]
 		var cfg = w[1]
