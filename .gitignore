@@ -13,6 +13,7 @@ Desktop.ini
 
 # 作業用一時ファイル
 *.tmp
+.worktrees/
 
 # Godotバイナリ(各自ダウンロード)
 tools/
