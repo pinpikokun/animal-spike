@@ -725,6 +725,13 @@ func test_jump_ball_gate_uses_strict_fixed_point_boundaries() -> void:
 	s.ball_vy = -FP.from_int(5) + 1
 	s.ball_y = FP.from_int(215) - 1
 	check(SimCpu._jump_ball_ok(s, p), "4条件の境界直前は合格")
+	s.ball_x = p.x - FP.from_int(80) + 1
+	s.ball_vx = 0
+	s.ball_vy = 0
+	check(SimCpu._jump_ball_ok(s, p), "横距離の負側境界直前も合格")
+	s.ball_x = p.x
+	s.ball_vx = -FP.from_int(10) + 1
+	check(SimCpu._jump_ball_ok(s, p), "横速度の負側境界直前も合格")
 	s.ball_x = p.x + FP.from_int(80)
 	check(not SimCpu._jump_ball_ok(s, p), "横距離80pxは不合格")
 	s.ball_x = p.x - FP.from_int(80)

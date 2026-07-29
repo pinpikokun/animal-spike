@@ -73,12 +73,14 @@ const BACK_ROLE_HYSTERESIS_PX := 64
 # 原作0x8372の非レシーバー退避先。原作の目盛り16×4。1目盛り=画面4ドット
 const RECEIVER_YIELD_OFFSET_PX := 64
 # 原作0x8824の攻撃ジャンプ発火AND条件。本作の固定小数へ変換する前のpx値。
+# 速度2値は原作更新Hz未確定のための設計値。導出はdocs/tasks/85.md。
 const JUMP_BALL_MAX_DX_PX := 80
 const JUMP_BALL_MAX_VX_PX := 10
 const JUMP_BALL_MAX_VY_PX := 5
 const JUMP_BALL_MAX_Y_PX := 215
 
 static func _jump_ball_ok(s, p) -> bool:
+	# yは下向き正。高さだけは上限で低い球を落とすため絶対値を取らない。
 	return absi(s.ball_x - p.x) < FP.from_int(JUMP_BALL_MAX_DX_PX) \
 		and absi(s.ball_vx) < FP.from_int(JUMP_BALL_MAX_VX_PX) \
 		and absi(s.ball_vy) < FP.from_int(JUMP_BALL_MAX_VY_PX) \
