@@ -1,61 +1,21 @@
 # Animal Spike project memory
 
-## Development workflow
+## 開発体制
 
-- The user develops this project alternately with Codex and Claude Code.
-- Codex and Claude Code are not run at the same time.
-- Both agents share the same working tree. Existing changes may belong to the
-  user or the other agent and must not be reverted without explicit approval.
-- At the start of a task, inspect `git status`, recent diffs, this memory, and
-  the relevant specification before editing.
-- Decisions made in conversation must be written to a specification before a
-  large implementation or refactor begins.
-- For this refactor, Codex must write a technical response to every Claude Code
-  design proposal. Claude Code and Codex must resolve their disagreements in
-  documents before implementation.
-- Agreement between the two agents is not permission to start. Present the final
-  agreement to the user and wait for the user's explicit refactoring-start
-  approval. Before that approval, do not delete files, extract modules, or move
-  production code.
-- Keep behavior changes and behavior-preserving refactors in separate steps so
-  the next agent can identify the source of a regression.
-- Run the complete Godot test suite and `git diff --check` before handing work
-  to the other agent.
+- Codex が開発主体となり、調査、設計、実装、検証、コミットを行う。
+- Claude Code は相談・レビュー役とし、Codex またはユーザーから依頼された場合だけ確認する。原則として開発は行わない。
+- 複雑な処理、根拠が弱い判断、重要な変更では、Codex は Claude Code へ積極的に相談し、回答を証拠とコードに照らして判断する。
+- 同じ作業ツリーを同時編集しない。既存の変更を自分のものと決めつけず、明示的な承認なしに戻さない。
+- 作業開始時は `git status`、直近の差分、関連仕様を確認する。
+- 新仕様、決着済み判断の変更、範囲拡大はユーザー承認を得る。承認済み範囲内の実装では同じ承認を繰り返し求めない。
+- 挙動変更と挙動を保つリファクタリングは分ける。
+- コミット前に Godot の全件テストと `git diff --check` を実行する。
 
-## Current design authority
+## 現在の資料
 
-The accepted ability, trait, toss, original-physics, settings-removal, and
-refactoring decisions are recorded in:
+- 現在の課題は `docs/remaining-tasks.md` と関連する現役のタスク・設計書を正本とする。
+- `docs/archive/` は履歴であり、判断の由来を調べる場合を除いて読まない。
 
-`docs/superpowers/specs/2026-07-19-ability-traits-toss-refactor-design.md`
+## 作業ツリー
 
-That specification supersedes the older 1-to-10 character-stat design where
-the two conflict. Signature techniques are intentionally outside its scope.
-
-## Agreed work order
-
-Work must proceed in this order:
-
-1. Audit the entire repository for unused files as the first refactoring stage.
-   Include root-level experiments, generated previews and videos, extracted
-   frames, temporary scripts, stale import metadata, and similar artifacts.
-   Check references, purpose, provenance, and reproducibility; classify candidates
-   as remove, confirm, or keep; show the list to the user; and delete only after
-   explicit approval. Keep cleanup in an independent commit, verify behavior and
-   synchronization, and add ignore/location rules that prevent recurrence.
-2. Perform the narrow, behavior-preserving code refactor described in the current
-   design specification.
-3. Implement the accepted A-to-E abilities, traits, toss behavior, original
-   rules, CPU behavior, and settings removal on top of the extracted modules.
-4. Verify and stabilize the completed gameplay changes with the full test suite.
-5. Resume the originally planned addition of characters from the source game.
-
-Do not start adding source-game characters before the refactor and accepted
-gameplay specification are implemented and stable. Character addition is a
-planned follow-up task, not a discarded idea.
-
-## Handoff note
-
-The working tree may contain a large set of uncommitted gameplay changes. Do
-not assume a clean checkout and do not overwrite them. Review the current diff
-and the latest test result before continuing.
+未コミットの変更が残っている場合がある。クリーンな状態と決めつけず、現在の差分と直近の検証結果を確認してから作業する。
