@@ -868,7 +868,8 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 			and p.on_ground == 1 and p.stun == 0 and not miss_roll \
 			and s.serve_flight == 0 \
 			and s.last_touch_team == team and s.touches < cfg.max_touches \
-			and attacker_priority and not own_toss_for_human_mate:
+			and attacker_priority and not own_toss_for_human_mate \
+			and _jump_ball_ok(s, p):
 		var precision_jump: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)
 		var precision_committed := false
 		if precision_jump:

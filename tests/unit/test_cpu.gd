@@ -674,6 +674,28 @@ func test_human_team_mask_keeps_human_mate_rule() -> void:
 	check(not SimCpu._mate_is_human(s, 0, 1),
 		"操作スロットでない相方は人間として扱わない")
 
+func _attack_jump_world(profile: int) -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 0
+	s.last_touch_idx = 0
+	s.touches = 1
+	var p = s.players[1]
+	p.x = cfg.net_x - FP.from_int(48)
+	p.cpu = profile
+	s.ball_x = p.x
+	s.ball_y = FP.from_int(160)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	_set_rally_role_roll(s, 0, 2)
+	return [s, cfg]
+
+func _attack_sweet_r(cfg, p) -> int:
+	return cfg.player_reach * cfg.spike_sweet_pct \
+		* Chars.stat(p.char_id, "just_window") / (100 * 100)
+
 func test_attack_cpu_jumps_to_meet_toss() -> void:
 	# 味方が上げた球に対し、会合できるならジャンプする(アタック準備)
 	var w := _world()
@@ -720,6 +742,68 @@ func test_jump_ball_gate_uses_strict_fixed_point_boundaries() -> void:
 	s.ball_vy = 0
 	s.ball_y = FP.from_int(215)
 	check(not SimCpu._jump_ball_ok(s, p), "高さ215pxは不合格")
+
+func test_attack_jump_requires_every_ball_gate_condition() -> void:
+	var profile := _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK,
+		0, 0, 0, 255, 3, 3)
+	var w := _attack_jump_world(profile)
+	check(SimCpu.decide(w[0], 1, w[1]) & Simulation.IN_JUMP,
+		"条件内では跳ぶ")
+	var failures := [
+		["横距離", FP.from_int(80), 0, 0, FP.from_int(160)],
+		["横速度", 0, FP.from_int(10), 0, FP.from_int(160)],
+		["縦速度", 0, 0, FP.from_int(5), FP.from_int(160)],
+		["高さ", 0, 0, 0, FP.from_int(215)],
+	]
+	for failure in failures:
+		w = _attack_jump_world(profile)
+		var s = w[0]
+		var p = s.players[1]
+		s.ball_x = p.x + failure[1]
+		s.ball_vx = failure[2]
+		s.ball_vy = failure[3]
+		s.ball_y = failure[4]
+		check_eq(SimCpu.decide(s, 1, w[1]) & Simulation.IN_JUMP, 0,
+			failure[0] + "違反では跳ばない")
+
+func test_sweet_jump_wait_rechecks_gate_each_tick() -> void:
+	var profile := _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK | SimCpu.AB_SWEET,
+		0, 0, 0, 255, 3, 3)
+	var w := _attack_jump_world(profile)
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[1]
+	s.ball_x = p.x + FP.from_int(40)
+	var waiting_plan: Array[int] = SimCpu._sweet_jump_plan(
+		s, p, cfg, _attack_sweet_r(cfg, p))
+	check(waiting_plan[0] > 0, "前提: 合格中は未来の離陸を待つ")
+	SimCpu.decide(s, 1, cfg)
+	# 次の観測tickを、計画上は即離陸できるが速度条件を外れた状態にする。
+	s.ball_x = p.x
+	s.ball_vy = FP.from_int(5)
+	check_eq(SimCpu._sweet_jump_plan(s, p, cfg,
+		_attack_sweet_r(cfg, p))[0], 0,
+		"前提: ゲート無しなら精密経路は今跳ぶ")
+	check_eq(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP, 0,
+		"離陸tickでも条件外なら計画を保持しない")
+	s.ball_vy = 0
+	check(SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP,
+		"再合格時は再計算した計画で跳ぶ")
+
+func test_jump_gate_keeps_non_attacker_substitution() -> void:
+	var profile := _prof(SimCpu.AB_PREDICT | SimCpu.AB_ATTACK,
+		0, 0, 0, 255, 3, 3)
+	var w := _attack_jump_world(profile)
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].cpu = profile
+	s.players[0].x = s.ball_x
+	s.players[1].x = FP.from_int(20)
+	check(not SimCpu._is_rally_attacker(s, 0), "前提: index 0は非役持ち")
+	check(not SimCpu._jump_will_meet(s, s.players[1], cfg, cfg.player_reach),
+		"前提: 役持ちの相方は会合不能")
+	check(SimCpu.decide(s, 0, cfg) & Simulation.IN_JUMP,
+		"条件内なら非役持ちが代行する")
 
 func test_support_zone_complements_human_mate() -> void:
 	# 相方が操作キャラの時、CPUは相方の居ない前後ゾーンを守る
