@@ -6,6 +6,7 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const STANDARD_CHAR := 99
 const JUMP_RANK_CHARS: Array[int] = [
@@ -23,6 +24,30 @@ func _world() -> Array:
 	Simulation.reset_match(s, cfg, 0, [STANDARD_CHAR, STANDARD_CHAR,
 		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	return [s, cfg]
+
+func _policy_a_serve_contract(state, cfg, server: int, serving_team: int) -> Dictionary:
+	var trial = SimState.new()
+	trial.load_int_array(state.to_int_array())
+	var inputs: Array[int] = [0, 0, 0, 0]
+	inputs[server] = Simulation.IN_ACTION
+	var hit_result: int = HitResolver._resolve_hit(trial, inputs, cfg)
+	var legal_touch: bool = hit_result == HitResolver.HIT_NO_POINT \
+		and trial.touches <= cfg.max_touches
+	var crossed := false
+	for _tick in 600:
+		var was_own_side: bool = trial.ball_x < cfg.net_x \
+			if serving_team == 0 else trial.ball_x > cfg.net_x
+		BallPhysics._step_ball(trial, cfg, inputs)
+		var is_opponent_side: bool = trial.ball_x > cfg.net_x \
+			if serving_team == 0 else trial.ball_x < cfg.net_x
+		if was_own_side and is_opponent_side:
+			crossed = true
+		if trial.ball_y >= cfg.floor_y - cfg.ball_radius:
+			return {
+				"clear": crossed and is_opponent_side,
+				"legal_touch": legal_touch,
+			}
+	return {"clear": false, "legal_touch": legal_touch}
 
 func _cpu_serve_result(cfg, score_l: int, score_r: int,
 		serving_team: int, receiver_formation: int, profile: int,
@@ -54,10 +79,46 @@ func _cpu_serve_result(cfg, score_l: int, score_r: int,
 		receiver_positions = [receiver_back, receiver_back]
 	else:
 		receiver_positions = [receiver_front, receiver_back]
+	var contact_captured := false
+	var candidate_count := 0
+	var policy_a_clear := false
+	var policy_a_legal_touch := false
+	var strike_input := 0
+	var strike_policy := -1
+	var server: int = serving_team * 2
 	for i in cfg.serve_delay_ticks + 180:
 		for slot in 2:
 			var receiver = s.players[receiver_team * 2 + slot]
 			receiver.x = receiver_positions[slot]
+		var serve_input: int = SimCpu._decide_serve(
+			s, server, cfg, s.players[server].cpu)
+		if not contact_captured and s.serve_tossed == 1 \
+				and s.players[server].on_ground == 0 \
+				and (serve_input & Simulation.IN_ACTION) != 0:
+			contact_captured = true
+			strike_input = serve_input
+			strike_policy = SimCpu._air_shot_policy(s)
+			var player = s.players[server]
+			var dx: int = s.ball_x - player.x
+			var dy: int = s.ball_y - player.y
+			var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
+			var d2: int = dx * dx + dy_n * dy_n
+			var back: int = Simulation.IN_LEFT \
+				if serving_team == 0 else Simulation.IN_RIGHT
+			var fwd: int = Simulation.IN_RIGHT \
+				if serving_team == 0 else Simulation.IN_LEFT
+			for candidate_input in [
+				Simulation.IN_ACTION | Simulation.IN_DOWN | back,
+				Simulation.IN_ACTION | Simulation.IN_DOWN,
+				Simulation.IN_ACTION | Simulation.IN_DOWN | fwd,
+			]:
+				if not SimCpu._air_spike_candidate(
+						s, server, cfg, serving_team, candidate_input, d2).is_empty():
+					candidate_count += 1
+			var policy_a: Dictionary = _policy_a_serve_contract(
+				s, cfg, server, serving_team)
+			policy_a_clear = policy_a["clear"]
+			policy_a_legal_touch = policy_a["legal_touch"]
 		Simulation.tick(s, [0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
 			var attack_kind: int = s.ball_attack_kind
@@ -77,23 +138,52 @@ func _cpu_serve_result(cfg, score_l: int, score_r: int,
 					return {
 						"attack_kind": attack_kind,
 						"crossing_y": crossing_y,
+						"contact_captured": contact_captured,
+						"candidate_count": candidate_count,
+						"policy_a_clear": policy_a_clear,
+						"policy_a_legal_touch": policy_a_legal_touch,
+						"strike_input": strike_input,
+						"strike_policy": strike_policy,
+						"serve_touches": s.touches,
 					}
 				if s.phase != SimState.PHASE_RALLY:
 					return {}
 			return {}
 	return {}
 
-func _check_cpu_serve_result(result: Dictionary, expect_attack: bool,
-		cfg, label: String) -> void:
-	check_eq(result.size(), 2, label + ": 実弾道が300tick以内にネットを越える")
-	if result.size() != 2:
+func _check_cpu_serve_result(result: Dictionary, expect_jump: bool,
+		cfg, label: String, require_candidates: bool = false) -> void:
+	check_eq(result.size(), 9, label + ": 実弾道が300tick以内にネットを越える")
+	if result.size() != 9:
 		return
 	var attack_kind: int = int(result["attack_kind"])
-	check_eq(attack_kind != SimState.BALL_ATTACK_NONE, expect_attack,
-		label + ": 指定profileのサーブ種別を使う")
+	var strike_input: int = int(result["strike_input"])
+	if expect_jump:
+		check_eq(attack_kind != SimState.BALL_ATTACK_NONE,
+			(strike_input & Simulation.IN_DOWN) != 0,
+			label + ": 共通政策入力と実サーブ種別が一致")
+	else:
+		check_eq(attack_kind, SimState.BALL_ATTACK_NONE,
+			label + ": 通常地上サーブはアタック種別にならない")
 	var crossing_y: int = int(result["crossing_y"])
 	check(crossing_y <= cfg.net_top_y - cfg.ball_radius,
 		label + ": 球全体がネット上端を越える")
+	check_eq(int(result["serve_touches"]), 0,
+		label + ": ネット通過時にサーブ接触は相手側の0タッチへ移る")
+	if expect_jump:
+		check(bool(result["contact_captured"]), label + ": 実ジャンプサーブ打点を採取")
+		check(int(result["strike_policy"]) >= 0,
+			label + ": 接触窓の共通政策を記録")
+		if require_candidates:
+			check(int(result["candidate_count"]) >= 1,
+				label + ": 実打点に有効候補が1つ以上")
+		check(bool(result["policy_a_clear"]),
+			label + ": 同じ実打点の政策甲がネット越え・相手着地")
+		check(bool(result["policy_a_legal_touch"]),
+			label + ": 政策甲サーブは合法接触で4回目にならない")
+	else:
+		check(not bool(result["contact_captured"]),
+			label + ": 通常地上サーブは空中政策へ入らない")
 
 func test_cpu_chases_ball_on_own_side() -> void:
 	var w := _world()
@@ -267,7 +357,7 @@ func test_cpu_attack_serve_all_variations_clear_net() -> void:
 						SimCpu.PRESET_MAX, Chars.CHAR_CARBY)
 					_check_cpu_serve_result(result, true, cfg,
 						"アタックサーブ team=%d score=%d-%d formation=%d" % [
-							serving_team, score_l, score_r, formation])
+							serving_team, score_l, score_r, formation], true)
 
 func test_cpu_attack_serve_other_jump_ranks_worst_score_samples_clear_net() -> void:
 	var cfg = SimConfig.new()

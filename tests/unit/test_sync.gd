@@ -151,7 +151,9 @@ const TICKS := 3600
 # 別々のreset直後に当たるindex 9/18/47/59だけが変化し、各々の次では再一致した。
 #   旧値 -7934760329014079569 -> 新値 5482364282085200630
 # 再採取前492本中この1本だけが赤、残り491本は緑。SCRIPT ERRORは0件。
-const GOLDEN_COMBINED_HASH := 5482364282085200630
+# 2026-07-29 #82: ジャンプサーブの空中打球選択を通常攻撃と共通化。
+# 独立比較の根拠は docs/tasks/82-golden-evidence.md を参照。
+const GOLDEN_COMBINED_HASH := 2162337541192119714
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る

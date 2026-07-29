@@ -308,12 +308,13 @@ func _check_attack_serve(profile: int, label: String) -> void:
 	p.y = s.ball_y
 	var hit_input: int = SimCpu.decide(s, 0, cfg)
 	check(hit_input & Simulation.IN_ACTION, label + "は空中でサーブを打つ")
-	check(hit_input & Simulation.IN_DOWN, label + "はアタックサーブを選ぶ")
+	check_eq(hit_input, SimCpu._pick_air_shot(s, 0, cfg, 0, true, 0),
+		label + "は空中サーブで共通候補・政策を使う")
 
-func test_strong_cpu_uses_attack_serve_on_successful_profile_roll() -> void:
+func test_strong_cpu_uses_shared_jump_serve_on_successful_profile_roll() -> void:
 	_check_attack_serve(SimCpu.PRESET_STRONG, "強CPU")
 
-func test_max_cpu_uses_attack_serve() -> void:
+func test_max_cpu_uses_shared_jump_serve() -> void:
 	_check_attack_serve(SimCpu.PRESET_MAX, "最強CPU")
 
 func test_max_mirror_offense_and_just_receive_kpi() -> void:

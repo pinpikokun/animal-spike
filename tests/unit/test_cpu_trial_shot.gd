@@ -223,6 +223,79 @@ func test_trial_band_candidate_is_monotonic_and_k0_exact() -> void:
 		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, input, d2, 3),
 			old_center, "中心有効ならk3でも中心landを信じる")
 
+func _jump_serve_contact_world(team: int, residue: int) -> Array:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	var actor: int = team * 2
+	var dir: int = SimState._dir_of_team(team)
+	var p = s.players[actor]
+	p.char_id = STANDARD_CHAR
+	p.on_ground = 0
+	p.cpu = SimCpu.PRESET_MAX
+	s.phase = SimState.PHASE_SERVE
+	s.serving_team = team
+	s.serve_tossed = 1
+	s.ball_x = cfg.net_x - dir * FP.from_int(60)
+	s.ball_y = cfg.net_top_y - FP.from_int(100)
+	p.x = s.ball_x
+	p.y = s.ball_y
+	s.players[(1 - team) * 2].x = cfg.net_x + dir * FP.from_int(20)
+	s.players[(1 - team) * 2 + 1].x = cfg.net_x + dir * FP.from_int(40)
+	s.aitick = AITICK_BY_RESIDUE[residue]
+	return [s, cfg, actor]
+
+func test_jump_serve_uses_shared_three_candidates_and_four_policies() -> void:
+	var left_expected: Array[int] = [
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN,
+		Simulation.IN_ACTION,
+	]
+	var right_expected: Array[int] = [
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN,
+		Simulation.IN_ACTION,
+	]
+	var residues: Array[int] = [0, 3, 6, 9]
+	for team in 2:
+		for policy in 4:
+			var w := _jump_serve_contact_world(team, residues[policy])
+			var s = w[0]
+			var cfg = w[1]
+			var actor: int = w[2]
+			var expected: int = left_expected[policy] \
+				if team == 0 else right_expected[policy]
+			var actual: int = SimCpu._decide_serve(
+				s, actor, cfg, s.players[actor].cpu)
+			check_eq(actual & (Simulation.IN_LEFT | Simulation.IN_RIGHT \
+				| Simulation.IN_UP | Simulation.IN_DOWN | Simulation.IN_ACTION),
+				expected, "ジャンプサーブ共通政策 team=%d policy=%d" % [team, policy])
+
+func test_jump_serve_policy_is_actor_independent_and_stable_in_contact_window() -> void:
+	var left := _jump_serve_contact_world(0, 6)
+	var right := _jump_serve_contact_world(1, 6)
+	var left_state = left[0]
+	var right_state = right[0]
+	var left_actor: int = left[2]
+	var right_actor: int = right[2]
+	var left_input: int = SimCpu._decide_serve(
+		left_state, left_actor, left[1], left_state.players[left_actor].cpu)
+	var right_input: int = SimCpu._decide_serve(
+		right_state, right_actor, right[1], right_state.players[right_actor].cpu)
+	check_eq(right_input, left_input,
+		"同じaitickの左右サーバーはactorによらず同じ政策入力")
+	left_state.tick += 777
+	left_state.ball_x += FP.from_int(1)
+	left_state.ball_y += FP.from_int(1)
+	left_state.players[left_actor].x += FP.from_int(1)
+	left_state.players[left_actor].y += FP.from_int(1)
+	for opponent in [2, 3]:
+		left_state.players[opponent].x += FP.from_int(1)
+	check_eq(SimCpu._decide_serve(
+		left_state, left_actor, left[1], left_state.players[left_actor].cpu),
+		left_input, "同じaitickの接触窓ではtickと平行移動で政策入力が変わらない")
+
 func _root_cause_world() -> Array:
 	var cfg = SimConfig.new()
 	var s = SimState.new()

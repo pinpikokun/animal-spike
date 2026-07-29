@@ -535,7 +535,8 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 					cfg.player_reach / 4) | SimInput.IN_JUMP
 		if dx * dx + dy_n * dy_n <= reach * reach:
 			if attack_serve and p.on_ground == 0:
-				return SimInput.IN_ACTION | SimInput.IN_DOWN | fwd
+				return _pick_air_shot(s, idx, cfg, s.serving_team, true,
+					dx * dx + dy_n * dy_n, TRIAL_BAND_CURRENT_STEPS)
 			return SimInput.IN_ACTION | fwd
 		var land: int = _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
 			cfg.floor_y - cfg.player_reach_up / 2, 0)
