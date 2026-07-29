@@ -61,6 +61,10 @@ const SALT_SUPER := 5
 # 用途ID 7は廃止済みの予約番号。再利用禁止。
 const SALT_AIR_SHOT := 8
 
+const TRIAL_BAND_STEP_PCT := 10
+const TRIAL_BAND_K_MAX := 3
+const TRIAL_BAND_CURRENT_STEPS := 0
+
 const WAIT_PHASE_COUNT := 9
 # 原作0x8406〜0x85CFの相方動作中待機位置表。原作の目盛り(40/64/16)×4。1目盛り=画面4ドット
 const WAIT_ACTIVE_OFFSETS: Array[int] = [160, 160, 160, 160, 160, 256, 256, 64, 64]
@@ -552,25 +556,52 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 		return SimInput.IN_ACTION
 	return 0
 
+static func _trial_band_velocities(actual: Vector2i, k: int) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	if k < 0 or k > TRIAL_BAND_K_MAX:
+		return out
+	var step_x: int = absi(actual.x) * TRIAL_BAND_STEP_PCT / 100
+	var step_y: int = absi(actual.y) * TRIAL_BAND_STEP_PCT / 100
+	for iy in range(-k, k + 1):
+		for ix in range(-k, k + 1):
+			if ix != 0 and iy != 0:
+				continue
+			if actual.x == 0 and ix != 0:
+				continue
+			out.append(Vector3i(
+				actual.x + signi(actual.x) * ix * step_x,
+				actual.y + iy * step_y,
+				absi(ix) + absi(iy)))
+	return out
+
 static func _air_spike_candidate(
-		s, actor: int, cfg, team: int, input: int, d2: int) -> Array[int]:
-	var velocity: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor: int, cfg, team: int, input: int, d2: int,
+		k: int = TRIAL_BAND_CURRENT_STEPS) -> Array[int]:
+	var actual_velocity: Vector2i = HitResolver.preview_air_spike_velocity(
 		s, actor, cfg, input, d2)
-	var land: int = _land_x_from(
-		s.ball_x, s.ball_y, velocity.x, velocity.y, cfg,
-		cfg.floor_y - cfg.ball_radius, 3)
-	var in_opponent_court: bool = land > cfg.net_x if team == 0 else land < cfg.net_x
-	if not in_opponent_court:
-		return []
 	var already_crossed: bool = s.ball_x > cfg.net_x if team == 0 else s.ball_x < cfg.net_x
-	if not already_crossed \
-			and not _clears_net(s.ball_x, s.ball_y, velocity.x, velocity.y, cfg):
-		return []
-	return [input, land]
+	var best: Array[int] = []
+	var best_distance := 0x7FFFFFFFFFFFFFFF
+	for point in _trial_band_velocities(actual_velocity, k):
+		var land: int = _land_x_from(
+			s.ball_x, s.ball_y, point.x, point.y, cfg,
+			cfg.floor_y - cfg.ball_radius, 3)
+		var in_opponent_court: bool = land > cfg.net_x \
+			if team == 0 else land < cfg.net_x
+		if not in_opponent_court:
+			continue
+		if not already_crossed \
+				and not _clears_net(s.ball_x, s.ball_y, point.x, point.y, cfg):
+			continue
+		if point.z < best_distance:
+			best = [input, land]
+			best_distance = point.z
+	return best
 
 # ①手前、②中央、③奥を実打球速度で評価し、30/30/30/10の政策を適用する。
 static func _pick_air_shot(
-		s, actor: int, cfg, team: int, can_spike: bool, d2: int) -> int:
+		s, actor: int, cfg, team: int, can_spike: bool, d2: int,
+		k: int = TRIAL_BAND_CURRENT_STEPS) -> int:
 	var toss_input: int = SimInput.IN_ACTION
 	if not can_spike:
 		return toss_input
@@ -591,7 +622,7 @@ static func _pick_air_shot(
 	var best_score: int = -1
 	for candidate_index in indices:
 		var candidate: Array[int] = _air_spike_candidate(
-			s, actor, cfg, team, inputs[candidate_index], d2)
+			s, actor, cfg, team, inputs[candidate_index], d2, k)
 		if candidate.is_empty():
 			continue
 		if policy == 0 or policy == 1:
