@@ -962,7 +962,7 @@ static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: i
 	mtx = clampi(mtx, zmin, zmax)
 	return _walk_to(p, mtx, deadzone / 2)
 
-# ブロック迎撃: 相手アタッカーがネット際で空中+ボールが打点圏なら、
+# ブロック迎撃: 相手アタッカーが空中+ボールが打点圏なら、
 # 自陣ネット際へ走り、着いていれば跳ぶ(体が壁になるのはsimulation._ball_vs_block)。
 # 0を返したら通常の持ち場戻りにフォールバック
 static func _decide_block(
@@ -973,8 +973,6 @@ static func _decide_block(
 	for j in 2:
 		var o = s.players[(1 - team) * 2 + j]
 		if o.on_ground == 1:
-			continue
-		if absi(o.x - cfg.net_x) > FP.from_int(120):
 			continue
 		var bdx: int = s.ball_x - o.x
 		var bdy: int = s.ball_y - o.y

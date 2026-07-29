@@ -1092,6 +1092,129 @@ func test_non_blocker_jumps_when_role_mate_cannot_meet() -> void:
 	check(input & Simulation.IN_JUMP,
 		"役持ち相方が会合不能なら非ブロッカー役が代わりに跳ぶ")
 
+func _deep_block_priority_world() -> Array:
+	var w := _block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	var attacker = s.players[2]
+	attacker.x = cfg.net_x + FP.from_int(160)
+	s.ball_x = attacker.x
+	s.ball_y = attacker.y
+	return w
+
+func test_deep_attacker_triggers_saved_blocker_role() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	var input: int = SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0)
+	check_eq(input, Simulation.IN_JUMP | Simulation.IN_UP,
+		"120px超の空中アタッカーへ保存済みブロッカー役が跳ぶ")
+
+func test_deep_non_blocker_yields_when_role_mate_can_meet() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = s.ball_x
+	check(SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: 深位置でも役持ち相方は球へ会合可能")
+	var input: int = SimCpu._decide_block(
+		s, 1, s.players[1], cfg, 0, SimCpu.AB_BLOCK, 0)
+	check_eq(input, 0, "役持ち相方が会合可能なら深位置でも非役は譲る")
+
+func test_deep_non_blocker_substitutes_when_role_mate_cannot_meet() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = FP.from_int(20)
+	check(not SimCpu._jump_will_meet(s, s.players[0], cfg, cfg.player_reach),
+		"前提: 深位置で役持ち相方は球へ会合不能")
+	var input: int = SimCpu._decide_block(
+		s, 1, s.players[1], cfg, 0, SimCpu.AB_BLOCK, 0)
+	check_eq(input, Simulation.IN_JUMP | Simulation.IN_UP,
+		"役持ち相方が会合不能なら深位置でも非役が代行")
+
+func test_deep_block_keeps_ability_ground_and_hit_zone_gates() -> void:
+	var no_ability := _deep_block_priority_world()
+	var s = no_ability[0]
+	var cfg = no_ability[1]
+	check_eq(SimCpu._decide_block(s, 0, s.players[0], cfg, 0, 0, 0), 0,
+		"ブロック能力なしは深位置へ反応しない")
+	var grounded := _deep_block_priority_world()
+	s = grounded[0]
+	cfg = grounded[1]
+	s.players[2].on_ground = 1
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0), 0,
+		"相手が地上なら深位置へ反応しない")
+	var outside := _deep_block_priority_world()
+	s = outside[0]
+	cfg = outside[1]
+	s.ball_x = s.players[2].x + cfg.player_reach * 2 + 1
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0), 0,
+		"球が相手打点圏外なら深位置へ反応しない")
+	var stunned := _deep_block_priority_world()
+	s = stunned[0]
+	cfg = stunned[1]
+	s.players[0].stun = 1
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0), 0,
+		"スタン中は深位置へ反応しない")
+
+func test_two_deep_attackers_keep_saved_role_priority() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	var second = s.players[3]
+	second.x = cfg.net_x + FP.from_int(180)
+	second.y = s.players[2].y
+	second.on_ground = 0
+	s.ball_x = cfg.net_x + FP.from_int(170)
+	for opponent in [s.players[2], s.players[3]]:
+		var dx: int = s.ball_x - opponent.x
+		var dy: int = s.ball_y - opponent.y
+		check(opponent.on_ground == 0 \
+			and dx * dx + dy * dy <= cfg.player_reach * cfg.player_reach * 4,
+			"前提: 相手2人が同時に空中かつ打点圏内")
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0),
+		Simulation.IN_JUMP | Simulation.IN_UP,
+		"深位置の相手2人が同時成立しても役持ちが跳ぶ")
+
+func test_deep_block_scan_skips_ineligible_first_opponent() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	var first = s.players[2]
+	var second = s.players[3]
+	first.x = cfg.net_x + FP.from_int(300)
+	second.x = cfg.net_x + FP.from_int(180)
+	second.y = first.y
+	second.on_ground = 0
+	s.ball_x = second.x
+	s.ball_y = second.y
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0),
+		Simulation.IN_JUMP | Simulation.IN_UP,
+		"先頭相手が打点圏外でも二人目の有効相手まで走査する")
+	var swap_x: int = first.x
+	first.x = second.x
+	second.x = swap_x
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0),
+		Simulation.IN_JUMP | Simulation.IN_UP,
+		"有効相手が先頭でも同じ保存役入力を返す")
+
+func test_deep_block_walks_to_post_before_jumping() -> void:
+	var w := _deep_block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.players[0].x = cfg.net_x - FP.from_int(70)
+	check_eq(SimCpu._decide_block(
+		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0),
+		Simulation.IN_RIGHT, "深位置反応でもポスト外なら先にポストへ歩く")
+
 func test_no_jump_at_serve_in_flight() -> void:
 	# サーブ打球がまだネットを越えていない間(serve_flight)は、味方の上げ球と
 	# 同じ観測条件でもジャンプアタックしない(サーブに跳びつく誤反応の抑止)
