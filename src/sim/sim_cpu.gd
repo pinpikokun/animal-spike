@@ -1116,11 +1116,10 @@ static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
 	return prof_byte(prof, P_TIQ) >= 3 \
 		or _derived_roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
 
-# 空中ヒットの打ち分け。ネット遠方のスパイクは自陣に落ちて自滅するため打たない
+# 空中ヒットの打ち分け。距離ではなく実速度候補の着地とネット通過で安全性を決める。
 static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, dy: int) -> int:
 	var ab: int = prof_byte(prof, P_AB)
-	var can_spike: bool = _attack_ok(s, idx, prof) \
-		and absi(p.x - cfg.net_x) < FP.from_int(120)
+	var can_spike: bool = _attack_ok(s, idx, prof)
 	if can_spike and _should_use_flame(s, idx, p, cfg, prof):
 		return SimInput.IN_ABILITY1 | SimInput.IN_DOWN
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \

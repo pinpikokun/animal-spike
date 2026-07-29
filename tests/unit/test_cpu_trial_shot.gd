@@ -8,6 +8,7 @@ const SimRng := preload("res://src/sim/sim_rng.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 const STANDARD_CHAR := 99
 
@@ -526,3 +527,89 @@ func test_ball_over_net_outside_ellipse_cannot_be_hit() -> void:
 		forced_inputs[actor] = Simulation.IN_ACTION | Simulation.IN_DOWN
 		check_eq(HitResolver._resolve_hit(s, forced_inputs, cfg), HitResolver.NO_HIT,
 			"楕円外は強制入力でも実接触しない")
+
+func _deep_attack_world(char_id: int = STANDARD_CHAR) -> Array:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	var actor := 0
+	var p = s.players[actor]
+	p.char_id = char_id
+	p.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK | SimCpu.AB_SWEET,
+		0, 0, 0, 255, 3, 3)
+	p.on_ground = 0
+	p.x = cfg.net_x - FP.from_int(160)
+	p.y = cfg.net_top_y - FP.from_int(100)
+	s.phase = SimState.PHASE_RALLY
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.ball_vx = 0
+	s.ball_vy = 0
+	s.players[2].x = cfg.net_x + FP.from_int(20)
+	s.players[3].x = cfg.net_x + FP.from_int(40)
+	s.aitick = AITICK_BY_RESIDUE[0]
+	return [s, cfg, actor]
+
+func test_deep_in_ellipse_attack_uses_valid_candidate() -> void:
+	var w := _deep_attack_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	var expected := Simulation.IN_ACTION | Simulation.IN_DOWN
+	check(SimCpu._air_spike_candidate(s, actor, cfg, 0,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
+		0).is_empty(), "政策1の①手前候補は無効")
+	check(not SimCpu._air_spike_candidate(
+		s, actor, cfg, 0, expected, 0).is_empty(),
+		"120px超でも中央候補は独立に有効")
+	check_eq(SimCpu._decide_air_hit(
+		s, actor, s.players[actor], cfg, 0, s.players[actor].cpu, 0, 0),
+		expected, "120px超でも楕円内かつ候補有効なら通常アタック")
+
+func test_deep_outside_ellipse_does_not_hit() -> void:
+	var w := _deep_attack_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	s.ball_x = s.players[actor].x + cfg.player_reach + 1
+	check_eq(SimCpu.decide(s, actor, cfg) & Simulation.IN_ACTION, 0,
+		"120px超でも楕円外なら打撃入力なし")
+	var forced: Array[int] = [0, 0, 0, 0]
+	forced[actor] = Simulation.IN_ACTION | Simulation.IN_DOWN
+	check_eq(HitResolver._resolve_hit(s, forced, cfg), HitResolver.NO_HIT,
+		"120px超の楕円外は強制入力でも接触しない")
+
+func test_deep_all_invalid_candidates_fall_back_to_toss() -> void:
+	var w := _deep_attack_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	s.ball_y = cfg.net_top_y + FP.from_int(80)
+	s.players[actor].y = s.ball_y
+	for input in [
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
+		Simulation.IN_ACTION | Simulation.IN_DOWN,
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
+	]:
+		check(SimCpu._air_spike_candidate(
+			s, actor, cfg, 0, input, 0).is_empty(),
+			"120px超の低い打点では全候補無効 input=" + str(input))
+	check_eq(SimCpu._decide_air_hit(
+		s, actor, s.players[actor], cfg, 0, s.players[actor].cpu, 0, 0),
+		Simulation.IN_ACTION, "120px超でも全候補無効なら安全弁トス")
+
+func test_deep_flame_keeps_dedicated_input_and_velocity() -> void:
+	var w := _deep_attack_world(Chars.CHAR_TOME)
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	var p = s.players[actor]
+	p.drive_gauge = cfg.drive_gauge_stock * 3
+	var flame_input := Simulation.IN_ABILITY1 | Simulation.IN_DOWN
+	check(SimCpu._should_use_flame(s, actor, p, cfg, p.cpu),
+		"120px条件と独立した炎必殺専用条件が成立")
+	# TOMEの中央炎スパイク。必殺でsweet固定、静止球なので慣性0の距離撤去前実測値。
+	check_eq(HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, flame_input, 0), Vector2i(1018429, 152917),
+		"炎必殺の固定打球速度は距離撤去前と同じ")
+	check_eq(SimCpu._decide_air_hit(s, actor, p, cfg, 0, p.cpu, 0, 0),
+		flame_input, "120px超でも専用条件成立なら炎必殺")
