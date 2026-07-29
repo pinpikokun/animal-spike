@@ -373,6 +373,7 @@ k=3はproductionから到達不能なので専用性能上限を作らない。
 - `tests/unit/test_sync.gd`（意図した入力列変更が到達した場合だけ）
 - `tests/unit/test_zz_performance.gd`（既存6引数呼び出しを維持し、承認式の上限締め直しだけ）
 - `docs/tasks/82.md`
+- `docs/tasks/83.md`（#82完了後の5実測値と承認式による上限締め直しの追記だけ）
 - `docs/remaining-tasks.md`
 
 追加予定:
