@@ -48,7 +48,11 @@ func _ready() -> void:
 
 	_sim_root = SimRootScript.new()
 	_sim_root.name = "SimRoot"
-	_sim_root.setup()
+	if not _sim_root.setup():
+		stop_handshake("rules.jsonの読み込みに失敗したためネット対戦を開始できない")
+		_sim_root.free()
+		_sim_root = null
+		return
 	_sim_root.state.human_team_mask = _human_team_mask()
 	Engine.physics_ticks_per_second = _sim_root.cfg.tick_rate
 
@@ -214,6 +218,7 @@ func _human_team_mask() -> int:
 	return 0 if _is_bot else 3
 
 func stop_handshake(reason: String) -> void:
+	set_process(false)
 	if _handshake != null:
 		_handshake.stop(reason)
 	push_error("NET HANDSHAKE ERROR: %s" % reason)

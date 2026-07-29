@@ -20,11 +20,19 @@ var cfg
 var state
 var _team_inputs: Array[int] = [0, 0]
 
-func setup(seed: int = 0) -> void:
+func setup(
+	seed: int = 0,
+	rules_path: String = SimConfig.DEFAULT_PATH
+	) -> bool:
 	# テストとnet_matchの両方から呼ぶ初期化(表示なし)
-	cfg = SimConfig.new()
+	cfg = SimConfig.new(rules_path)
+	if not cfg.valid:
+		state = null
+		push_error("rules.jsonの読み込みに失敗したためsimを初期化できない")
+		return false
 	state = SimState.new()
 	Simulation.reset_match(state, cfg, 0, Chars.ROSTER, seed, seed)
+	return true
 
 func apply_agreed_start(
 		agreed_serving_team: int,
@@ -42,7 +50,10 @@ func apply_agreed_start(
 
 func _ready() -> void:
 	if cfg == null:
-		setup()
+		if not setup():
+			return
+	if not cfg.valid or state == null:
+		return
 	add_to_group("network_sync")
 
 func set_team_input(team: int, bits: int) -> void:

@@ -16,13 +16,23 @@ func _make_root():
 
 func test_setup_default_seed_matches_explicit_zero() -> void:
 	var default_root = SimRoot.new()
-	default_root.setup()
+	check_eq(default_root.setup(), true, "既定設定のsetupは成功を返す")
 	var explicit_root = SimRoot.new()
-	explicit_root.setup(0)
+	check_eq(explicit_root.setup(0), true, "明示seed 0のsetupも成功を返す")
 	check_eq(default_root.state.to_int_array(), explicit_root.state.to_int_array(),
 		"引数なしsetupは明示seed 0と同じ初期状態")
 	default_root.free()
 	explicit_root.free()
+
+func test_setup_rejects_invalid_rules_without_creating_state() -> void:
+	var r = SimRoot.new()
+	var result: bool = r.setup(0, "res://tests/fixtures/bad_rules.json")
+	check_eq(result, false, "不正ルールのsetupは失敗を返す")
+	check(r.cfg != null, "失敗した設定を診断用に保持する")
+	if r.cfg != null:
+		check_eq(r.cfg.valid, false, "不正ルールはinvalidのまま")
+	check_eq(r.state, null, "不正ルールからstateを生成しない")
+	r.free()
 
 func test_apply_agreed_start_replaces_state_contents_and_resets_app_inputs() -> void:
 	var r = SimRoot.new()
