@@ -59,6 +59,7 @@ const SALT_MISS := 2
 const SALT_SUPER := 5
 # 用途ID 6は廃止済みの予約番号。再利用禁止。
 # 用途ID 7は廃止済みの予約番号。再利用禁止。
+const SALT_AIR_SHOT := 8
 
 const WAIT_PHASE_COUNT := 9
 # 原作0x8406〜0x85CFの相方動作中待機位置表。原作の目盛り(40/64/16)×4。1目盛り=画面4ドット
@@ -106,6 +107,10 @@ static func prof_byte(profile: int, shift: int) -> int:
 # aitickは打球間で固定される。本作独自抽選を状態消費なしで用途・actorごとに分離する。
 static func _derived_roll(salt: int, s, actor: int) -> int:
 	return SimRng.derived_value(s.aitick, actor, salt)
+
+static func _air_shot_policy(s) -> int:
+	var roll: int = SimRng.derived_value(s.aitick, 0, SALT_AIR_SHOT) % 10
+	return roll / 3 if roll < 9 else 3
 
 # ラリー開始時に保存したチーム別role rollを読む。同じラリー中は常に同じ役。
 static func _is_rally_attacker(s, idx: int) -> bool:
@@ -534,55 +539,59 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 		return SimInput.IN_ACTION
 	return 0
 
-# 空中の配球(TARGET_IQ>=2): スパイク3方向と安全返球の着弾点を計算し、
-# 相手2人から最も遠い所へ落ちる打ち方を選ぶ。「反応でなく判断で強い」の芯
-static func _pick_air_shot(s, p, cfg, team: int, can_spike: bool) -> int:
-	var dir: int = 1 if team == 0 else -1
-	var target_y: int = cfg.floor_y - cfg.ball_radius
-	# 候補: [入力ビット, vx, vy]。スパイクの後ろ/なし/前は従来の3着弾点を保つ。
-	var cands: Array = []
+static func _air_spike_candidate(
+		s, actor: int, cfg, team: int, input: int, d2: int) -> Array[int]:
+	var velocity: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, input, d2)
+	var land: int = _land_x_from(
+		s.ball_x, s.ball_y, velocity.x, velocity.y, cfg,
+		cfg.floor_y - cfg.ball_radius, 3)
+	var in_opponent_court: bool = land > cfg.net_x if team == 0 else land < cfg.net_x
+	if not in_opponent_court:
+		return []
+	var already_crossed: bool = s.ball_x > cfg.net_x if team == 0 else s.ball_x < cfg.net_x
+	if not already_crossed \
+			and not _clears_net(s.ball_x, s.ball_y, velocity.x, velocity.y, cfg):
+		return []
+	return [input, land]
+
+# ①手前、②中央、③奥を実打球速度で評価し、30/30/30/10の政策を適用する。
+static func _pick_air_shot(
+		s, actor: int, cfg, team: int, can_spike: bool, d2: int) -> int:
+	var toss_input: int = SimInput.IN_ACTION
+	if not can_spike:
+		return toss_input
+	var policy: int = _air_shot_policy(s)
+	if policy == 3:
+		return toss_input
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	var back_key: int = SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
-	if can_spike:
-		var rvx: int = s.ball_vx * cfg.hit_inertia_num / cfg.hit_inertia_den
-		var rvy: int = s.ball_vy * cfg.hit_inertia_num / cfg.hit_inertia_den
-		for row in [[back_key, cfg.spike_steep_vy * cfg.spike_normal_pct / 100], [
-			0, (cfg.spike_steep_vy + cfg.spike_vy) * cfg.spike_normal_pct / 200],
-			[fwd_key, cfg.spike_vy * cfg.spike_normal_pct / 100]]:
-			var spike_vy: int = row[1]
-			var relative: int = 1 if row[0] == fwd_key else (-1 if row[0] == back_key else 0)
-			var spike_vx: int = HitResolver.toss_aim_vx(
-				s.ball_x, s.ball_y, spike_vy,
-				HitResolver.spike_target_x(team, relative * dir, cfg), cfg)
-			cands.append([SimInput.IN_ACTION | SimInput.IN_DOWN | row[0],
-				spike_vx - rvx, spike_vy - rvy, true])
-	var toss_vy: int = -cfg.toss_fwd_vy
-	var toss_vx: int = HitResolver.opponent_return_vx(
-		s.ball_x, s.ball_y, s.ball_vx, team, p.char_id, cfg)
-	cands.append([SimInput.IN_ACTION, toss_vx, toss_vy, false])
-	var best_input: int = SimInput.IN_ACTION
+	var inputs: Array[int] = [
+		SimInput.IN_ACTION | SimInput.IN_DOWN | back_key,
+		SimInput.IN_ACTION | SimInput.IN_DOWN,
+		SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
+	]
+	var indices: Array[int] = [2]
+	if policy != 1:
+		indices = [0, 1, 2]
+	var best_input: int = toss_input
 	var best_score: int = -1
-	var best_is_attack := false
-	for c in cands:
-		if best_is_attack and not c[3]:
+	for candidate_index in indices:
+		var candidate: Array[int] = _air_spike_candidate(
+			s, actor, cfg, team, inputs[candidate_index], d2)
+		if candidate.is_empty():
 			continue
-		var land: int = _land_x_from(s.ball_x, s.ball_y, c[1], c[2], cfg, target_y, 3)
-		# 相手コートに落ちない打ち方・ネットに掛かる打ち方は選ばない
-		var in_opp: bool = land > cfg.net_x if team == 0 else land < cfg.net_x
-		if not in_opp:
-			continue
-		if not _clears_net(s.ball_x, s.ball_y, c[1], c[2], cfg):
-			continue
+		if policy == 0 or policy == 1:
+			return candidate[0]
 		var score: int = 0x7FFFFFFFFFFFFFFF
 		for i in 2:
 			var opp = s.players[(1 - team) * 2 + i]
-			# スタン中の相手は追えない=その分遠いのと同義(メテオ後の追い打ちが賢くなる)
-			var d: int = absi(land - opp.x) + opp.stun * cfg.move_speed
-			score = mini(score, d)
+			var distance: int = absi(candidate[1] - opp.x) \
+				+ opp.stun * cfg.move_speed
+			score = mini(score, distance)
 		if score > best_score:
 			best_score = score
-			best_input = c[0]
-			best_is_attack = c[3]
+			best_input = candidate[0]
 	return best_input
 
 static func decide(s, idx: int, cfg) -> int:
@@ -684,7 +693,11 @@ static func decide(s, idx: int, cfg) -> int:
 		and _derived_roll(SALT_MISS, s, idx) % 256 < prof_byte(prof, P_MISS) and dy < 0
 	if d2 <= reach * reach and not late_swing:
 		if p.on_ground == 0:
-			input |= _decide_air_hit(s, idx, p, cfg, team, prof, d2, dy)
+			var air_input: int = _decide_air_hit(
+				s, idx, p, cfg, team, prof, d2, dy)
+			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT \
+				| SimInput.IN_UP | SimInput.IN_DOWN | SimInput.IN_ACTION)
+			input |= air_input
 		else:
 			# 地上ヒットの組み立て: 素のバンプは真上に上がるだけでネットを越えない。
 			# チームにアタッカーがいてタッチ数に余裕があれば真上に上げて呼び込み、
@@ -1071,11 +1084,4 @@ static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, 
 	if use_sweet and d2 > sweet_r * sweet_r \
 			and _air_will_meet_sweet(s, p, cfg, sweet_r):
 		return 0
-	if prof_byte(prof, P_TIQ) >= 2:
-		return _pick_air_shot(s, p, cfg, team, can_spike)
-	var input: int = SimInput.IN_ACTION
-	if can_spike:
-		# 配球IQなしは下+前で敵陣後面へのアタック固定。
-		input |= SimInput.IN_DOWN
-		input |= SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-	return input
+	return _pick_air_shot(s, idx, cfg, team, can_spike, d2)

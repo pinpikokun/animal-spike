@@ -4,6 +4,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
@@ -832,38 +833,92 @@ func test_first_and_second_ground_toss_keep_backward_aim() -> void:
 		check_eq(s.ball_vx, expected_vx,
 			"1・2打目の地上トスは後方入力を維持: %s" % [row])
 
-func test_third_touch_does_not_change_air_toss_or_spike() -> void:
-	for input in [
-		Simulation.IN_ACTION | Simulation.IN_LEFT,
-		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
-	]:
-		var first := _rally_world()
-		var third := _rally_world()
-		for w in [first, third]:
-			var state = w[0]
+func _air_toss_world(team: int, touches_before: int) -> Array:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = team * 2
+	var p = s.players[actor]
+	p.on_ground = 0
+	p.y = cfg.floor_y - FP.from_int(80)
+	s.ball_x = p.x + SimState._dir_of_team(team) * FP.from_int(5)
+	s.ball_y = p.y - FP.from_int(5)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	s.last_touch_team = team if touches_before > 0 else 1 - team
+	s.touches = touches_before
+	return [s, cfg, actor, s.ball_x, s.ball_y]
+
+func test_first_and_second_air_toss_target_own_front_mirrors_teams() -> void:
+	for team in 2:
+		for touches_before in [0, 1]:
+			var w := _air_toss_world(team, touches_before)
+			var s = w[0]
 			var cfg = w[1]
-			var p = state.players[0]
-			p.on_ground = 0
-			p.y = cfg.floor_y - FP.from_int(60)
-			state.ball_x = p.x + FP.from_int(5)
-			state.ball_y = p.y - FP.from_int(5)
-		third[0].last_touch_team = 0
-		third[0].touches = third[1].max_touches - 1
-		for w in [first, third]:
-			HitResolver._apply_hit(
-				w[0], 0, w[1], input, w[1].player_reach * w[1].player_reach)
-		check_eq(third[0].ball_vx, first[0].ball_vx,
-			"3打目でも空中打撃の横速度は通常時と同じ: %d" % input)
-		check_eq(third[0].ball_vy, first[0].ball_vy,
-			"3打目でも空中打撃の縦速度は通常時と同じ: %d" % input)
-		if input & Simulation.IN_DOWN:
-			check(third[0].ball_vy > 0, "3打目でも空中+下はスパイク")
-			check_eq(third[0].ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
-				"3打目の通常スパイク分類を維持")
-		else:
-			check(third[0].ball_vy < 0, "3打目の空中トスは上向き")
-			check_eq(third[0].ball_attack_kind, SimState.BALL_ATTACK_NONE,
-				"3打目の空中トス分類を維持")
+			var expected_vy: int = -cfg.toss_fwd_vy
+			var expected_vx: int = HitResolver.toss_aim_vx(
+				w[3], w[4], expected_vy,
+				HitResolver.toss_target_x(team, 0, cfg), cfg)
+			HitResolver._apply_hit(s, w[2], cfg, Simulation.IN_ACTION, 0)
+			check_eq(s.ball_vx, expected_vx,
+				"1・2打目の空中トスは自陣前方: team=%d touch=%d"
+				% [team, touches_before + 1])
+			check_eq(s.ball_vy, expected_vy,
+				"1・2打目の空中トスは既存の上向き速度")
+
+func test_third_air_toss_returns_to_opponent_mirrors_teams() -> void:
+	for team in 2:
+		var w := _air_toss_world(team, 2)
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = w[2]
+		var expected_vx: int = HitResolver.opponent_return_vx(
+			s.ball_x, s.ball_y, 0, team, s.players[actor].char_id, cfg)
+		HitResolver._apply_hit(s, actor, cfg, Simulation.IN_ACTION, 0)
+		check_eq(s.ball_vx, expected_vx, "3打目の空中トスは敵陣返球式")
+		var landing_x: int = SimCpu._predict_landing_x(
+			s, cfg, cfg.floor_y - cfg.ball_radius, 3)
+		check((landing_x > cfg.net_x) == (team == 0),
+			"3打目の空中トスは相手コートへ着地")
+		check_eq(s.touches, cfg.max_touches,
+			"3打目は4回目接触にせず最大タッチ数で止まる")
+
+func test_air_toss_serve_returns_to_opponent_mirrors_teams() -> void:
+	for team in 2:
+		var w := _air_toss_world(team, 0)
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = w[2]
+		var dir: int = SimState._dir_of_team(team)
+		s.phase = SimState.PHASE_SERVE
+		s.serving_team = team
+		s.serve_tossed = 1
+		var expected_vx: int = HitResolver.opponent_return_vx(
+			s.ball_x, s.ball_y, 0, team, s.players[actor].char_id, cfg)
+		var input: int = Simulation.IN_ACTION \
+			| (Simulation.IN_RIGHT if dir > 0 else Simulation.IN_LEFT)
+		HitResolver._apply_hit(s, actor, cfg, input, 0)
+		check_eq(s.ball_vx, expected_vx,
+			"空中通常サーブはタッチ数によらず敵陣返球式")
+		var landing_x: int = SimCpu._predict_landing_x(
+			s, cfg, cfg.floor_y - cfg.ball_radius, 3)
+		check((landing_x > cfg.net_x) == (team == 0),
+			"空中通常サーブは相手コートへ着地")
+
+func test_third_touch_does_not_change_air_spike() -> void:
+	var first := _air_toss_world(0, 0)
+	var third := _air_toss_world(0, 2)
+	var input: int = Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT
+	for w in [first, third]:
+		HitResolver._apply_hit(
+			w[0], w[2], w[1], input, w[1].player_reach * w[1].player_reach)
+	check_eq(third[0].ball_vx, first[0].ball_vx,
+		"3打目でも空中スパイクの横速度は通常時と同じ")
+	check_eq(third[0].ball_vy, first[0].ball_vy,
+		"3打目でも空中スパイクの縦速度は通常時と同じ")
+	check(third[0].ball_vy > 0, "3打目でも空中+下はスパイク")
+	check_eq(third[0].ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+		"3打目の通常スパイク分類を維持")
 
 func test_toss_good_aims_own_ground_trajectory_at_zone() -> void:
 	var cfg = SimConfig.new()

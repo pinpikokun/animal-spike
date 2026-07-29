@@ -139,7 +139,14 @@ const TICKS := 3600
 # 全過程で tick=0/rng=0/aitick=0 のまま動く。旧 keyed_hash(s.tick=0,..) と
 # 新 keyed_hash(aitick=0,..) が同一値になるので、乱数源の変更を原理的に検出できない。
 # 代わりに test_refactor_characterization.gd.test_scatter_stream_snapshot が捉えた。
-const GOLDEN_COMBINED_HASH := 148595592752712713
+# 2026-07-29 #82でCPU空中打撃候補を実打球速度へ統一し、4政策を実装したため更新。実測値。
+# 1・2打目の空中トスも自陣前方へ戻したため、CPU入力列と打球軌道が意図どおり変わる。
+#   旧値 148595592752712713 -> 新値 4728804889166836807
+# 再採取前482本中この1本だけが赤、残り481本は緑。SCRIPT ERRORは0件。
+# コードレビューで空中通常サーブまで自陣トス化する回帰を検出し、サーブだけ敵陣返球へ
+# 戻したため再更新。中間値 4728804889166836807 -> 最終値 -7934760329014079569。
+# 再採取前483本中この1本だけが赤、残り482本は緑。SCRIPT ERRORは0件。
+const GOLDEN_COMBINED_HASH := -7934760329014079569
 
 func _next_rand(s: int) -> int:
 	# xorshift64。乱数も整数のみで作る
