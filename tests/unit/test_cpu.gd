@@ -16,14 +16,15 @@ func _world() -> Array:
 		STANDARD_CHAR, STANDARD_CHAR], 0, 0)
 	return [s, cfg]
 
-func _cpu_jump_serve_result(cfg, score_l: int, score_r: int,
-		serving_team: int, receiver_formation: int) -> Array[int]:
+func _cpu_serve_result(cfg, score_l: int, score_r: int,
+		serving_team: int, receiver_formation: int, profile: int) -> Dictionary:
 	var s = SimState.new()
 	var roster: Array[int] = [
 		STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR, STANDARD_CHAR,
 	]
 	roster[serving_team * 2] = Chars.CHAR_CARBY
 	Simulation.reset_match(s, cfg, serving_team, roster, 0, 0)
+	s.players[serving_team * 2].cpu = profile
 	s.score_l = score_l
 	s.score_r = score_r
 	if serving_team == 0:
@@ -50,13 +51,40 @@ func _cpu_jump_serve_result(cfg, score_l: int, score_r: int,
 			receiver.x = receiver_positions[slot]
 		Simulation.tick(s, [0, 0], cfg)
 		if s.phase == SimState.PHASE_RALLY:
-			var land: int = SimCpu._land_x_from(
-				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
-				cfg.floor_y - cfg.ball_radius, 3)
-			var clears_net: int = 1 if SimCpu._clears_net(
-				s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg) else 0
-			return [land, clears_net]
-	return []
+			var attack_kind: int = s.ball_attack_kind
+			# 予測関数ではなく、実際のBallPhysicsがserve_flightを解除する
+			# 最初の通過を観測する。未通過は300tickで空結果となり必ずFAILする。
+			for flight_tick in 300:
+				var prev_x: int = s.ball_x
+				var prev_y: int = s.ball_y
+				var was_serve_flight: int = s.serve_flight
+				Simulation.tick(s, [0, 0], cfg)
+				if was_serve_flight == 1 and s.serve_flight == 0:
+					var travel_x: int = s.ball_x - prev_x
+					if travel_x == 0:
+						return {}
+					var crossing_y: int = prev_y \
+						+ (s.ball_y - prev_y) * (cfg.net_x - prev_x) / travel_x
+					return {
+						"attack_kind": attack_kind,
+						"crossing_y": crossing_y,
+					}
+				if s.phase != SimState.PHASE_RALLY:
+					return {}
+			return {}
+	return {}
+
+func _check_cpu_serve_result(result: Dictionary, expect_attack: bool,
+		cfg, label: String) -> void:
+	check_eq(result.size(), 2, label + ": 実弾道が300tick以内にネットを越える")
+	if result.size() != 2:
+		return
+	var attack_kind: int = int(result["attack_kind"])
+	check_eq(attack_kind != SimState.BALL_ATTACK_NONE, expect_attack,
+		label + ": 指定profileのサーブ種別を使う")
+	var crossing_y: int = int(result["crossing_y"])
+	check(crossing_y <= cfg.net_top_y - cfg.ball_radius,
+		label + ": 球全体がネット上端を越える")
 
 func test_cpu_chases_ball_on_own_side() -> void:
 	var w := _world()
@@ -206,20 +234,27 @@ func test_cpu_serve_crosses_net_right_team() -> void:
 			break
 	check(crossed, "右CPUのサーブがネットを越え左コートへ渡る")
 
-func test_cpu_jump_serve_all_variations_clear_net() -> void:
+func test_cpu_normal_serve_both_teams_clear_net() -> void:
 	var cfg = SimConfig.new()
+	for serving_team in 2:
+		var result: Dictionary = _cpu_serve_result(
+			cfg, 0, 0, serving_team, 2, SimCpu.PRESET_NORMAL)
+		_check_cpu_serve_result(result, false, cfg,
+			"通常サーブ team=%d" % serving_team)
+
+func test_cpu_attack_serve_all_variations_clear_net() -> void:
+	var cfg = SimConfig.new()
+	# 得点はSimCpu._serve_target()でaim/pow_pctへ直接入るため、11x11を全走査する。
 	for serving_team in 2:
 		for score_l in cfg.points_to_win:
 			for score_r in cfg.points_to_win:
 				for formation in 3:
-					var result: Array[int] = _cpu_jump_serve_result(
-						cfg, score_l, score_r, serving_team, formation)
-					check_eq(result.size(), 2,
-						"全得点・全配置でCPUジャンプサーブが成立する")
-					if result.size() != 2:
-						continue
-					check_eq(result[1], 1,
-						"全得点・全配置でCPUジャンプサーブがネットを越える")
+					var result: Dictionary = _cpu_serve_result(
+						cfg, score_l, score_r, serving_team, formation,
+						SimCpu.PRESET_MAX)
+					_check_cpu_serve_result(result, true, cfg,
+						"アタックサーブ team=%d score=%d-%d formation=%d" % [
+							serving_team, score_l, score_r, formation])
 
 func _prof(ab: int, delay := 0, aim := 0, miss := 0, sweet := 255, depth := 3, tiq := 0) -> int:
 	# テスト用: 誤差・ミス・遅延のない純粋な能力プロファイル(既定)
