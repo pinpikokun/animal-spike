@@ -52,6 +52,157 @@ func _normal_spike_vx(team: int, relative_hdir: int,
 		s, actor, cfg, input, cfg.player_reach * cfg.player_reach)
 	return s.ball_vx
 
+func _preview_air_spike_world(team: int) -> Array:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = team * 2
+	var p = s.players[actor]
+	p.on_ground = 0
+	p.x = cfg.net_x - SimState._dir_of_team(team) * FP.from_int(48)
+	p.y = cfg.net_top_y - FP.from_int(48)
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.ball_vx = 0
+	s.ball_vy = 0
+	return [s, cfg, actor]
+
+func _air_spike_input(team: int, relative_hdir: int) -> int:
+	var input: int = Simulation.IN_ACTION | Simulation.IN_DOWN
+	var hdir: int = relative_hdir * SimState._dir_of_team(team)
+	if hdir < 0:
+		input |= Simulation.IN_LEFT
+	elif hdir > 0:
+		input |= Simulation.IN_RIGHT
+	return input
+
+func test_preview_air_spike_velocity_matches_fixed_normal_values() -> void:
+	for team in 2:
+		var w := _preview_air_spike_world(team)
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = w[2]
+		var dir: int = SimState._dir_of_team(team)
+		var d2: int = cfg.player_reach * cfg.player_reach
+		var pct: int = cfg.spike_normal_pct
+		var rows: Array[Array] = [
+			[-1, dir * cfg.spike_steep_vx * pct / 100,
+				cfg.spike_steep_vy * pct / 100],
+			[0, dir * cfg.spike_mid_vx * pct / 100,
+				(cfg.spike_steep_vy + cfg.spike_vy) * pct / 200],
+			[1, dir * cfg.spike_vx * pct / 100,
+				cfg.spike_vy * pct / 100],
+		]
+		for row in rows:
+			var before: Array[int] = s.to_int_array()
+			var actual: Vector2i = HitResolver.preview_air_spike_velocity(
+				s, actor, cfg, _air_spike_input(team, row[0]), d2)
+			check_eq(actual, Vector2i(row[1], row[2]),
+				"通常空中打撃の固定速度 team=%d direction=%d" % [team, row[0]])
+			check_eq(s.to_int_array(), before, "速度予測は同期状態を変更しない")
+
+func test_preview_air_spike_velocity_applies_sweet_and_inertia() -> void:
+	var w := _preview_air_spike_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	var p = s.players[actor]
+	s.ball_vx = cfg.inertia_min_speed * 2
+	s.ball_vy = -cfg.inertia_min_speed
+	var pct: int = cfg.spike_power_pct \
+		* Chars.stat(p.char_id, "just_reward") / 100
+	pct = pct * Chars.stat(p.char_id, "atk") / 100
+	var inertia: int = cfg.hit_inertia_just_num \
+		* (200 - Chars.stat(p.char_id, "absorb")) / 100
+	var expected := Vector2i(
+		cfg.spike_mid_vx * pct / 100 \
+			- s.ball_vx * inertia / cfg.hit_inertia_den,
+		(cfg.spike_steep_vy + cfg.spike_vy) * pct / 200 \
+			- s.ball_vy * inertia / cfg.hit_inertia_den)
+	var actual: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, _air_spike_input(0, 0), 0)
+	check_eq(actual, expected, "ジャスト倍率と入射慣性を順番どおり適用")
+
+func test_preview_air_spike_velocity_serve_ignores_inertia() -> void:
+	var w := _preview_air_spike_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	s.phase = SimState.PHASE_SERVE
+	s.serve_tossed = 1
+	s.serving_team = 0
+	s.ball_vx = cfg.inertia_min_speed * 3
+	s.ball_vy = cfg.inertia_min_speed * 2
+	var pct: int = cfg.spike_normal_pct
+	var expected := Vector2i(
+		cfg.spike_vx * pct / 100,
+		cfg.spike_vy * pct / 100)
+	var actual: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, _air_spike_input(0, 1),
+		cfg.player_reach * cfg.player_reach)
+	check_eq(actual, expected, "サーブ打撃は入射慣性をゼロにする")
+
+func test_preview_air_spike_velocity_mangles_opponent_power_ball() -> void:
+	var w := _preview_air_spike_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	s.last_touch_team = 1
+	s.ball_power = 1
+	s.ball_vx = cfg.inertia_min_speed * 2
+	s.ball_vy = cfg.inertia_min_speed
+	var pct: int = cfg.spike_normal_pct
+	var expected := Vector2i(
+		cfg.spike_mid_vx * pct / 100 * HitResolver.MANGLE_AIM_PCT / 100 \
+			- s.ball_vx,
+		(cfg.spike_steep_vy + cfg.spike_vy) * pct / 200 \
+			* HitResolver.MANGLE_AIM_PCT / 100 - s.ball_vy)
+	var actual: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, _air_spike_input(0, 0),
+		cfg.player_reach * cfg.player_reach)
+	check_eq(actual, expected, "相手パワー球の芯外しは狙い30%と全反射")
+
+func test_preview_air_spike_velocity_applies_attack_and_mura_once() -> void:
+	var w := _preview_air_spike_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var actor: int = w[2]
+	var p = s.players[actor]
+	p.char_id = Chars.CHAR_PANDA
+	s.aitick = 0xABCD
+	check_eq(HitResolver._mura_power_pct(s, actor, p.char_id), 150,
+		"固定aitickはむらっけ150%側")
+	var pct: int = cfg.spike_normal_pct * Chars.stat(p.char_id, "atk") / 100
+	pct = pct * 150 / 100
+	var expected := Vector2i(
+		cfg.spike_mid_vx * pct / 100,
+		(cfg.spike_steep_vy + cfg.spike_vy) * pct / 200)
+	var actual: Vector2i = HitResolver.preview_air_spike_velocity(
+		s, actor, cfg, _air_spike_input(0, 0),
+		cfg.player_reach * cfg.player_reach)
+	check_eq(actual, expected, "攻撃値とむらっけを最終倍率へ一度だけ適用")
+
+func test_air_spike_application_matches_preview_velocity() -> void:
+	for mode in ["normal", "sweet", "mangled"]:
+		var w := _preview_air_spike_world(0)
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = w[2]
+		var d2: int = cfg.player_reach * cfg.player_reach
+		s.ball_vx = cfg.inertia_min_speed * 2
+		s.ball_vy = -cfg.inertia_min_speed
+		if mode == "sweet":
+			d2 = 0
+		elif mode == "mangled":
+			s.last_touch_team = 1
+			s.ball_power = 1
+		var input: int = _air_spike_input(0, 1)
+		var expected: Vector2i = HitResolver.preview_air_spike_velocity(
+			s, actor, cfg, input, d2)
+		HitResolver._apply_hit(s, actor, cfg, input, d2)
+		check_eq(Vector2i(s.ball_vx, s.ball_vy), expected,
+			"実打球は速度予測と一致: " + mode)
+
 func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 	var normal := _rally_world()
 	var ghost := _rally_world()

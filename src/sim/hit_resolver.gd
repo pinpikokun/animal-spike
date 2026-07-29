@@ -87,6 +87,64 @@ static func _classify_intent(on_ground: int, input: int, d2: int,
 		return [INTENT_AIR_SPIKE, hdir, up, 0]
 	return [INTENT_AIR_TOSS, hdir, up, 0]
 
+static func preview_air_spike_velocity(
+		s, actor: int, cfg, input: int, d2: int) -> Vector2i:
+	var p = s.players[actor]
+	var team: int = team_of(actor)
+	var dir: int = SimStateScript._dir_of_team(team)
+	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE \
+		and s.serve_tossed == 1
+	var special: int = _special_for_input(p, input, cfg)
+	var intent: Array[int] = _classify_intent(
+		p.on_ground, input, d2, cfg.player_reach, serve_strike)
+	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
+		* Chars.stat(p.char_id, "just_window") / (100 * 100)
+	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
+	if special != 0:
+		sweet = true
+	if p.burnout_ticks > 0:
+		sweet = false
+	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
+	var in_sp2: int = s.ball_vx * s.ball_vx + s.ball_vy * s.ball_vy
+	if in_sp2 < cfg.inertia_min_speed * cfg.inertia_min_speed:
+		inertia = 0
+	inertia = maxi(inertia * (200 - Chars.stat(p.char_id, "absorb")) / 100, 0)
+	if serve_strike:
+		inertia = 0
+	var incoming_unblockable: bool = s.ball_defense_class == Chars.DEFENSE_UNBLOCKABLE
+	var flame_spike_return: bool = incoming_unblockable \
+		and intent[0] == INTENT_AIR_SPIKE
+	var opposing_power: bool = s.last_touch_team >= 0 \
+		and s.last_touch_team != team and s.ball_power == 1 \
+		and not flame_spike_return
+	var unblockable_touch: bool = incoming_unblockable and s.ball_power == 1 \
+		and intent[0] != INTENT_AIR_SPIKE
+	var mangled: bool = (opposing_power or unblockable_touch) and not sweet
+	var aim_pct: int = 100
+	if mangled:
+		aim_pct = MANGLE_AIM_PCT
+		inertia = cfg.hit_inertia_den
+	var pct: int = cfg.spike_normal_pct
+	if sweet:
+		pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
+	pct = pct * Chars.stat(p.char_id, "atk") / 100
+	pct = pct * _mura_power_pct(s, actor, p.char_id) / 100
+	var relative_hdir: int = intent[1] * dir
+	var svx: int
+	var svy: int
+	if relative_hdir < 0:
+		svx = dir * cfg.spike_steep_vx * pct / 100
+		svy = cfg.spike_steep_vy * pct / 100
+	elif relative_hdir > 0:
+		svx = dir * cfg.spike_vx * pct / 100
+		svy = cfg.spike_vy * pct / 100
+	else:
+		svx = dir * cfg.spike_mid_vx * pct / 100
+		svy = (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200
+	return Vector2i(
+		svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den,
+		svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den)
+
 static func _mura_power_pct(s, actor: int, char_id: int) -> int:
 	if not Chars.has_trait(char_id, Chars.Profile.TRAIT_MURA):
 		return 100
@@ -372,6 +430,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		p.on_ground, input, d2, cfg.player_reach, serve_strike)
 	var intent_kind: int = intent[0]
 	var hdir: int = intent[1]
+	var air_spike_velocity := Vector2i.ZERO
+	if intent_kind == INTENT_AIR_SPIKE:
+		air_spike_velocity = preview_air_spike_velocity(s, i, cfg, input, d2)
 	var incoming_attack_kind: int = s.ball_attack_kind
 	var incoming_guard_damage: int = s.ball_guard_damage
 	var incoming_defense_class: int = s.ball_defense_class
@@ -570,13 +631,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
-		var pct: int = cfg.spike_normal_pct
 		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
 		if drive_just_attack:
 			_spend_drive(p, cfg.drive_gauge_stock / 2, cfg)
 		if sweet:
-			# ジャスト報酬%: パワー倍率にキャラ%を掛ける(パワー型の見せ場)
-			pct = cfg.spike_power_pct * Chars.stat(p.char_id, "just_reward") / 100
 			s.ball_power = 1
 			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
 			# スローモーション12tick(1/3速)でボールが撃ち出される様をスロー再生する。
@@ -590,22 +648,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		else:
 			# 通常アタックの瞬止を4tick=67msに強化(2tickでは打感が伝わらないとの指摘)
 			s.hit_freeze = maxi(s.hit_freeze, 4)
-		pct = pct * Chars.stat(p.char_id, "atk") / 100  # アタック威力%
-		pct = pct * _mura_power_pct(s, i, p.char_id) / 100
-		var svx: int
-		var svy: int
-		var relative_hdir: int = hdir * dir
-		if relative_hdir < 0:
-			svx = dir * cfg.spike_steep_vx * pct / 100
-			svy = cfg.spike_steep_vy * pct / 100
-		elif relative_hdir > 0:
-			svx = dir * cfg.spike_vx * pct / 100
-			svy = cfg.spike_vy * pct / 100
-		else:
-			svx = dir * cfg.spike_mid_vx * pct / 100
-			svy = (cfg.spike_steep_vy + cfg.spike_vy) * pct / 200
-		s.ball_vx = svx * aim_pct / 100 - s.ball_vx * inertia / cfg.hit_inertia_den
-		s.ball_vy = svy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
+		s.ball_vx = air_spike_velocity.x
+		s.ball_vy = air_spike_velocity.y
 		if special == Chars.SUPER_FLAME_ATTACK:
 			s.ball_flame = 1
 		elif incoming_flame:
