@@ -6,7 +6,7 @@ extends "res://tests/test_case.gd"
 
 const SIM_DIR := "res://src/sim"
 const BANNED := [
-	"float", "randf", "randi", "Vector2", "Vector3",
+	"float", "randf", "randi",
 	"lerp", "sin(", "cos(", "tan(", "sqrt(", "exp(",
 	"floor(", "ceil(", "round(",
 	"pow(", "atan2(", "fmod(", "smoothstep(", "ease(", "deg_to_rad(",
@@ -19,6 +19,7 @@ var _string_re: RegEx
 var _decimal_re: RegEx
 var _const_re: RegEx
 var _log_re: RegEx
+var _float_vector_re: RegEx
 
 func test_sim_sources_are_float_free() -> void:
 	_string_re = RegEx.new()
@@ -32,6 +33,9 @@ func test_sim_sources_are_float_free() -> void:
 	# 自然対数log(。debug_log(等は_が単語文字なので\bで弾かれず誤爆しない
 	_log_re = RegEx.new()
 	_log_re.compile("\\blog\\(")
+	# Vector2i/Vector3iは整数型なので、部分一致で拒否しない。
+	_float_vector_re = RegEx.new()
+	_float_vector_re.compile("\\b(Vector2|Vector3)\\b")
 	var scanned := _scan_dir(SIM_DIR)
 	check(scanned >= 4, "simファイルの走査数=" + str(scanned))
 
@@ -75,3 +79,5 @@ func _scan_file(path: String) -> void:
 			check(false, "%s:%d float定数(PI/TAU/INF/NAN): %s" % [path, i + 1, line.strip_edges()])
 		if _log_re.search(code) != null:
 			check(false, "%s:%d float返しlog(: %s" % [path, i + 1, line.strip_edges()])
+		if _float_vector_re.search(code) != null:
+			check(false, "%s:%d floatベクトル型: %s" % [path, i + 1, line.strip_edges()])
