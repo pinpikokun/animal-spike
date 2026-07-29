@@ -72,6 +72,17 @@ const WAIT_BACK_OFFSETS: Array[int] = [240, 240, 240, 240, 280, 280, 160, 160, 2
 const BACK_ROLE_HYSTERESIS_PX := 64
 # 原作0x8372の非レシーバー退避先。原作の目盛り16×4。1目盛り=画面4ドット
 const RECEIVER_YIELD_OFFSET_PX := 64
+# 原作0x8824の攻撃ジャンプ発火AND条件。本作の固定小数へ変換する前のpx値。
+const JUMP_BALL_MAX_DX_PX := 80
+const JUMP_BALL_MAX_VX_PX := 10
+const JUMP_BALL_MAX_VY_PX := 5
+const JUMP_BALL_MAX_Y_PX := 215
+
+static func _jump_ball_ok(s, p) -> bool:
+	return absi(s.ball_x - p.x) < FP.from_int(JUMP_BALL_MAX_DX_PX) \
+		and absi(s.ball_vx) < FP.from_int(JUMP_BALL_MAX_VX_PX) \
+		and absi(s.ball_vy) < FP.from_int(JUMP_BALL_MAX_VY_PX) \
+		and s.ball_y < FP.from_int(JUMP_BALL_MAX_Y_PX)
 
 # 難易度プリセット(2026-07-13「人間化」改訂)。方針:
 # - 超人反応の撤廃: 最強でも遅延12tick=200ms(人間の上級者並み)。強さは反応でなく

@@ -694,6 +694,33 @@ func test_attack_cpu_jumps_to_meet_toss() -> void:
 	p.cpu = _prof(SimCpu.AB_PREDICT)
 	check(not (SimCpu.decide(s, 1, cfg) & Simulation.IN_JUMP), "能力なしは跳ばない")
 
+func test_jump_ball_gate_uses_strict_fixed_point_boundaries() -> void:
+	var w := _world()
+	var s = w[0]
+	var p = s.players[1]
+	s.ball_x = p.x + FP.from_int(80) - 1
+	s.ball_vx = FP.from_int(10) - 1
+	s.ball_vy = -FP.from_int(5) + 1
+	s.ball_y = FP.from_int(215) - 1
+	check(SimCpu._jump_ball_ok(s, p), "4条件の境界直前は合格")
+	s.ball_x = p.x + FP.from_int(80)
+	check(not SimCpu._jump_ball_ok(s, p), "横距離80pxは不合格")
+	s.ball_x = p.x - FP.from_int(80)
+	check(not SimCpu._jump_ball_ok(s, p), "横距離-80pxは不合格")
+	s.ball_x = p.x
+	s.ball_vx = FP.from_int(10)
+	check(not SimCpu._jump_ball_ok(s, p), "横速度+10px/tickは不合格")
+	s.ball_vx = -FP.from_int(10)
+	check(not SimCpu._jump_ball_ok(s, p), "横速度-10px/tickは不合格")
+	s.ball_vx = 0
+	s.ball_vy = FP.from_int(5)
+	check(not SimCpu._jump_ball_ok(s, p), "縦速度+5px/tickは不合格")
+	s.ball_vy = -FP.from_int(5)
+	check(not SimCpu._jump_ball_ok(s, p), "縦速度-5px/tickは不合格")
+	s.ball_vy = 0
+	s.ball_y = FP.from_int(215)
+	check(not SimCpu._jump_ball_ok(s, p), "高さ215pxは不合格")
+
 func test_support_zone_complements_human_mate() -> void:
 	# 相方が操作キャラの時、CPUは相方の居ない前後ゾーンを守る
 	# (相方に張り付いて随伴しない)
