@@ -85,6 +85,37 @@ func test_reset_rally_keeps_player_positions() -> void:
 	check_eq(s.cpu_hit_count, 13, "ラリー初期化は打球回数を維持")
 	check_eq(s.cpu_back_role_mask, back_role_mask_before, "ラリー初期化は前衛後衛役を維持")
 
+func test_reset_rally_clears_transient_movement_state_for_every_player() -> void:
+	var w := _serve_world(0)
+	var s = w[0]
+	var cfg = w[1]
+	var positions: Array[Vector2i] = []
+	for i in s.players.size():
+		var p = s.players[i]
+		p.x = FP.from_int(60 + i * 100)
+		p.y = FP.from_int(200 + i)
+		p.tap_dir = -1 if i % 2 == 0 else 1
+		p.tap_tick = -(i + 1) if i % 2 == 0 else i + 1
+		p.dash = i + 1
+		p.push = -(i + 2) if i % 2 == 0 else i + 2
+		positions.append(Vector2i(p.x, p.y))
+
+	Simulation.reset_rally(s, cfg, 1)
+
+	for i in s.players.size():
+		var p = s.players[i]
+		check_eq(p.tap_dir, 0, "player%dの前tick方向を消す" % i)
+		check_eq(p.tap_tick, 0, "player%dのダブルタップ受付を消す" % i)
+		check_eq(p.dash, 0, "player%dのダッシュ残時間を消す" % i)
+		check_eq(p.push, 0, "player%dの吹っ飛び残時間を消す" % i)
+		if i != 2:
+			check_eq(Vector2i(p.x, p.y), positions[i],
+				"非サーバーplayer%dの位置を維持" % i)
+	check_eq(s.players[2].x, cfg.court_width - cfg.serve_line,
+		"右サーバーは従来どおりサーブ線へ移る")
+	check_eq(s.players[2].y, cfg.floor_y,
+		"右サーバーは従来どおり床へ移る")
+
 func test_ball_held_by_server() -> void:
 	var w := _serve_world(0)
 	var s = w[0]

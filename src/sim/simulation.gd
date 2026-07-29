@@ -421,6 +421,10 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.receive_stance = 0
 		p.just_receive_flash = 0
 		p.quake_stun = 0
+		p.tap_dir = 0
+		p.tap_tick = 0
+		p.dash = 0
+		p.push = 0
 		# 投げっぱなしの帽子はラリー再開で戻す(帽子を持たないキャラは持たないまま)
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
 	# 飛んでるエンティティ(帽子等)は全て消す(ラリーをまたぐ置き物は今後kind別に判断)

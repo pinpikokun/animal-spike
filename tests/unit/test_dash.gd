@@ -50,6 +50,31 @@ func test_no_dash_without_ability() -> void:
 	_tap_twice(s, cfg, SimInput.IN_RIGHT, 2)
 	check_eq(s.players[0].dash, 0, "CA_DASH無しキャラは発動しない")
 
+func test_rally_reset_turns_same_direction_tap_into_a_new_first_tap() -> void:
+	var control = _rally(Chars.CHAR_DEBUG)
+	var control_state = control[0]
+	var cfg = control[1]
+	Sim.tick(control_state, [SimInput.IN_RIGHT, 0], cfg)
+	Sim.tick(control_state, [0, 0], cfg)
+	check(control_state.players[0].tap_tick > 0,
+		"対照: 1回目の右タップ受付が残っている")
+	Sim.tick(control_state, [SimInput.IN_RIGHT, 0], cfg)
+	check(control_state.players[0].dash > 0,
+		"対照: resetなしの同方向2回目はダッシュになる")
+
+	var reset_case = _rally(Chars.CHAR_DEBUG)
+	var reset_state = reset_case[0]
+	Sim.tick(reset_state, [SimInput.IN_RIGHT, 0], cfg)
+	Sim.tick(reset_state, [0, 0], cfg)
+	check(reset_state.players[0].tap_tick > 0,
+		"前提: reset前に右タップ受付が残っている")
+	Sim.reset_rally(reset_state, cfg, 1)
+	Sim.tick(reset_state, [SimInput.IN_RIGHT, 0], cfg)
+	check_eq(reset_state.players[0].dash, 0,
+		"reset後の同方向1回目ではダッシュしない")
+	check_eq(reset_state.players[0].tap_tick, PlayerMovement.DASH_TAP_WINDOW,
+		"reset後の入力を新しい1回目として記録する")
+
 func test_dash_jump_carries_speed() -> void:
 	# ダッシュ中にジャンプ→空中でもダッシュ速度で横移動(ダッシュジャンプ)
 	var w = _rally(Chars.CHAR_DEBUG); var s = w[0]; var cfg = w[1]
