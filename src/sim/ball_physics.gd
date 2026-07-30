@@ -4,8 +4,47 @@ extends RefCounted
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
+class _BallProbe:
+	var ball_x: int = 0
+	var ball_y: int = 0
+	var ball_vx: int = 0
+	var ball_vy: int = 0
+	var ball_spin: int = 0
+	var ball_power: int = 0
+	var ball_attack_kind: int = 0
+	var ball_guard_damage: int = 0
+	var ball_defense_class: int = 0
+	var ball_ghost: int = 0
+	var ball_flame: int = 0
+	var touches: int = 0
+	var serve_flight: int = 0
+	var last_touch_team: int = -1
+
 static func wall_reflect_vx(vx: int, cfg) -> int:
 	return -vx * cfg.wall_bounce_num / cfg.ball_bounce_den
+
+static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
+	var probe := _BallProbe.new()
+	probe.ball_x = s.ball_x
+	probe.ball_y = s.ball_y
+	probe.ball_vx = s.ball_vx
+	probe.ball_vy = s.ball_vy
+	probe.ball_spin = s.ball_spin
+	probe.ball_power = s.ball_power
+	probe.ball_attack_kind = s.ball_attack_kind
+	probe.ball_guard_damage = s.ball_guard_damage
+	probe.ball_defense_class = s.ball_defense_class
+	probe.ball_ghost = s.ball_ghost
+	probe.ball_flame = s.ball_flame
+	probe.touches = s.touches
+	probe.serve_flight = s.serve_flight
+	probe.last_touch_team = s.last_touch_team
+	var floor_limit: int = cfg.floor_y - cfg.ball_radius
+	for _tick in max_ticks:
+		_step_ball(probe, cfg)
+		if probe.ball_y >= floor_limit and probe.ball_vy > 0:
+			return probe.ball_x
+	return -1
 
 static func _clear_attack_effect(s) -> void:
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
