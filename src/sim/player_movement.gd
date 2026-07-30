@@ -118,6 +118,28 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		input = 0
 	else:
 		p.stun_action_held = action_down
+	var min_x: int = 0
+	var max_x: int = cfg.court_width
+	if team == 0:
+		max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
+	else:
+		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
+	if p.dive != 0:
+		p.dive_age_ticks += 1
+		p.vx = p.dive * cfg.dive_receive_speed if p.dive_contact_ticks > 0 else 0
+		p.vy += cfg.gravity
+		p.x = clampi(p.x + p.vx, min_x, max_x)
+		p.y += p.vy
+		if p.hit_cooldown > 0:
+			p.hit_cooldown -= 1
+		if p.y >= cfg.floor_y:
+			p.y = cfg.floor_y
+			p.vy = 0
+			p.on_ground = 1
+			p.dive = 0
+			p.dive_contact_ticks = 0
+			p.dive_age_ticks = 0
+		return
 	var in_dir: int = 0
 	if input & IN_LEFT:
 		in_dir -= 1
@@ -204,17 +226,6 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 			p.vy += _jump_gravity(jump_height, down_ticks, false)
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1
-	# ジャンピングトス演出の残時間(符号=方向)。ゼロへ向かって減る
-	if p.dive > 0:
-		p.dive -= 1
-	elif p.dive < 0:
-		p.dive += 1
-	var min_x: int = 0
-	var max_x: int = cfg.court_width
-	if team == 0:
-		max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
-	else:
-		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
 	# ヒップアタック(固有技CA_HIP): 空中で下+Dの明示入力により発動。
 	# その後まっすぐ急降下。帽子所持への相乗りは廃止(技として独立)
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \

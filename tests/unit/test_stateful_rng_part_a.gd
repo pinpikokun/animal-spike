@@ -94,18 +94,22 @@ func test_tick_advances_only_rng_once_during_normal_freeze_and_slow_ticks() -> v
 	frozen[0].hit_freeze = 1
 	var frozen_aitick: int = frozen[0].aitick
 	var frozen_expected: int = SimRng.advance_frame(frozen[0].rng, frozen_aitick)
-	Simulation.tick(frozen[0], [0, 0], frozen[1])
+	Simulation.tick(frozen[0], [Simulation.IN_ACTION, 0], frozen[1])
 	check_eq(frozen[0].rng, frozen_expected, "hit freeze中もrngを1回進める")
 	check_eq(frozen[0].aitick, frozen_aitick, "hit freeze中もaitickを進めない")
+	check_eq(frozen[0].players[frozen[0].controlled_l].action_latch, 1,
+		"hit freeze中もACTIONラッチを入力レベルへ更新")
 
 	var slowed := _match(0x3456)
 	slowed[0].phase = SimState.PHASE_GAME_OVER
 	slowed[0].slow_ticks = 2
 	var slowed_aitick: int = slowed[0].aitick
 	var slowed_expected: int = SimRng.advance_frame(slowed[0].rng, slowed_aitick)
-	Simulation.tick(slowed[0], [0, 0], slowed[1])
+	Simulation.tick(slowed[0], [Simulation.IN_ACTION, 0], slowed[1])
 	check_eq(slowed[0].rng, slowed_expected, "slow早期returnでもrngを1回進める")
 	check_eq(slowed[0].aitick, slowed_aitick, "slow中もaitickを進めない")
+	check_eq(slowed[0].players[slowed[0].controlled_l].action_latch, 1,
+		"slow早期returnでもACTIONラッチを入力レベルへ更新")
 
 	var direct := _match(0x4567)
 	direct[0].phase = SimState.PHASE_GAME_OVER

@@ -65,8 +65,8 @@ static func _advance_cpu_positioning_after_hit(s) -> void:
 		var first_idx: int = team * 2
 		s.cpu_back_role_mask ^= (1 << first_idx) | (1 << (first_idx + 1))
 
-static func _classify_intent(on_ground: int, input: int, d2: int,
-		player_reach: int, serve_strike: bool) -> Array[int]:
+static func _classify_intent(on_ground: int, input: int, _d2: int,
+		_player_reach: int, _serve_strike: bool) -> Array[int]:
 	var hdir: int = 0
 	if input & IN_LEFT:
 		hdir -= 1
@@ -76,11 +76,7 @@ static func _classify_intent(on_ground: int, input: int, d2: int,
 	if on_ground == 1:
 		if input & IN_DOWN:
 			return [INTENT_GROUND_RECEIVE, hdir, 0, 0]
-		var dive_dir: int = 0
-		var edge: int = player_reach * 3 / 4
-		if hdir != 0 and not serve_strike and d2 >= 0 and d2 > edge * edge:
-			dive_dir = hdir
-		return [INTENT_GROUND_TOSS, hdir, 0, dive_dir]
+		return [INTENT_GROUND_TOSS, hdir, 0, 0]
 	if up == 1:
 		return [INTENT_AIR_BLOCK, hdir, up, 0]
 	if input & IN_DOWN:
@@ -579,8 +575,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			else:
 				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 					toss_target_x(team, ground_toss_hdir, cfg), cfg)
-			if intent[3] != 0:
-				p.dive = hdir * cfg.hit_cooldown_ticks  # 表示層の飛びつき演出用
 			p.hit_kind = 1
 		else:
 			# 地上レシーブは接触位置を主成分とし、散りと小さな左右操舵を加える。

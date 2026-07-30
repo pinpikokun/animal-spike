@@ -1728,8 +1728,8 @@ func test_jump_without_action_is_full() -> void:
 	check_eq(p.on_ground, 0, "フルジャンプで浮く")
 	check(p.vy < 0, "フルジャンプは上向きの初速を持つ")
 
-func test_jumping_toss_on_reach_edge() -> void:
-	# 横+アクションでボールがリーチ縁ギリギリ: ジャンピングトス(緩め軌道+演出フラグ)
+func test_reach_edge_toss_does_not_reuse_dive_state() -> void:
+	# 通常リーチ内の横トスは従来どおり拾うが、横っ飛び状態は予測発動だけに使う。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -1739,8 +1739,8 @@ func test_jumping_toss_on_reach_edge() -> void:
 	s.ball_y = cfg.floor_y
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "ギリギリでも拾える")
-	check(s.ball_vy < 0, "救済トスは低い失敗時でも上向きに拾う")
-	check(p.dive > 0, "飛びつき演出フラグ(右向き)が立つ")
+	check(s.ball_vy < 0, "リーチ縁のトスも上向きに拾う")
+	check_eq(p.dive, 0, "通常トスは横っ飛び状態を立てない")
 
 func test_near_toss_is_not_jumping_toss() -> void:
 	# 体の近くの横トスは通常の前トス(演出フラグなし)

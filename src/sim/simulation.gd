@@ -112,9 +112,19 @@ static func _handle_switch(state, in_l: int, in_r: int) -> void:
 static func _cpu_input(state, idx: int, cfg) -> int:
 	return SimCpu.decide(state, idx, cfg)
 
+static func _consume_action_edges(state, inputs: Array[int]) -> Array[bool]:
+	var edges: Array[bool] = []
+	for i in state.players.size():
+		var level: int = 1 if i < inputs.size() and (inputs[i] & IN_ACTION) != 0 else 0
+		var p = state.players[i]
+		edges.append(level == 1 and p.action_latch == 0)
+		p.action_latch = level
+	return edges
+
 static func step(state, inputs: Array[int], cfg) -> void:
 	# matchの定数パターンは識別子束縛の罠があるためif/elifで書く
 	state.tick += 1
+	var action_edges: Array[bool] = _consume_action_edges(state, inputs)
 	_update_drive_recovery(state, cfg)
 	var burnout_before: Array[int] = []
 	for p in state.players:
@@ -152,7 +162,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 					state.serve_pow = maxi(state.serve_pow - 1, POW_MIN)
 				serve_inputs[srv_idx] &= ~(IN_JUMP | IN_LEFT | IN_RIGHT)
 			var effective_serve_inputs: Array[int] = \
-				_step_players_and_hits(state, serve_inputs, cfg)
+				_step_players_and_hits(state, serve_inputs, cfg, action_edges)
 			# サーバーは外線(サービスライン)を越えられない(トスまで)。線の後ろでは動ける。
 			# 下限は壁からball_radius: 壁際まで下がると保持ボールが壁反射圏に入り、
 			# 前サーブが反転して自陣に落ちる自滅死角ができるため(レビュー指摘)
@@ -169,7 +179,7 @@ static func step(state, inputs: Array[int], cfg) -> void:
 			# ヒットルールで打つ(地上前トス=安全サーブ/走り込みジャンプ+下=アタック)。
 			# 打った瞬間に_resolve_hitがRALLYへ遷移させる
 			var effective_toss_inputs: Array[int] = \
-				_step_players_and_hits(state, inputs, cfg)
+				_step_players_and_hits(state, inputs, cfg, action_edges)
 			BallPhysics._step_ball(state, cfg, effective_toss_inputs)
 			HitResolver._ball_vs_block(state, cfg, effective_toss_inputs)
 			if state.phase == SimStateScript.PHASE_SERVE \
@@ -178,20 +188,20 @@ static func step(state, inputs: Array[int], cfg) -> void:
 				_award_point(state, 1 - state.serving_team, cfg)
 	elif state.phase == SimStateScript.PHASE_RALLY:
 		var effective_rally_inputs: Array[int] = \
-			_step_players_and_hits(state, inputs, cfg)
+			_step_players_and_hits(state, inputs, cfg, action_edges)
 		BallPhysics._step_ball(state, cfg, effective_rally_inputs)
 		HitResolver._ball_vs_block(state, cfg, effective_rally_inputs)
 		_check_floor_point(state, cfg)
 	elif state.phase == SimStateScript.PHASE_POINT_PAUSE:
 		state.timer -= 1
 		# ポーズ中も操作は生かす(ヒットは_try_hitのフェーズ判定で無効)
-		_step_players_and_hits(state, inputs, cfg)
+		_step_players_and_hits(state, inputs, cfg, action_edges)
 		BallPhysics._step_ball_loose(state, cfg)
 		if state.timer <= 0:
 			reset_rally(state, cfg, state.serving_team)
 	elif state.phase == SimStateScript.PHASE_GAME_OVER:
 		# 勝敗確定後もキャラの移動・ジャンプは生かす
-		_step_players_and_hits(state, inputs, cfg)
+		_step_players_and_hits(state, inputs, cfg, action_edges)
 		BallPhysics._step_ball_loose(state, cfg)
 	_apply_burnout_entry_feedback(state, burnout_before)
 
@@ -230,12 +240,19 @@ static func _update_drive_recovery(state, cfg) -> void:
 		if p.drive_gauge == cfg.drive_gauge_max:
 			p.drive_recovery_progress = 0
 
-static func _step_players_and_hits(state, inputs: Array[int], cfg) -> Array[int]:
+static func _step_players_and_hits(state, inputs: Array[int],
+		cfg, action_edges: Array[bool] = []) -> Array[int]:
 	var hip_landed: bool = false
 	var effective_inputs: Array[int] = []
+	var dive_edges: Array[bool] = action_edges.duplicate()
+	while dive_edges.size() < state.players.size():
+		dive_edges.append(false)
 	for i in state.players.size():
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var p = state.players[i]
+		if i >= dive_edges.size() or not _can_start_dive_receive(p):
+			if i < dive_edges.size():
+				dive_edges[i] = false
 		# 炎上開始時点で入力を封じ、最終tickにburnが0へ減った後も同tick中は
 		# 打撃・構え・固有技へ生入力を漏らさない。
 		effective_inputs.append(0 if p.burn > 0 else input)
@@ -251,6 +268,9 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> Array[int]
 		and state.serve_tossed == 1
 	_update_receive_stances(state, effective_inputs, cfg)
 	var hit_result: int = HitResolver._resolve_hit(state, effective_inputs, cfg)
+	_advance_dive_contact_windows(state)
+	if hit_result == HitResolver.NO_HIT:
+		_try_start_dive_receives(state, effective_inputs, dive_edges, cfg)
 	if was_serve_strike and hit_result != HitResolver.NO_HIT:
 		# serve_flightとは別に、受け手の初接触までサーブ由来球であることを保持する。
 		# 得点判定より先に立て、同tickにラリー終了した場合は_award_pointで解除する。
@@ -264,6 +284,56 @@ static func _step_players_and_hits(state, inputs: Array[int], cfg) -> Array[int]
 		state.serve_flight = 1
 	_update_hat(state, effective_inputs, cfg)
 	return effective_inputs
+
+static func _can_start_dive_receive(p) -> bool:
+	return p.on_ground == 1 and p.dive == 0 and p.hit_cooldown == 0 \
+		and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
+		and p.throw == 0 and p.flinch == 0 and p.hip == 0
+
+static func _try_start_dive_receives(state, _inputs: Array[int],
+		action_edges: Array[bool], cfg) -> void:
+	if state.phase != SimStateScript.PHASE_RALLY or state.last_touch_team < 0:
+		return
+	var has_edge: bool = false
+	for edge in action_edges:
+		if edge:
+			has_edge = true
+			break
+	if not has_edge:
+		return
+	var predicted_x: int = BallPhysics.predict_first_floor_x(state, cfg)
+	if predicted_x < 0:
+		return
+	var landing_team: int = 0 if predicted_x < cfg.net_x else 1
+	for i in state.players.size():
+		if i >= action_edges.size() or not action_edges[i]:
+			continue
+		var p = state.players[i]
+		var team: int = team_of(i)
+		if team == state.last_touch_team or team != landing_team \
+				or not _can_start_dive_receive(p):
+			continue
+		var receive_reach: int = HitResolver.reach_for_intent(
+			p.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+		var distance: int = absi(predicted_x - p.x)
+		if distance <= receive_reach \
+				or distance > receive_reach + cfg.dive_receive_extra_reach:
+			continue
+		p.dive = signi(predicted_x - p.x)
+		p.dive_contact_ticks = cfg.dive_receive_contact_ticks
+		p.dive_age_ticks = 0
+		p.vx = p.dive * cfg.dive_receive_speed
+		p.vy = -cfg.dive_receive_hop
+		p.receive_stance = 0
+		p.on_ground = 0
+
+static func _advance_dive_contact_windows(state) -> void:
+	for p in state.players:
+		if p.dive == 0 or p.dive_contact_ticks <= 0:
+			continue
+		p.dive_contact_ticks -= 1
+		if p.dive_contact_ticks == 0:
+			p.vx = 0
 
 static func _update_receive_stances(state, inputs: Array[int], cfg) -> void:
 	for i in state.players.size():
@@ -412,6 +482,8 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.stun_action_held = 0
 		p.burn = 0
 		p.dive = 0
+		p.dive_contact_ticks = 0
+		p.dive_age_ticks = 0
 		p.brake = 0
 		p.run = 0
 		p.throw = 0

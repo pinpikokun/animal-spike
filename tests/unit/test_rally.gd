@@ -98,6 +98,10 @@ func test_reset_rally_clears_transient_movement_state_for_every_player() -> void
 		p.tap_tick = -(i + 1) if i % 2 == 0 else i + 1
 		p.dash = i + 1
 		p.push = -(i + 2) if i % 2 == 0 else i + 2
+		p.dive = -1 if i % 2 == 0 else 1
+		p.dive_contact_ticks = i + 1
+		p.dive_age_ticks = i + 5
+		p.action_latch = 1
 		positions.append(Vector2i(p.x, p.y))
 
 	Simulation.reset_rally(s, cfg, 1)
@@ -108,6 +112,10 @@ func test_reset_rally_clears_transient_movement_state_for_every_player() -> void
 		check_eq(p.tap_tick, 0, "player%dのダブルタップ受付を消す" % i)
 		check_eq(p.dash, 0, "player%dのダッシュ残時間を消す" % i)
 		check_eq(p.push, 0, "player%dの吹っ飛び残時間を消す" % i)
+		check_eq(p.dive, 0, "player%dの横っ飛び方向を消す" % i)
+		check_eq(p.dive_contact_ticks, 0, "player%dの横っ飛び受付を消す" % i)
+		check_eq(p.dive_age_ticks, 0, "player%dの横っ飛び経過を消す" % i)
+		check_eq(p.action_latch, 1, "player%dのACTIONラッチを維持" % i)
 		if i != 2:
 			check_eq(Vector2i(p.x, p.y), positions[i],
 				"非サーバーplayer%dの位置を維持" % i)

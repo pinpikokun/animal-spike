@@ -53,7 +53,7 @@ func test_intent_classification_table() -> void:
 		[1, 0, near_d2, 1, 0],
 		[1, Simulation.IN_UP, near_d2, 1, 0],
 		[1, Simulation.IN_RIGHT, near_d2, 1, 0],
-		[1, Simulation.IN_RIGHT, edge_d2, 1, 1],
+		[1, Simulation.IN_RIGHT, edge_d2, 1, 0],
 		[1, Simulation.IN_UP | Simulation.IN_RIGHT, near_d2, 1, 0],
 		[0, Simulation.IN_DOWN, near_d2, 0, 0],
 		[0, Simulation.IN_RIGHT, near_d2, 0, 0],
@@ -76,7 +76,7 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 		[1, Simulation.IN_DOWN, near_d2, false, [0, 0, 0, 0]],
 		[1, Simulation.IN_UP, near_d2, false, [1, 0, 0, 0]],
 		[1, Simulation.IN_RIGHT, near_d2, false, [1, 1, 0, 0]],
-		[1, Simulation.IN_RIGHT, edge_d2, false, [1, 1, 0, 1]],
+		[1, Simulation.IN_RIGHT, edge_d2, false, [1, 1, 0, 0]],
 		[1, Simulation.IN_RIGHT, edge_d2, true, [1, 1, 0, 0]],
 		[1, Simulation.IN_LEFT | Simulation.IN_UP, near_d2, false, [1, -1, 0, 0]],
 		[0, Simulation.IN_DOWN, near_d2, false, [3, 0, 0, 0]],
@@ -119,7 +119,7 @@ func test_output_velocity_snapshot() -> void:
 		# 2026-07-29 1・2打目の空中トスを自陣前方狙いへ戻した。実測値。
 		# 2026-07-26 (第2回) スパイクの横速度を打つ位置からの逆算をやめ、
 		# 押した横キーごとの固定値にしたため空中打球の横速度が変化した。実測値。
-		[1, 14, 208622, -567978, 0, 100, 0],
+		[1, 0, 208622, -567978, 0, 100, 0],
 		[0, 0, 1018429, 100489, 1, 100, 0],
 		[0, 0, 900027, 149640, 0, 100, 0],
 		[0, 0, 90830, -513365, 0, 100, 0],
