@@ -25,13 +25,22 @@ func test_hash_changes_on_diff() -> void:
 	var d = SimState.new()
 	d.players[1].drive_recovery_delay = 1
 	check(a.state_hash() != d.state_hash(), "回復ディレイ差分でも変わる")
+	var e = SimState.new()
+	e.players[0].dive_contact_ticks = 1
+	check(a.state_hash() != e.state_hash(), "横っ飛び受付差分でも変わる")
+	var f = SimState.new()
+	f.players[0].dive_age_ticks = 1
+	check(a.state_hash() != f.state_hash(), "横っ飛び経過差分でも変わる")
+	var g = SimState.new()
+	g.players[0].action_latch = 1
+	check(a.state_hash() != g.state_hash(), "ACTIONラッチ差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick + rng + aitick + role roll 2チーム分(5) + プレイヤー4体x36(回復ディレイを含む)
+	# tick + rng + aitick + role roll 2チーム分(5) + プレイヤー4体x39(横っ飛び状態を含む)
 	# + 全体37(CPU打球回数/後衛役を含む) + エンティティ8スロットx8欄
-	# 5 + 4x36 + 37 + 8x8 = 250
+	# 5 + 4x39 + 37 + 8x8 = 262
 	# 先頭の5は tick + rng + aitick + rally_role_roll_team0 + rally_role_roll_team1
-	check_eq(SimState.new().to_int_array().size(), 250,
+	check_eq(SimState.new().to_int_array().size(), 262,
 		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -57,6 +66,9 @@ func test_load_int_array_roundtrip() -> void:
 	a.players[2].quake_stun = 5
 	a.players[2].stun_action_held = 1
 	a.players[2].stun_mash_event = 4
+	a.players[2].dive_contact_ticks = 13
+	a.players[2].dive_age_ticks = 6
+	a.players[2].action_latch = 1
 	a.hip_quake_event = 9
 	a.ball_guard_damage = 35
 	a.ball_defense_class = 2
@@ -81,6 +93,9 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.players[2].quake_stun, 5, "地震硬直残りtickの復元")
 	check_eq(b.players[2].stun_action_held, 1, "気絶連打入力ラッチの復元")
 	check_eq(b.players[2].stun_mash_event, 4, "気絶連打演出イベントの復元")
+	check_eq(b.players[2].dive_contact_ticks, 13, "横っ飛び受付残りの復元")
+	check_eq(b.players[2].dive_age_ticks, 6, "横っ飛び経過tickの復元")
+	check_eq(b.players[2].action_latch, 1, "ACTION入力ラッチの復元")
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
 	check_eq(b.ball_guard_damage, 35, "飛来球の絶対ガード削り値の復元")
 	check_eq(b.ball_defense_class, 2, "飛来球の防御分類の復元")

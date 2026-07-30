@@ -31,6 +31,13 @@ var serve_hold_height: int
 var serve_line: int
 var ball_rest_speed: int
 var bump_up_speed: int
+var normal_receive_up: int
+var just_receive_up: int
+var dive_receive_up: int
+var dive_receive_extra_reach: int
+var dive_receive_speed: int
+var dive_receive_hop: int
+var dive_receive_contact_ticks: int
 var ally_ground_toss_up: int
 var bump_fwd_speed: int  # 旧レシーブ速度。比較テスト等の互換用に設定キーを保持する。
 var receive_offset_gain_pct: int
@@ -124,6 +131,29 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	serve_line = FP.from_int(_int_of(raw, "serve_line_px"))
 	ball_rest_speed = FP.from_int(_int_of(raw, "ball_rest_speed_px_s")) / tick_rate
 	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
+	var normal_receive_up_px_s: int = _int_of(raw, "normal_receive_up_px_s")
+	var just_receive_up_px_s: int = _int_of(raw, "just_receive_up_px_s")
+	var dive_receive_up_px_s: int = _int_of(raw, "dive_receive_up_px_s")
+	var dive_receive_extra_reach_px: int = _int_of(raw, "dive_receive_extra_reach_px")
+	var dive_receive_speed_px_s: int = _int_of(raw, "dive_receive_speed_px_s")
+	var dive_receive_hop_px_s: int = _int_of(raw, "dive_receive_hop_px_s")
+	dive_receive_contact_ticks = _int_of(raw, "dive_receive_contact_ticks")
+	if normal_receive_up_px_s <= 0 or just_receive_up_px_s <= 0 \
+			or dive_receive_up_px_s <= 0 or dive_receive_extra_reach_px <= 0 \
+			or dive_receive_speed_px_s <= 0 or dive_receive_hop_px_s <= 0 \
+			or dive_receive_contact_ticks <= 0:
+		_fail("三段階レシーブ設定はすべて正であること")
+		return
+	if dive_receive_up_px_s > normal_receive_up_px_s \
+			or normal_receive_up_px_s > just_receive_up_px_s:
+		_fail("レシーブ縦速度はギリギリ<=通常<=ジャストであること")
+		return
+	normal_receive_up = FP.from_int(normal_receive_up_px_s) / tick_rate
+	just_receive_up = FP.from_int(just_receive_up_px_s) / tick_rate
+	dive_receive_up = FP.from_int(dive_receive_up_px_s) / tick_rate
+	dive_receive_extra_reach = FP.from_int(dive_receive_extra_reach_px)
+	dive_receive_speed = FP.from_int(dive_receive_speed_px_s) / tick_rate
+	dive_receive_hop = FP.from_int(dive_receive_hop_px_s) / tick_rate
 	ally_ground_toss_up = FP.from_int(_int_of(raw, "ally_ground_toss_up_px_s")) / tick_rate
 	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
 	receive_offset_gain_pct = _int_of(raw, "receive_offset_gain_pct")

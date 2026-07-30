@@ -55,6 +55,16 @@ func test_receive_rules_loaded() -> void:
 	check_eq(cfg.cpu_mate_spacing, FP.from_int(72),
 		"CPU相方の守備間隔72px")
 
+func test_three_tier_receive_rules_loaded() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.normal_receive_up, FP.from_int(600) / cfg.tick_rate, "通常600")
+	check_eq(cfg.just_receive_up, FP.from_int(680) / cfg.tick_rate, "ジャスト680")
+	check_eq(cfg.dive_receive_up, FP.from_int(520) / cfg.tick_rate, "ギリギリ520")
+	check_eq(cfg.dive_receive_extra_reach, FP.from_int(32), "発動幅32")
+	check_eq(cfg.dive_receive_speed, FP.from_int(360) / cfg.tick_rate, "飛込速度360")
+	check_eq(cfg.dive_receive_hop, FP.from_int(280) / cfg.tick_rate, "飛込上昇280")
+	check_eq(cfg.dive_receive_contact_ticks, 14, "受付14tick")
+
 func test_drive_gauge_rules_loaded() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")

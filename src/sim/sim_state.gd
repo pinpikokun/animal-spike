@@ -34,7 +34,10 @@ class Player:
 	var stun_action_held: int = 0
 	var stun_mash_event: int = 0
 	var burn: int = 0  # 燃えるアタック被弾後の行動不能・炎上表示残りtick
-	var dive: int = 0  # ジャンピングトス演出の残りtick(符号=飛びつき方向)。表示層が読む
+	var dive: int = 0  # 横っ飛び方向(-1/0/1)。開始から着地まで保持する
+	var dive_contact_ticks: int = 0  # 横っ飛びレシーブの接触受付残りtick
+	var dive_age_ticks: int = 0  # 横っ飛び開始からの経過tick。表示層が読む
+	var action_latch: int = 0  # ACTION押下エッジを決定論的に作る前tick入力
 	var hit_kind: int = 0  # 直近の地上ヒット種別(0=レシーブ,1=トス,2=前トス)。表示層が読む
 	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
 	var run: int = 0  # 同方向の連続走行tick。一定以上でのみ反転スキッドが出る(細かい制御は滑らない)
@@ -158,6 +161,9 @@ func to_int_array() -> Array[int]:
 		out.append(p.stun_mash_event)
 		out.append(p.burn)
 		out.append(p.dive)
+		out.append(p.dive_contact_ticks)
+		out.append(p.dive_age_ticks)
+		out.append(p.action_latch)
 		out.append(p.hit_kind)
 		out.append(p.brake)
 		out.append(p.run)
@@ -251,6 +257,9 @@ func load_int_array(arr: Array) -> void:
 		p.stun_mash_event = arr[k]; k += 1
 		p.burn = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
+		p.dive_contact_ticks = arr[k]; k += 1
+		p.dive_age_ticks = arr[k]; k += 1
+		p.action_latch = arr[k]; k += 1
 		p.hit_kind = arr[k]; k += 1
 		p.brake = arr[k]; k += 1
 		p.run = arr[k]; k += 1
