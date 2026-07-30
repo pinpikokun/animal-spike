@@ -464,6 +464,11 @@ func _sync_sprites() -> void:
 				spr.frame = clampi(int(float(36 - p.hip) * 9.0 / 36.0), 0, 8)
 			else:
 				spr.frame = 9
+		elif anim == "dive":
+			if spr.animation != "dive":
+				spr.animation = "dive"
+			spr.pause()
+			spr.frame = AnimSelect.dive_frame_for(p)
 		elif anim == "jump":
 			_land[i] = 0
 			if spr.animation != "jump":
@@ -488,12 +493,10 @@ func _sync_sprites() -> void:
 		# キツネ・マリオは補正不要
 		if cid == Chars.CHAR_FROG and anim != "jump":
 			pos.y += 5.0
-		# ジャンピングトス(リーチ縁の救済)は体を倒して飛びつく。sim状態の
-		# dive(符号=方向、絶対値=残tick)から毎フレーム導出(ロールバック安全)。
-		# 回転軸は足元原点。出だしが最大で起き上がりながら戻る
-		if p.dive != 0:
-			var lean := float(p.dive) / float(cfg.hit_cooldown_ticks)
-			spr.rotation = lean * 0.9
+		# 横っ飛び方向の符号から傾きを固定する。フレームと同じくsim状態だけで決まり、
+		# ロールバック後も描画時刻に左右されない。
+		if anim == "dive":
+			spr.rotation = AnimSelect.dive_rotation_for(p)
 		else:
 			spr.rotation = 0.0
 		# 被弾直後は白/赤の高速点滅(ダメージフラッシュ)。その後スタン中は薄い赤み。

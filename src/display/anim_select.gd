@@ -2,19 +2,19 @@
 # 状態を読むだけ(副作用なし)。表示層だがテクスチャ非依存なのでヘッドレステスト可能。
 extends RefCounted
 
-# 優先順位: 被弾/固有動作 > 横っ飛び > 空中打撃 > 空中 > 接地実打
+# 優先順位: 被弾 > 横っ飛び > 固有動作 > 空中打撃 > 空中 > 接地実打
 #         > レシーブ構え > 移動 > 静止
 static func anim_for(p) -> String:
 	if p.stun > 0:
 		return "stun"
 	if p.flinch > 0:
 		return "hurt"
+	if p.dive != 0:
+		return "dive"
 	if p.hip != 0:
 		return "hipdrop"
 	if p.cling != 0:
 		return "wallcling"
-	if p.dive != 0:
-		return "dive"
 	if p.on_ground == 0:
 		if p.hit_cooldown > 0:
 			return "attack"
@@ -31,6 +31,13 @@ static func anim_for(p) -> String:
 	if p.vx != 0:
 		return "run"
 	return "idle"
+
+# 原作セル11,10,7,0の4コマをsim経過から固定選択する。
+static func dive_frame_for(p) -> int:
+	return clampi(int(p.dive_age_ticks / 2), 0, 3)
+
+static func dive_rotation_for(p) -> float:
+	return float(signi(p.dive)) * 0.9
 
 # チーム0(左)は右向き=反転なし、チーム1(右)は左向き=反転
 static func flip_for_team(team: int) -> bool:

@@ -63,6 +63,33 @@ func test_dive_uses_dive_animation() -> void:
 	p.dive = 1
 	check_eq(AnimSelect.anim_for(p), "dive", "飛びつき中は横っ飛びレシーブ")
 
+func test_dive_takes_priority_over_non_hurt_actions() -> void:
+	var p = _player(0, 0, 5)
+	p.dive = 1
+	p.hip = 1
+	p.cling = 1
+	check_eq(AnimSelect.anim_for(p), "dive", "飛び込みは固有動作と通常動作より優先")
+	p.stun = 1
+	check_eq(AnimSelect.anim_for(p), "stun", "スタンは飛び込みより優先")
+	p.stun = 0
+	p.flinch = 1
+	check_eq(AnimSelect.anim_for(p), "hurt", "よろけは飛び込みより優先")
+
+func test_dive_frame_is_derived_from_sim_age() -> void:
+	var p = _player(0, 0, 0)
+	p.dive = 1
+	for row in [[0, 0], [1, 0], [2, 1], [4, 2], [6, 3], [99, 3]]:
+		p.dive_age_ticks = row[0]
+		check_eq(AnimSelect.dive_frame_for(p), row[1],
+			"経過tickから横っ飛び4コマを固定: %s" % [row])
+
+func test_dive_rotation_follows_direction_sign() -> void:
+	var p = _player(0, 0, 0)
+	for row in [[1, 0.9], [-1, -0.9], [0, 0.0]]:
+		p.dive = row[0]
+		check_eq(AnimSelect.dive_rotation_for(p), row[1],
+			"横っ飛び方向と回転符号を一致: %s" % [row])
+
 func test_flip_team0_false() -> void:
 	check_eq(AnimSelect.flip_for_team(0), false, "左チームは右向き(反転なし)")
 
