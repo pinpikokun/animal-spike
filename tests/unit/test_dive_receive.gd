@@ -5,6 +5,8 @@ const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 func _first_floor_x_by_production_steps(source, cfg, max_ticks: int = 240) -> int:
 	var probe = SimState.new()
@@ -108,6 +110,26 @@ func _step_player_action(s, cfg, player_index: int, extra_input: int = 0) -> voi
 	var inputs: Array[int] = [0, 0, 0, 0]
 	inputs[player_index] = Simulation.IN_ACTION | extra_input
 	Simulation.step(s, inputs, cfg)
+
+func _active_dive_contact_world(contact_ticks: int = 14) -> Array:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	s.phase = SimState.PHASE_RALLY
+	var p = s.players[0]
+	p.char_id = 99
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y - FP.from_int(10)
+	p.on_ground = 0
+	p.dive = 1
+	p.dive_contact_ticks = contact_ticks
+	p.dive_age_ticks = 1
+	p.vx = cfg.dive_receive_speed
+	s.ball_x = p.x
+	s.ball_y = p.y
+	s.ball_vx = 0
+	s.ball_vy = 0
+	s.last_touch_team = 1
+	return [s, cfg]
 
 func test_current_normal_reach_hit_wins_over_dive_start() -> void:
 	var cfg = SimConfig.new()
@@ -263,3 +285,111 @@ func test_dive_landing_clears_state_and_restores_control_next_tick() -> void:
 	check_eq(p.dive_age_ticks, 0, "着地で経過を消す")
 	Simulation.step(s, [Simulation.IN_LEFT, 0, 0, 0], cfg)
 	check_eq(p.vx, -cfg.move_speed, "着地の次tickから通常操作へ戻る")
+
+func test_active_dive_contacts_without_action_at_520_speed() -> void:
+	var w = _active_dive_contact_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.receive_stance = cfg.just_receive_window_ticks
+	var result: int = HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+	check_eq(result, HitResolver.HIT_NO_POINT, "アクションを離しても受付中は接触する")
+	check_eq(s.touches, 1, "横っ飛び成功は1タッチ")
+	check_eq(s.ball_vy, -cfg.dive_receive_up, "横っ飛びは520px/sで上げる")
+	check_eq(p.just_receive_event, 0, "横っ飛びは構え窓が残っていてもジャストにならない")
+	check_eq(p.receive_stance, 0, "横っ飛び成功時に古いジャスト窓を消す")
+	check_eq(p.dive_contact_ticks, 0, "成功時に専用受付を終了")
+	check_eq(p.vx, 0, "成功時に水平移動を止める")
+
+func test_dive_receive_keeps_normal_scatter_and_vertical_inertia() -> void:
+	var horizontal: Array[int] = []
+	for aitick in [0, 137]:
+		var w = _active_dive_contact_world()
+		var s = w[0]
+		var cfg = w[1]
+		s.aitick = aitick
+		s.ball_vy = FP.from_int(12)
+		HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+		check(-s.ball_vy > cfg.dive_receive_up,
+			"横っ飛びは下降球の縦慣性を返す")
+		horizontal.append(s.ball_vx)
+	check(horizontal[0] != horizontal[1], "横っ飛びは通常レシーブと同じ散りを使う")
+
+func test_dive_contact_ignores_new_special_input() -> void:
+	var w = _active_dive_contact_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.char_id = Chars.CHAR_TOME
+	p.y = cfg.net_top_y - FP.from_int(10)
+	p.drive_gauge = cfg.drive_gauge_max
+	s.ball_y = p.y
+	HitResolver._resolve_hit(s,
+		[Simulation.IN_DOWN | Simulation.IN_ABILITY1, 0, 0, 0], cfg)
+	check_eq(s.ball_flame, 0, "飛び込み中の追加入力で必殺技へ化けない")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max, "飛び込み接触は必殺技ゲージを使わない")
+
+func test_dive_started_this_tick_contacts_from_next_tick() -> void:
+	var w = _dive_start_world(0, FP.from_int(150))
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	# 開始tickの床得点を避けつつ、次tickの通常楕円内へ入る高さに置く。
+	s.ball_y = p.y - cfg.ball_radius - FP.from_int(2)
+	_step_player_action(s, cfg, 0)
+	check_eq(s.touches, 0, "開始tickには専用接触しない")
+	check_eq(p.dive_contact_ticks, 14, "開始tickは受付14を維持")
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check_eq(s.touches, 1, "開始の次tickはアクションなしで接触する")
+	check_eq(p.dive_contact_ticks, 0, "次tickの成功で受付終了")
+
+func test_last_dive_contact_tick_succeeds_but_expired_window_misses() -> void:
+	var last = _active_dive_contact_world(1)
+	check_eq(HitResolver._resolve_hit(last[0], [0, 0, 0, 0], last[1]),
+		HitResolver.HIT_NO_POINT, "残り1の14回目も接触できる")
+	check_eq(last[0].touches, 1, "14回目の接触を記録")
+	var expired = _active_dive_contact_world(0)
+	check_eq(HitResolver._resolve_hit(expired[0], [0, 0, 0, 0], expired[1]),
+		HitResolver.NO_HIT, "受付0の15回目は接触しない")
+	check_eq(expired[0].touches, 0, "15回目はタッチを増やさない")
+
+func test_successful_dive_cannot_hit_twice_even_after_cooldown_clear() -> void:
+	var w = _active_dive_contact_world()
+	var s = w[0]
+	var cfg = w[1]
+	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+	s.players[0].hit_cooldown = 0
+	check_eq(HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg),
+		HitResolver.NO_HIT, "成功後は同じ横っ飛びで二度打たない")
+	check_eq(s.touches, 1, "二度目のタッチは増えない")
+
+func test_power_damage_cancels_dive_and_hurt_state_wins() -> void:
+	var w = _active_dive_contact_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_power = 1
+	s.ball_guard_damage = 25
+	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+	check(p.flinch > 0, "パワー球の通常被弾を受ける")
+	check_eq(p.dive, 0, "被弾状態が横っ飛びより優先される")
+	check_eq(p.dive_contact_ticks, 0, "被弾時に受付を消す")
+	check_eq(p.dive_age_ticks, 0, "被弾時に横っ飛び経過を消す")
+
+func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
+	var w = _active_dive_contact_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.burnout_ticks = cfg.burnout_recovery_ticks
+	p.guard = 100
+	s.ball_power = 1
+	s.ball_flame = 1
+	s.ball_guard_damage = 40
+	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
+	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+	check_eq(s.touches, 1, "バーンアウト中も横っ飛び接触できる")
+	check_eq(p.guard, 40, "防御不能40へバーンアウト1.5倍の60ダメージ")
+	check(p.burn > 0, "防御不能球の炎上を無効化しない")
+	check_eq(p.dive, 0, "炎上状態を横っ飛びより優先")

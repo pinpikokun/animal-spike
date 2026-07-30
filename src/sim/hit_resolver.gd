@@ -332,11 +332,13 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			continue
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var p = s.players[i]
-		if not (input & IN_ACTION) and _special_for_input(p, input, cfg) == 0:
+		var force_dive_receive: bool = p.dive != 0 and p.dive_contact_ticks > 0
+		if not force_dive_receive and not (input & IN_ACTION) \
+				and _special_for_input(p, input, cfg) == 0:
 			continue
-		if _is_block_input(p, input):
+		if not force_dive_receive and _is_block_input(p, input):
 			continue
-		if _is_active_block(s, i, input, cfg):
+		if not force_dive_receive and _is_active_block(s, i, input, cfg):
 			continue
 		if p.hit_cooldown > 0 or p.stun > 0 or p.burn > 0 or p.quake_stun > 0:
 			continue
@@ -348,7 +350,9 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
 		var d2: int = dx * dx + dy_n * dy_n
 		var intent: Array[int] = _classify_intent(
-			p.on_ground, input, d2, cfg.player_reach, serve_strike)
+			1 if force_dive_receive else p.on_ground,
+			input | IN_DOWN if force_dive_receive else input,
+			d2, cfg.player_reach, serve_strike)
 		var reach: int = reach_for_intent(p.char_id, cfg.player_reach, intent[0])
 		if d2 > reach * reach:
 			continue
@@ -360,7 +364,9 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			best_d2 = d2
 	if best_i >= 0:
 		var winner_input: int = inputs[best_i] if best_i < inputs.size() else 0
-		_apply_hit(s, best_i, cfg, winner_input, best_d2)
+		var force_dive_receive: bool = s.players[best_i].dive != 0 \
+			and s.players[best_i].dive_contact_ticks > 0
+		_apply_hit(s, best_i, cfg, winner_input, best_d2, force_dive_receive)
 		return 1 - team_of(best_i) if s.touches > cfg.max_touches else HIT_NO_POINT
 	return NO_HIT
 
@@ -416,15 +422,19 @@ static func _ignite_player(p, team: int, cfg) -> void:
 		FP.from_int(cfg.burn_launch_height_px), cfg.gravity)
 	p.on_ground = 0
 
-static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
+static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
+		force_dive_receive: bool = false) -> void:
 	var p = s.players[i]
 	var team: int = team_of(i)
 	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
-	var special: int = _special_for_input(p, input, cfg)
+	# 横っ飛びは開始済みの一行動。受付中の追加入力で必殺技へ化けさせない。
+	var special: int = 0 if force_dive_receive else _special_for_input(p, input, cfg)
 	var incoming_flame: bool = s.ball_flame == 1
 	var intent: Array[int] = _classify_intent(
-		p.on_ground, input, d2, cfg.player_reach, serve_strike)
+		1 if force_dive_receive else p.on_ground,
+		input | IN_DOWN if force_dive_receive else input,
+		d2, cfg.player_reach, serve_strike)
 	var intent_kind: int = intent[0]
 	var hdir: int = intent[1]
 	var air_spike_velocity := Vector2i.ZERO
@@ -457,8 +467,11 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		sweet = true  # 必殺技は芯位置によらず、成立すれば常に同じ技になる
 	if p.burnout_ticks > 0:
 		sweet = false
+	if force_dive_receive:
+		sweet = false
 	var just_receive: bool = opposing_attack \
 		and intent_kind == INTENT_GROUND_RECEIVE \
+		and not force_dive_receive \
 		and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
 		and p.burnout_ticks == 0 and not incoming_unblockable
@@ -555,7 +568,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		aim_pct = MANGLE_AIM_PCT
 		inertia = cfg.hit_inertia_den
 	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
-	if p.on_ground == 1:
+	if p.on_ground == 1 or force_dive_receive:
 		# 地上は下+ボタンだけがレシーブ。それ以外は横3種のトス。
 		var ground_toss_hdir: int = hdir
 		if intent_kind == INTENT_GROUND_TOSS and s.last_touch_team == team \
@@ -578,11 +591,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 			p.hit_kind = 1
 		else:
 			# 地上レシーブは接触位置を主成分とし、散りと小さな左右操舵を加える。
-			desired_vy = -cfg.bump_up_speed
+			desired_vy = -cfg.dive_receive_up if force_dive_receive \
+				else (-cfg.just_receive_up if just_receive else -cfg.normal_receive_up)
 			var offset_vx: int = (s.ball_x - p.x) \
 				* cfg.receive_offset_gain_pct / 100 / cfg.tick_rate
-			var scatter_vx: int = _scatter(s, i, SALT_RECEIVE_SCATTER) \
-				* cfg.receive_scatter / 100
+			var scatter_vx: int = 0 if just_receive else \
+				_scatter(s, i, SALT_RECEIVE_SCATTER) * cfg.receive_scatter / 100
 			var steer_vx: int = hdir * cfg.receive_vx_max / 4
 			desired_vx = clampi(offset_vx + scatter_vx + steer_vx,
 				-cfg.receive_vx_max, cfg.receive_vx_max)
@@ -608,6 +622,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 					- s.ball_vx * inertia / cfg.hit_inertia_den
 		# 標準トスの高さは専用設定で決める。素レシーブは従来どおり縦の勢いも返す。
 		if returns_to_opponent:
+			s.ball_vy = desired_vy
+		elif just_receive:
 			s.ball_vy = desired_vy
 		elif p.hit_kind == 0:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
@@ -687,6 +703,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 	s.last_touch_idx = i
 	s.aitick = SimRng.advance_hit(s.aitick, s.rng)
 	_advance_cpu_positioning_after_hit(s)
+	if force_dive_receive:
+		p.receive_stance = 0
+		p.dive_contact_ticks = 0
+		if p.flinch > 0 or p.stun > 0 or p.burn > 0:
+			p.dive = 0
+			p.dive_age_ticks = 0
+		else:
+			p.vx = 0
 
 # ヒット解決側の読み取り専用派生値。aitickは打球間で固定される。
 # actor + 1の補正を維持し、状態を進めずロールバック再現可能にする。

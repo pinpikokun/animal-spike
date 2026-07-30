@@ -569,6 +569,8 @@ func test_ground_receive_vx_is_clamped() -> void:
 func test_ground_receive_scatter_is_deterministic() -> void:
 	check_eq(_ground_receive_vx(0, 0, 137), _ground_receive_vx(0, 0, 137),
 		"同じaitick・actor・入力のレシーブ散りは同じ値になる")
+	check(_ground_receive_vx(0, 0, 0) != _ground_receive_vx(0, 0, 137),
+		"通常レシーブはaitickに応じた散りを残す")
 
 func test_ground_receive_has_no_forward_bias() -> void:
 	var cfg = SimConfig.new()
@@ -576,8 +578,8 @@ func test_ground_receive_has_no_forward_bias() -> void:
 	check(absi(vx) <= cfg.receive_scatter,
 		"中心接触・入射なしの横速度は固定前方値でなく散り幅内に収まる")
 
-func test_neutral_receive_keeps_legacy_bounce() -> void:
-	# 方向なしアクションはトスではなく素レシーブ。トス技能の低軌道補正を受けない。
+func test_neutral_receive_uses_normal_receive_height() -> void:
+	# 下+アクションは通常レシーブ。トスとは独立した専用高度を使う。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -585,8 +587,8 @@ func test_neutral_receive_keeps_legacy_bounce() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = 0
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
-		"ニュートラルレシーブのvyはトス抽選に関係なく従来の高さで跳ねる")
+	check_eq(s.ball_vy, -cfg.normal_receive_up + cfg.gravity,
+		"ニュートラルレシーブのvyは通常レシーブ専用高度で跳ねる")
 
 func test_neutral_receive_reflects_vertical_inertia() -> void:
 	var w := _rally_world()
@@ -596,9 +598,46 @@ func test_neutral_receive_reflects_vertical_inertia() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = FP.from_int(12)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check(-s.ball_vy > cfg.bump_up_speed - cfg.gravity,
+	check(-s.ball_vy > cfg.normal_receive_up - cfg.gravity,
 		"落下球のニュートラルレシーブは縦の勢いも跳ね返す: actual=%d base=%d" % [
-			-s.ball_vy, cfg.bump_up_speed - cfg.gravity])
+			-s.ball_vy, cfg.normal_receive_up - cfg.gravity])
+
+func test_normal_receive_uses_dedicated_600_speed() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = s.players[0].x
+	s.ball_y = s.players[0].y - FP.from_int(10)
+	s.ball_vx = 0
+	s.ball_vy = 0
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(s.ball_vy, -cfg.normal_receive_up,
+		"通常レシーブは専用の600px/sで上げる")
+
+func test_just_receive_uses_680_speed_without_vertical_inertia_or_scatter() -> void:
+	var results: Array[Vector2i] = []
+	for row in [[0, 0], [137, FP.from_int(20)]]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.receive_stance = cfg.just_receive_window_ticks
+		s.last_touch_team = 1
+		s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+		s.ball_x = p.x + FP.from_int(8)
+		s.ball_y = p.y - FP.from_int(10)
+		s.ball_vx = 0
+		s.ball_vy = row[1]
+		s.aitick = row[0]
+		HitResolver._apply_hit(s, 0, cfg,
+			Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+		check_eq(s.ball_vy, -cfg.just_receive_up,
+			"ジャストレシーブは入射縦速度にかかわらず680px/s")
+		results.append(Vector2i(s.ball_vx, s.ball_vy))
+	check_eq(results[0], results[1],
+		"ジャストレシーブは乱数散りを使わず接触位置だけで決まる")
+	check(results[0].x > 0, "ジャストレシーブも右側接触の決定的な横成分は残す")
 
 func test_neutral_ground_toss_targets_own_front() -> void:
 	var w := _rally_world()
@@ -697,8 +736,8 @@ func test_standard_toss_override_does_not_change_ground_receive() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	HitResolver._apply_hit(
 		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
-	check_eq(s.ball_vy, -cfg.bump_up_speed,
-		"専用設定を変えても地上レシーブは520px/s")
+	check_eq(s.ball_vy, -cfg.normal_receive_up,
+		"標準トス設定を変えても通常レシーブは600px/s")
 
 func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	var aitick := 0xABCD
