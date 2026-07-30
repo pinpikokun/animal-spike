@@ -155,6 +155,7 @@ static func _mura_power_pct(s, actor: int, char_id: int) -> int:
 		return 100
 	return 150
 
+# 標準トスからは一時的に呼ばない。低い速攻トスを再設計するdocs/tasks/112.md用に残す。
 static func _toss_apex_pct(s, actor: int, char_id: int) -> int:
 	if not Chars.has_trait(char_id, Chars.Profile.TRAIT_TOSS_BAD):
 		return 100
@@ -558,7 +559,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		aim_pct = MANGLE_AIM_PCT
 		inertia = cfg.hit_inertia_den
 	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
-	var toss_bad: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_BAD)
 	if p.on_ground == 1:
 		# 地上は下+ボタンだけがレシーブ。それ以外は横3種のトス。
 		var ground_toss_hdir: int = hdir
@@ -570,7 +570,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 		var returns_to_opponent: bool = intent_kind == INTENT_GROUND_TOSS \
 			and ground_toss_hdir == dir
 		if intent_kind == INTENT_GROUND_TOSS:
-			desired_vy = -cfg.bump_up_speed
+			desired_vy = -cfg.bump_up_speed if returns_to_opponent \
+				else -cfg.ally_ground_toss_up
 			if returns_to_opponent:
 				var return_incoming_vx: int = 0 if serve_strike else s.ball_vx
 				desired_vx = opponent_return_vx(
@@ -593,13 +594,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				-cfg.receive_vx_max, cfg.receive_vx_max)
 			p.hit_kind = 0
 		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS
-		if is_ground_toss and not returns_to_opponent:
-			if toss_bad:
-				desired_vy = toss_vy_for_apex_pct(desired_vy, cfg.gravity,
-					_toss_apex_pct(s, i, p.char_id))
-			if toss_good:
-				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
-					toss_target_x(team, ground_toss_hdir, cfg), cfg)
+		if is_ground_toss and not returns_to_opponent and toss_good:
+			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
+				toss_target_x(team, ground_toss_hdir, cfg), cfg)
 		if special == Chars.SUPER_GHOST_BALL:
 			s.ball_ghost = 1
 			var ghost_def: Dictionary = Chars.super_def(special)
@@ -615,7 +612,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1) -> void:
 				if toss_good and is_ground_toss \
 				else desired_vx * aim_pct / 100 \
 					- s.ball_vx * inertia / cfg.hit_inertia_den
-		# トスの高さは入力と技能だけで決める。素レシーブは従来どおり縦の勢いも返す。
+		# 標準トスの高さは専用設定で決める。素レシーブは従来どおり縦の勢いも返す。
 		if returns_to_opponent:
 			s.ball_vy = desired_vy
 		elif p.hit_kind == 0:

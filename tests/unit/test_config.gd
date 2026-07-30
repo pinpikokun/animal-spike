@@ -22,6 +22,20 @@ func test_loads_default_rules() -> void:
 	check_eq(cfg.spike_power_pct, 40, "ジャストアタック速度40%(パワーC基準)")
 	check_eq(cfg.spike_sweet_pct, 45, "ジャスト判定はリーチ45%以内")
 
+func test_standard_ground_toss_rule_uses_initial_playtest_value() -> void:
+	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
+	var raw: Dictionary = JSON.parse_string(file.get_as_text())
+	check_eq(raw.get("ally_ground_toss_up_px_s"), 680,
+		"味方地上標準トスは初回試遊値680px/s")
+	var cfg = SimConfig.new()
+	check_eq(cfg.ally_ground_toss_up, FP.from_int(680) / cfg.tick_rate,
+		"味方地上標準トス速度を固定小数点/tickへ変換")
+
+func test_serve_toss_rule_remains_unchanged() -> void:
+	var cfg = SimConfig.new()
+	check_eq(cfg.serve_toss_up, FP.from_int(620) / cfg.tick_rate,
+		"サーブトスは既存の620px/sを維持")
+
 func test_spike_horizontal_speed_rules_loaded() -> void:
 	var cfg = SimConfig.new()
 	check_eq(cfg.spike_steep_vx, FP.from_int(1554) / cfg.tick_rate,

@@ -31,6 +31,7 @@ var serve_hold_height: int
 var serve_line: int
 var ball_rest_speed: int
 var bump_up_speed: int
+var ally_ground_toss_up: int
 var bump_fwd_speed: int  # 旧レシーブ速度。比較テスト等の互換用に設定キーを保持する。
 var receive_offset_gain_pct: int
 var receive_scatter: int
@@ -123,6 +124,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	serve_line = FP.from_int(_int_of(raw, "serve_line_px"))
 	ball_rest_speed = FP.from_int(_int_of(raw, "ball_rest_speed_px_s")) / tick_rate
 	bump_up_speed = FP.from_int(_int_of(raw, "bump_up_speed_px_s")) / tick_rate
+	ally_ground_toss_up = FP.from_int(_int_of(raw, "ally_ground_toss_up_px_s")) / tick_rate
 	bump_fwd_speed = FP.from_int(_int_of(raw, "bump_fwd_speed_px_s")) / tick_rate
 	receive_offset_gain_pct = _int_of(raw, "receive_offset_gain_pct")
 	if receive_offset_gain_pct <= 0:

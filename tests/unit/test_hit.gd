@@ -28,6 +28,18 @@ func _rally_world() -> Array:
 	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
+func _config_with_standard_toss_speed(speed_px_s: int):
+	var source := FileAccess.open("res://data/rules.json", FileAccess.READ)
+	var raw: Dictionary = JSON.parse_string(source.get_as_text())
+	raw["ally_ground_toss_up_px_s"] = speed_px_s
+	var path := "user://test_standard_ground_toss_rules.json"
+	var custom := FileAccess.open(path, FileAccess.WRITE)
+	custom.store_string(JSON.stringify(raw))
+	custom.close()
+	var cfg = SimConfig.new(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	return cfg
+
 func _normal_spike_vx(team: int, relative_hdir: int,
 		distance_px: int, height_px: int) -> int:
 	var w := _rally_world()
@@ -598,54 +610,95 @@ func test_neutral_ground_toss_targets_own_front() -> void:
 	check(s.ball_vx > 0, "ニュートラルトスは自陣前方へ進む")
 	check(s.ball_vy < 0, "ニュートラルトスは上向き")
 
-func test_only_toss_bad_can_produce_low_toss() -> void:
-	var low_world := _rally_world()
-	var low_state = low_world[0]
-	var cfg = low_world[1]
-	low_state.players[0].char_id = Chars.CHAR_PANDA
-	low_state.aitick = 0
-	check_eq(HitResolver._trait_roll_pct(
-		low_state, 0, HitResolver.SALT_TOSS_BAD), 10,
-		"固定aitick=0はトス下手の低トス側")
-	check_eq(HitResolver._toss_apex_pct(low_state, 0, Chars.CHAR_PANDA), 70,
-		"トス下手の成功抽選は頂点70%")
-	low_state.ball_x = low_state.players[0].x + FP.from_int(30)
-	low_state.ball_y = cfg.floor_y - FP.from_int(10)
-	low_state.ball_vy = 0
-	Simulation.step(low_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	var low_upward: int = -low_state.ball_vy
+func test_early_standard_ground_toss_uses_initial_height_for_both_teams() -> void:
+	for row in [[0, 0], [0, 1], [2, 0], [2, 1]]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = row[0]
+		var touches_before: int = row[1]
+		var team: int = actor / 2
+		var p = s.players[actor]
+		s.last_touch_team = team if touches_before > 0 else 1 - team
+		s.touches = touches_before
+		s.ball_x = p.x + FP.from_int(5)
+		s.ball_y = cfg.floor_y - FP.from_int(10)
+		HitResolver._apply_hit(s, actor, cfg, Simulation.IN_ACTION, 0)
+		check_eq(s.ball_vy, -FP.from_int(680) / 60,
+			"両チームの1・2打目標準トスは680px/s: %s" % [row])
 
-	var normal_world := _rally_world()
-	var normal_state = normal_world[0]
-	normal_state.players[0].char_id = Chars.CHAR_PANDA
-	normal_state.aitick = 1
-	check_eq(HitResolver._trait_roll_pct(
-		normal_state, 0, HitResolver.SALT_TOSS_BAD), 65,
-		"固定aitick=1はトス下手の通常側")
-	check_eq(HitResolver._toss_apex_pct(normal_state, 0, Chars.CHAR_PANDA), 100,
-		"トス下手でも失敗抽選外は通常頂点")
-	normal_state.ball_x = normal_state.players[0].x + FP.from_int(30)
-	normal_state.ball_y = cfg.floor_y - FP.from_int(10)
-	normal_state.ball_vy = 0
-	Simulation.step(normal_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	var normal_upward: int = -normal_state.ball_vy
-	check(low_upward < normal_upward,
-		"トス下手の成功抽選だけが通常より低いトスを出す")
-	check_eq(normal_state.ball_vy, -cfg.bump_up_speed + cfg.gravity,
-		"トス下手でも失敗抽選外は通常速度")
+func test_standard_ground_toss_has_same_height_for_every_toss_trait() -> void:
+	var actual: Array[int] = []
+	for char_id in [Chars.CHAR_MARIO, Chars.CHAR_FOX, Chars.CHAR_PANDA]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		s.players[0].char_id = char_id
+		s.aitick = 0
+		s.ball_x = s.players[0].x + FP.from_int(5)
+		s.ball_y = cfg.floor_y - FP.from_int(10)
+		HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
+		actual.append(s.ball_vy)
+	check_eq(actual, [
+		-FP.from_int(680) / 60,
+		-FP.from_int(680) / 60,
+		-FP.from_int(680) / 60,
+	], "標準トスの高さにトス能力差を付けない")
 
-	var traitless_world := _rally_world()
-	var traitless_state = traitless_world[0]
-	traitless_state.players[0].char_id = Chars.CHAR_FOX
-	traitless_state.aitick = 0
-	check_eq(HitResolver._toss_apex_pct(traitless_state, 0, Chars.CHAR_FOX), 100,
-		"特性なしは低トス側の固定入力でも通常頂点")
-	traitless_state.ball_x = traitless_state.players[0].x + FP.from_int(5)
-	traitless_state.ball_y = cfg.floor_y - FP.from_int(10)
-	traitless_state.ball_vy = 0
-	Simulation.step(traitless_state, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check_eq(traitless_state.ball_vy, -cfg.bump_up_speed + cfg.gravity,
-		"特性なしは低トス失敗なし")
+func test_standard_ground_toss_real_trajectory_matches_playtest_baseline() -> void:
+	var w := _rally_world()
+	var s = w[0]
+	var cfg = w[1]
+	s.ball_x = HitResolver.toss_target_x(0, 0, cfg)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	var start_y: int = s.ball_y
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
+	var min_y: int = s.ball_y
+	var rising_ticks: int = 0
+	while s.ball_vy < 0:
+		BallPhysics._step_ball(s, cfg)
+		min_y = mini(min_y, s.ball_y)
+		rising_ticks += 1
+	var rise: int = start_y - min_y
+	check_eq(rising_ticks, 36, "680px/s標準トスは36tick上昇")
+	check(rise >= FP.from_int(195) and rise < FP.from_int(196),
+		"680px/s標準トスの実上昇量は195px以上196px未満: %d" % rise)
+
+func test_standard_ground_toss_follows_dedicated_config_override() -> void:
+	var cfg = _config_with_standard_toss_speed(600)
+	var w := _rally_world()
+	var s = w[0]
+	var p = s.players[0]
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
+	check_eq(s.ball_vy, -FP.from_int(600) / 60,
+		"味方地上標準トスだけが専用設定へ追従")
+
+func test_standard_toss_override_does_not_change_third_ground_return() -> void:
+	var cfg = _config_with_standard_toss_speed(600)
+	var w := _rally_world()
+	var s = w[0]
+	var p = s.players[0]
+	s.last_touch_team = 0
+	s.touches = cfg.max_touches - 1
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
+	check_eq(s.ball_vy, -cfg.bump_up_speed,
+		"専用設定を変えても3打目地上返球は520px/s")
+
+func test_standard_toss_override_does_not_change_ground_receive() -> void:
+	var cfg = _config_with_standard_toss_speed(600)
+	var w := _rally_world()
+	var s = w[0]
+	var p = s.players[0]
+	s.ball_x = p.x + FP.from_int(5)
+	s.ball_y = cfg.floor_y - FP.from_int(10)
+	HitResolver._apply_hit(
+		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(s.ball_vy, -cfg.bump_up_speed,
+		"専用設定を変えても地上レシーブは520px/s")
 
 func test_mura_applies_to_normal_just_and_attack_serve() -> void:
 	var aitick := 0xABCD
@@ -827,11 +880,39 @@ func test_first_and_second_ground_toss_keep_backward_aim() -> void:
 		s.ball_y = p.y - FP.from_int(10)
 		var expected_target: int = FP.from_int(row[4])
 		var expected_vx: int = HitResolver.toss_aim_vx(
-			s.ball_x, s.ball_y, -cfg.bump_up_speed, expected_target, cfg)
+			s.ball_x, s.ball_y, -FP.from_int(680) / 60, expected_target, cfg)
 		HitResolver._apply_hit(
 			s, actor, cfg, Simulation.IN_ACTION | row[1], 0)
 		check_eq(s.ball_vx, expected_vx,
 			"1・2打目の地上トスは後方入力を維持: %s" % [row])
+
+func test_standard_ground_toss_recomputed_velocity_lands_at_fixed_target() -> void:
+	for row in [
+		[0, 0, 248],
+		[0, Simulation.IN_LEFT, 136],
+		[2, 0, 328],
+		[2, Simulation.IN_RIGHT, 440],
+	]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var actor: int = row[0]
+		var p = s.players[actor]
+		s.ball_x = p.x + FP.from_int(5)
+		s.ball_y = cfg.floor_y - FP.from_int(10)
+		HitResolver._apply_hit(
+			s, actor, cfg, Simulation.IN_ACTION | row[1], 0)
+		var launch_vx: int = s.ball_vx
+		var landed := false
+		for _tick in 180:
+			BallPhysics._step_ball(s, cfg)
+			if s.ball_vy >= 0 and s.ball_y >= cfg.floor_y - cfg.ball_radius:
+				landed = true
+				break
+		var target: int = FP.from_int(row[2])
+		check(landed, "標準トスが180tick以内に着地高度へ戻る: %s" % [row])
+		check(absi(s.ball_x - target) <= absi(launch_vx),
+			"実ボール物理でも既存の自陣目標へ着地: %s" % [row])
 
 func _air_toss_world(team: int, touches_before: int) -> Array:
 	var w := _rally_world()
@@ -956,7 +1037,7 @@ func test_toss_vy_for_apex_pct_targets_requested_height() -> void:
 	check(absi(low_h * 100 - normal_h * 70) <= cfg.gravity * 100,
 		"低トスは通常頂点の70%%: %d/%d" % [low_h, normal_h])
 
-func test_fast_incoming_ball_does_not_launch_toss_offscreen() -> void:
+func test_fast_incoming_ball_does_not_raise_standard_toss_above_initial_height() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -964,7 +1045,8 @@ func test_fast_incoming_ball_does_not_launch_toss_offscreen() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vy = FP.from_int(700) / cfg.tick_rate
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(-s.ball_vy <= cfg.bump_up_speed, "強い入射でもトスを基準より高くしない")
+	check_eq(s.ball_vy, -FP.from_int(680) / 60 + cfg.gravity,
+		"強い入射でも標準トスは680px/s基準を越えない")
 
 func test_toss_forward_goes_far() -> void:
 	# 横入力+アクション: 前トス(横速度が素レシーブより大きく、入力方向へ)

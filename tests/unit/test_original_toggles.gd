@@ -129,7 +129,7 @@ func test_soft_ball_gives_full_control() -> void:
 	s.ball_vy = FP.from_int(200) / cfg.tick_rate
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(s.ball_vx > 0, "緩い球のニュートラルトスは自陣前方へ進む")
-	check_eq(s.ball_vy, -cfg.bump_up_speed + cfg.gravity,
+	check_eq(s.ball_vy, -cfg.ally_ground_toss_up + cfg.gravity,
 		"特性なしの緩球トスは通常高度")
 
 func test_fast_ball_still_pushes_through() -> void:
@@ -142,7 +142,7 @@ func test_fast_ball_still_pushes_through() -> void:
 	s.ball_vx = 0
 	s.ball_vy = FP.from_int(700) / cfg.tick_rate  # 強い落下球
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(s.ball_vy >= -cfg.bump_up_speed + cfg.gravity,
+	check_eq(s.ball_vy, -cfg.ally_ground_toss_up + cfg.gravity,
 		"強い球でも基準より高いトスにしない")
 
 func test_loose_floor_bounce_is_half() -> void:

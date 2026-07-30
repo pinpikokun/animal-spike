@@ -24,6 +24,7 @@
 	"inertia_min_speed_px_s": 400,
 	"ball_rest_speed_px_s": 40,
 	"bump_up_speed_px_s": 520,
+	"ally_ground_toss_up_px_s": 680,
 	"bump_fwd_speed_px_s": 40,
 	"receive_offset_gain_pct": 100,
 	"receive_scatter_px_s": 12,
