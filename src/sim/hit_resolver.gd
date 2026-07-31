@@ -50,6 +50,12 @@ const INTENT_AIR_TOSS_UP := INTENT_AIR_TOSS
 const INTENT_AIR_TOSS_SIDE := INTENT_AIR_TOSS
 const INTENT_AIR_FEINT := INTENT_AIR_TOSS
 
+const DEFENSE_CONTACT_NONE := 0
+const DEFENSE_CONTACT_GROUND_TOSS := 1
+const DEFENSE_CONTACT_GROUND_RECEIVE := 2
+const DEFENSE_CONTACT_JUST_RECEIVE := 3
+const DEFENSE_CONTACT_DIVE := 4
+
 static func team_of(i: int) -> int:
 	return SimStateScript.team_of(i)
 
@@ -407,6 +413,46 @@ static func _spend_drive(p, amount: int, cfg) -> void:
 static func _burnout_guard_damage(p, damage: int) -> int:
 	return damage * 3 / 2 if p.burnout_ticks > 0 else damage
 
+static func _defense_contact_kind(intent_kind: int, just_receive: bool,
+		force_dive_receive: bool) -> int:
+	if force_dive_receive:
+		return DEFENSE_CONTACT_DIVE
+	if intent_kind == INTENT_GROUND_TOSS:
+		return DEFENSE_CONTACT_GROUND_TOSS
+	if intent_kind == INTENT_GROUND_RECEIVE:
+		return DEFENSE_CONTACT_JUST_RECEIVE if just_receive \
+			else DEFENSE_CONTACT_GROUND_RECEIVE
+	return DEFENSE_CONTACT_NONE
+
+static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
+		base_guard_damage: int, cfg) -> void:
+	var guard_damage: int = base_guard_damage
+	if contact_kind == DEFENSE_CONTACT_GROUND_RECEIVE:
+		guard_damage = base_guard_damage * 2 / 5
+	elif contact_kind == DEFENSE_CONTACT_JUST_RECEIVE:
+		guard_damage = 0
+	guard_damage = _burnout_guard_damage(p, guard_damage)
+	p.guard -= guard_damage
+	if p.guard <= 0:
+		p.stun = cfg.stun_ticks
+		p.guard = p.guard_max
+		p.flinch = 0
+		p.vx = 0
+		p.push = 0
+		s.hit_freeze = maxi(s.hit_freeze, 10)
+		if contact_kind == DEFENSE_CONTACT_DIVE:
+			p.dive = 0
+			p.dive_contact_ticks = 0
+			p.dive_age_ticks = 0
+		return
+	if guard_damage <= 0 or contact_kind != DEFENSE_CONTACT_GROUND_TOSS:
+		return
+	var back: int = -1 if team == 0 else 1
+	p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 \
+		/ Chars.stat(p.char_id, "weight")
+	p.flinch = FLINCH_TICKS
+	s.hit_freeze = maxi(s.hit_freeze, 3)
+
 static func _ignite_player(p, team: int, cfg) -> void:
 	var back: int = -1 if team == 0 else 1
 	p.burn = cfg.burn_stun_ticks
@@ -475,8 +521,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
 		and p.burnout_ticks == 0 and not incoming_unblockable
+	var defense_contact_kind: int = _defense_contact_kind(
+		intent_kind, just_receive, force_dive_receive)
 	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE \
-			and not just_receive:
+			and not just_receive and not force_dive_receive:
 		_spend_drive(p, _drive_damage_for_attack(incoming_attack_kind, cfg), cfg)
 	if just_receive:
 		p.just_receive_flash = 30
@@ -509,7 +557,16 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and s.ball_power == 1 and not flame_spike_return
 	var unblockable_touch: bool = incoming_unblockable and s.ball_power == 1 \
 		and intent_kind != INTENT_AIR_SPIKE
-	if opposing_power or unblockable_touch:
+	var regular_attack_defense_handled: bool = opposing_drive_attack \
+		and not incoming_unblockable \
+		and defense_contact_kind != DEFENSE_CONTACT_NONE
+	if regular_attack_defense_handled:
+		# 返球制御は従来どおり。パワー球の芯外しだけmangledを維持する。
+		if opposing_power and not sweet:
+			mangled = true
+		_apply_regular_attack_defense(s, p, team, defense_contact_kind,
+			incoming_guard_damage, cfg)
+	if (opposing_power or unblockable_touch) and not regular_attack_defense_handled:
 		if sweet:
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
@@ -672,7 +729,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_defense_class = int(special_def.defense_class)
 		else:
 			s.ball_guard_damage = cfg.power_guard_damage_for_rank(
-				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER)) if sweet else 0
+				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER))
 			s.ball_defense_class = Chars.DEFENSE_NONE
 	else:
 		s.ball_guard_damage = 0
