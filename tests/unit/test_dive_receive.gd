@@ -363,7 +363,7 @@ func test_successful_dive_cannot_hit_twice_even_after_cooldown_clear() -> void:
 		HitResolver.NO_HIT, "成功後は同じ横っ飛びで二度打たない")
 	check_eq(s.touches, 1, "二度目のタッチは増えない")
 
-func test_power_damage_cancels_dive_and_hurt_state_wins() -> void:
+func test_power_damage_keeps_dive_without_butt_drop() -> void:
 	var w = _active_dive_contact_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -372,10 +372,12 @@ func test_power_damage_cancels_dive_and_hurt_state_wins() -> void:
 	s.ball_power = 1
 	s.ball_guard_damage = 25
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
-	check(p.flinch > 0, "パワー球の通常被弾を受ける")
-	check_eq(p.dive, 0, "被弾状態が横っ飛びより優先される")
-	check_eq(p.dive_contact_ticks, 0, "被弾時に受付を消す")
-	check_eq(p.dive_age_ticks, 0, "被弾時に横っ飛び経過を消す")
+	check_eq(p.guard, 75, "飛びつきはパワー球のガード損害を全量受ける")
+	check_eq(p.flinch, 0, "跳躍後に接地用のしりもちを重ねない")
+	check_eq(p.dive, 1, "横っ飛び表示は着地まで維持する")
+	check_eq(p.dive_contact_ticks, 0, "成功時に接触受付を終了する")
+	check_eq(p.dive_age_ticks, 1, "成功時に横っ飛び経過を維持する")
+	check_eq(p.vx, 0, "成功時に専用水平速度を終了する")
 
 func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	var w = _active_dive_contact_world()
