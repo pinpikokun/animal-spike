@@ -13,6 +13,11 @@ const BALL_ATTACK_NONE := 0
 const BALL_ATTACK_NORMAL := 1
 const BALL_ATTACK_JUST := 2
 
+const HIT_KIND_RECEIVE := 0
+const HIT_KIND_TOSS := 1
+const HIT_KIND_FORWARD := 2
+const HIT_KIND_BLOCK := 3
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -38,7 +43,7 @@ class Player:
 	var dive_contact_ticks: int = 0  # 横っ飛びレシーブの接触受付残りtick
 	var dive_age_ticks: int = 0  # 横っ飛び開始からの経過tick。表示層が読む
 	var action_latch: int = 0  # ACTION押下エッジを決定論的に作る前tick入力
-	var hit_kind: int = 0  # 直近の地上ヒット種別(0=レシーブ,1=トス,2=前トス)。表示層が読む
+	var hit_kind: int = HIT_KIND_RECEIVE  # 直近の打撃種別。表示層が読む
 	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
 	var run: int = 0  # 同方向の連続走行tick。一定以上でのみ反転スキッドが出る(細かい制御は滑らない)
 	var has_hat: int = 1  # 帽子をかぶってるか(0=投げ中)。表示層のスプライト選択に使う

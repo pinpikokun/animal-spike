@@ -130,6 +130,50 @@ func test_block_requires_forward_action_and_existing_context_boundaries() -> voi
 			"自陣から離れる球はブロックしない")
 
 
+func test_successful_block_records_block_hit_kind() -> void:
+	for team in 2:
+		for on_ground in [0, 1]:
+			var w := _rally_world()
+			var s = w[0]
+			var cfg = w[1]
+			var dir: int = SimState._dir_of_team(team)
+			var blocker_idx: int = team * 2 + 1
+			var p = s.players[blocker_idx]
+			p.on_ground = on_ground
+			p.x = cfg.net_x - dir * FP.from_int(20)
+			p.y = cfg.floor_y - FP.from_int(140)
+			s.last_touch_team = 1 - team
+			s.ball_x = p.x
+			s.ball_y = p.y - cfg.player_reach_up
+			s.ball_vx = -dir * FP.from_int(8)
+			var inputs: Array[int] = [0, 0, 0, 0]
+			var forward: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+			inputs[blocker_idx] = SimInput.IN_ACTION | forward
+			HitResolver._ball_vs_block(s, cfg, inputs)
+			check_eq(p.hit_kind, 3,
+				"成功ブロックは専用hit_kindを記録 team=%d ground=%d"
+				% [team, on_ground])
+			check(p.hit_cooldown > 0,
+				"成功ブロックは表示期間となるクールダウンを持つ")
+
+
+func test_next_air_hit_clears_previous_block_hit_kind() -> void:
+	for input in [SimInput.IN_ACTION, SimInput.IN_ACTION | SimInput.IN_UP]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.on_ground = 0
+		p.y = cfg.floor_y - FP.from_int(100)
+		p.hit_kind = SimState.HIT_KIND_BLOCK
+		p.hit_cooldown = 0
+		s.ball_x = p.x
+		s.ball_y = p.y
+		HitResolver._apply_hit(s, 0, cfg, input, 0)
+		check_eq(p.hit_kind, SimState.HIT_KIND_RECEIVE,
+			"次の空中打撃は古いブロック表示を再利用しない input=%d" % input)
+
+
 func test_cpu_emits_new_toss_receive_and_block_inputs() -> void:
 	var w := _rally_world()
 	var s = w[0]

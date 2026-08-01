@@ -473,6 +473,8 @@ static func _ignite_player(p, team: int, cfg) -> void:
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		force_dive_receive: bool = false) -> void:
 	var p = s.players[i]
+	# 直前のブロック種別を次の空中打撃へ持ち越さない。地上種別は各分岐で上書きする。
+	p.hit_kind = SimStateScript.HIT_KIND_RECEIVE
 	var team: int = team_of(i)
 	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
@@ -649,7 +651,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			else:
 				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 					toss_target_x(team, ground_toss_hdir, cfg), cfg)
-			p.hit_kind = 1
+			p.hit_kind = SimStateScript.HIT_KIND_TOSS
 		else:
 			# 地上レシーブは接触位置を主成分とし、散りと小さな左右操舵を加える。
 			desired_vy = -cfg.dive_receive_up if force_dive_receive \
@@ -661,7 +663,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			var steer_vx: int = hdir * cfg.receive_vx_max / 4
 			desired_vx = clampi(offset_vx + scatter_vx + steer_vx,
 				-cfg.receive_vx_max, cfg.receive_vx_max)
-			p.hit_kind = 0
+			p.hit_kind = SimStateScript.HIT_KIND_RECEIVE
 		var is_ground_toss: bool = intent_kind == INTENT_GROUND_TOSS
 		if is_ground_toss and not returns_to_opponent and toss_good:
 			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
@@ -686,7 +688,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_vy = desired_vy
 		elif just_receive:
 			s.ball_vy = desired_vy
-		elif p.hit_kind == 0:
+		elif p.hit_kind == SimStateScript.HIT_KIND_RECEIVE:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		else:
 			s.ball_vy = desired_vy * aim_pct / 100
@@ -856,6 +858,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		_advance_cpu_positioning_after_hit(s)
 		s.touches = 1  # 原作どおりブロックもチームの1タッチに数える
 		s.last_hit_tick = s.tick
+		p.hit_kind = SimStateScript.HIT_KIND_BLOCK
 		p.hit_cooldown = cfg.hit_cooldown_ticks
 		s.hit_freeze = maxi(s.hit_freeze, 2)
 		return

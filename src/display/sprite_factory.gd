@@ -18,7 +18,7 @@ const M_CH := 29
 # 代役ルール: スプライトが無いアクションは連鎖の先頭から順に探して流用する
 # (歩きか立ち1枚あればキャラが成立する=パンダ方式の公式化)。最後の砦はidle
 const ANIMATIONS: Array[String] = [
-	"idle", "run", "jump", "attack", "receive_stance", "ground_swing",
+	"idle", "run", "jump", "attack", "block", "receive_stance", "ground_swing",
 	"toss", "toss_fwd", "dive", "crouch", "brake", "hurt", "shock",
 	"stun", "burn", "fly", "bubble", "victory", "fall_special",
 	"hat-throw", "hat-catch", "hipdrop", "wallcling",
@@ -30,6 +30,7 @@ const FALLBACK := {
 	"attack": ["jump", "run", "idle"],
 	"receive_stance": ["crouch", "idle"],
 	"ground_swing": ["toss", "receive_stance", "idle"],
+	"block": ["ground_swing", "attack", "idle"],
 	"toss": ["receive_stance", "idle"],
 	"toss_fwd": ["toss", "receive_stance", "idle"],
 	"dive": ["ground_swing", "jump", "idle"],
@@ -173,6 +174,7 @@ static func build_original(sheet_path: String) -> SpriteFrames:
 	_add_original_sheet(sf, "run", sheet_path, [0, 1], [6, 6], true)
 	_add_original_sheet(sf, "jump", sheet_path, [2], [1], false)
 	_add_original_sheet(sf, "attack", sheet_path, [3, 4, 5], [2, 2, 2], false)
+	_add_original_sheet(sf, "block", sheet_path, [9], [1], false)
 	_add_original_sheet(sf, "receive_stance", sheet_path, [6], [1], false)
 	_add_original_sheet(sf, "ground_swing", sheet_path, [8, 9], [2, 2], false)
 	_add_original_sheet(sf, "toss", sheet_path, [7], [1], false)

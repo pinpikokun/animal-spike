@@ -46,6 +46,20 @@ func test_air_hit_is_attack() -> void:
 	# 空中でヒット中(hit_cooldown>0)=アタック(スパイク)。ただ飛んでるだけならjump
 	check_eq(AnimSelect.anim_for(_player(0, 0, 9)), "attack", "空中+ヒットはattack")
 
+func test_hit_kind_constants_are_explicit() -> void:
+	var constants: Dictionary = SimState.new().get_script().get_script_constant_map()
+	check_eq(constants.get("HIT_KIND_RECEIVE", -1), 0, "レシーブ種別を定数化")
+	check_eq(constants.get("HIT_KIND_TOSS", -1), 1, "トス種別を定数化")
+	check_eq(constants.get("HIT_KIND_FORWARD", -1), 2, "前トス種別を定数化")
+	check_eq(constants.get("HIT_KIND_BLOCK", -1), 3, "ブロック種別を定数化")
+
+func test_block_hit_uses_same_animation_on_ground_and_in_air() -> void:
+	for on_ground in [0, 1]:
+		var p = _player(on_ground, 0, 5)
+		p.hit_kind = 3
+		check_eq(AnimSelect.anim_for(p), "block",
+			"地上・空中共通ブロック姿勢 ground=%d" % on_ground)
+
 func test_ground_toss_kinds() -> void:
 	var t = _player(1, 0, 9)
 	t.hit_kind = 1
