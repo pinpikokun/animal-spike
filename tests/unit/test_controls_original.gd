@@ -140,20 +140,53 @@ func test_cpu_emits_new_toss_receive_and_block_inputs() -> void:
 	s.last_touch_team = 1
 	check_eq(SimCpu._ground_hit_keys(s, 0, cfg, 0, s.players[0].cpu),
 		SimInput.IN_DOWN, "CPUは相手球へ下レシーブを明示する")
-	var p = s.players[1]
-	p.cpu = SimCpu.make_profile(SimCpu.AB_BLOCK, 0, 0, 0, 0, 0, 0)
-	p.on_ground = 0
-	p.y = cfg.floor_y - FP.from_int(140)
-	var attacker = s.players[2]
-	attacker.on_ground = 0
-	attacker.x = cfg.net_x + FP.from_int(40)
-	attacker.y = p.y
-	s.ball_x = attacker.x
-	s.ball_y = attacker.y
-	s.rally_role_roll_team0 = 0
-	check(SimCpu._is_rally_blocker(s, 1),
-		"roll=0の両者ブロッカー枝で空中CPUがブロッカー役になる")
-	var block_input: int = SimCpu._decide_block(
-		s, 1, p, cfg, 0, SimCpu.AB_BLOCK, 0)
-	check(block_input & SimInput.IN_ACTION, "空中CPUブロックはボタンを押す")
-	check(block_input & SimInput.IN_UP, "空中CPUブロックは上を明示する")
+
+
+func test_cpu_attack_vertical_uses_drive_and_burnout() -> void:
+	var helper := Callable(SimCpu, "_cpu_attack_vertical")
+	check(helper.is_valid(), "CPUアタック縦入力の共通helperが存在する")
+	if not helper.is_valid():
+		return
+	var cfg = SimConfig.new()
+	var p = SimState.new().players[0]
+	p.drive_gauge = cfg.drive_gauge_stock
+	check_eq(helper.call(p, cfg), SimInput.IN_DOWN,
+		"1本以上ならジャスト可能アタック")
+	p.drive_gauge = cfg.drive_gauge_stock - 1
+	check_eq(helper.call(p, cfg), SimInput.IN_UP,
+		"1本未満なら通常アタック")
+	p.drive_gauge = cfg.drive_gauge_max
+	p.burnout_ticks = 1
+	check_eq(helper.call(p, cfg), SimInput.IN_UP,
+		"バーンアウト中は通常アタック")
+
+
+func test_cpu_air_block_uses_team_relative_forward_action() -> void:
+	for team in 2:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var dir: int = SimState._dir_of_team(team)
+		var blocker_idx: int = team * 2 + 1
+		var p = s.players[blocker_idx]
+		p.cpu = SimCpu.make_profile(SimCpu.AB_BLOCK, 0, 0, 0, 0, 0, 0)
+		p.on_ground = 0
+		p.x = cfg.net_x - dir * FP.from_int(20)
+		p.y = cfg.floor_y - FP.from_int(140)
+		var attacker = s.players[(1 - team) * 2]
+		attacker.on_ground = 0
+		attacker.x = cfg.net_x + dir * FP.from_int(40)
+		attacker.y = p.y
+		s.ball_x = attacker.x
+		s.ball_y = attacker.y
+		if team == 0:
+			s.rally_role_roll_team0 = 0
+		else:
+			s.rally_role_roll_team1 = 0
+		check(SimCpu._is_rally_blocker(s, blocker_idx),
+			"roll=0の両者ブロッカー枝で空中CPUが役を持つ team=%d" % team)
+		var block_input: int = SimCpu._decide_block(
+			s, blocker_idx, p, cfg, team, SimCpu.AB_BLOCK, 0)
+		var forward: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+		check_eq(block_input, SimInput.IN_ACTION | forward,
+			"空中CPUブロックはチーム相対の前+ボタン team=%d" % team)

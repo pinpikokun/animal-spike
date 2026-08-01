@@ -97,6 +97,7 @@ func _air_fixture() -> Array:
 	player.char_id = STANDARD_CHAR
 	player.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK, 0, 0, 0, 0, 3, 3)
 	player.on_ground = 0
+	player.drive_gauge = cfg.drive_gauge_max
 	state.phase = SimState.PHASE_RALLY
 	state.ball_x = cfg.net_x - FP.from_int(60)
 	state.ball_y = cfg.net_top_y - FP.from_int(100)

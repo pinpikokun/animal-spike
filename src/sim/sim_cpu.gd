@@ -600,6 +600,12 @@ static func _air_spike_candidate(
 	return best
 
 # ①手前、②中央、③奥を実打球速度で評価し、30/30/30/10の政策を適用する。
+static func _cpu_attack_vertical(p, cfg) -> int:
+	if p.burnout_ticks > 0 or p.drive_gauge < cfg.drive_gauge_stock:
+		return SimInput.IN_UP
+	return SimInput.IN_DOWN
+
+
 static func _pick_air_shot(
 		s, actor: int, cfg, team: int, can_spike: bool, d2: int,
 		k: int = TRIAL_BAND_CURRENT_STEPS) -> int:
@@ -611,10 +617,11 @@ static func _pick_air_shot(
 		return toss_input
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	var back_key: int = SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
+	var vertical_key: int = _cpu_attack_vertical(s.players[actor], cfg)
 	var inputs: Array[int] = [
-		SimInput.IN_ACTION | SimInput.IN_DOWN | back_key,
-		SimInput.IN_ACTION | SimInput.IN_DOWN,
-		SimInput.IN_ACTION | SimInput.IN_DOWN | fwd_key,
+		SimInput.IN_ACTION | vertical_key | back_key,
+		SimInput.IN_ACTION | vertical_key,
+		SimInput.IN_ACTION | vertical_key | fwd_key,
 	]
 	var indices: Array[int] = [2]
 	if policy != 1:
@@ -991,7 +998,8 @@ static func _decide_block(
 				return 0
 			if p.on_ground == 1:
 				return SimInput.IN_JUMP | SimInput.IN_UP
-			return SimInput.IN_ACTION | SimInput.IN_UP
+			var forward_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+			return SimInput.IN_ACTION | forward_key
 		return _walk_to(p, post, deadzone / 2)
 	return 0
 

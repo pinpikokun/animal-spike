@@ -108,6 +108,7 @@ func _band_miss_world(team: int) -> Array:
 	var p = s.players[actor]
 	p.char_id = STANDARD_CHAR
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	s.phase = SimState.PHASE_RALLY
 	s.ball_x = cfg.net_x - dir * FP.from_int(20)
 	s.ball_y = cfg.net_top_y - FP.from_int(17)
@@ -232,6 +233,7 @@ func _jump_serve_contact_world(team: int, residue: int) -> Array:
 	var p = s.players[actor]
 	p.char_id = STANDARD_CHAR
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	p.cpu = SimCpu.PRESET_MAX
 	s.phase = SimState.PHASE_SERVE
 	s.serving_team = team
@@ -305,6 +307,7 @@ func _root_cause_world() -> Array:
 	p.char_id = STANDARD_CHAR
 	p.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK, 0, 0, 0, 0, 3, 3)
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	s.phase = SimState.PHASE_RALLY
 	s.ball_x = cfg.net_x - FP.from_int(50)
 	s.ball_y = cfg.net_top_y - FP.from_int(25)
@@ -347,6 +350,7 @@ func _all_candidates_world(residue: int) -> Array:
 	p.char_id = STANDARD_CHAR
 	p.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK, 0, 0, 0, 0, 3, 3)
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	s.phase = SimState.PHASE_RALLY
 	s.ball_x = cfg.net_x - FP.from_int(60)
 	s.ball_y = cfg.net_top_y - FP.from_int(100)
@@ -365,6 +369,31 @@ func _decide_fixture(w: Array) -> int:
 	return SimCpu._decide_air_hit(
 		s, actor, s.players[actor], cfg, 0, s.players[actor].cpu,
 		cfg.player_reach * cfg.player_reach, 0)
+
+
+func test_air_shot_candidates_use_cpu_drive_vertical_input() -> void:
+	var rich := _all_candidates_world(0)
+	var rich_input: int = _decide_fixture(rich)
+	check(rich_input & Simulation.IN_ACTION,
+		"ゲージ十分のCPUはアタック候補を選ぶ")
+	check(rich_input & Simulation.IN_DOWN,
+		"ゲージ十分のCPU候補は下アタック")
+	check_eq(rich_input & Simulation.IN_UP, 0,
+		"ゲージ十分のCPU候補に上を混ぜない")
+	var poor := _all_candidates_world(0)
+	poor[0].players[poor[2]].drive_gauge = poor[1].drive_gauge_stock - 1
+	var poor_input: int = _decide_fixture(poor)
+	check(poor_input & Simulation.IN_ACTION,
+		"ゲージ不足のCPUも通常アタック候補を選ぶ")
+	check(poor_input & Simulation.IN_UP,
+		"ゲージ不足のCPU候補は上アタック")
+	check_eq(poor_input & Simulation.IN_DOWN, 0,
+		"ゲージ不足のCPU候補に下を混ぜない")
+	var burnout := _all_candidates_world(0)
+	burnout[0].players[burnout[2]].burnout_ticks = 1
+	var burnout_input: int = _decide_fixture(burnout)
+	check(burnout_input & Simulation.IN_UP,
+		"バーンアウト中のCPU候補は上アタック")
 
 func test_policy_one_uses_first_valid_candidate() -> void:
 	var decided: int = _decide_fixture(_all_candidates_world(0))
@@ -440,6 +469,7 @@ func test_selection_series_ignores_actor_tick_and_profile() -> void:
 	var cfg = w[1]
 	var d2: int = cfg.player_reach * cfg.player_reach
 	s.players[1].char_id = s.players[0].char_id
+	s.players[1].drive_gauge = cfg.drive_gauge_max
 	var expected: int = SimCpu._pick_air_shot(s, 0, cfg, 0, true, d2)
 	s.tick += 777
 	s.players[1].cpu = SimCpu.PRESET_WEAK
@@ -454,6 +484,7 @@ func test_air_hit_replaces_positioning_direction_bits() -> void:
 	p.char_id = STANDARD_CHAR
 	p.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK, 0, 0, 0, 0, 3, 3)
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	p.x = cfg.net_x - FP.from_int(70)
 	p.y = cfg.floor_y - FP.from_int(120)
 	s.phase = SimState.PHASE_RALLY
@@ -537,6 +568,7 @@ func _deep_attack_world(char_id: int = STANDARD_CHAR) -> Array:
 	p.cpu = SimCpu.make_profile(SimCpu.AB_ATTACK | SimCpu.AB_SWEET,
 		0, 0, 0, 255, 3, 3)
 	p.on_ground = 0
+	p.drive_gauge = cfg.drive_gauge_max
 	p.x = cfg.net_x - FP.from_int(160)
 	p.y = cfg.net_top_y - FP.from_int(100)
 	s.phase = SimState.PHASE_RALLY
