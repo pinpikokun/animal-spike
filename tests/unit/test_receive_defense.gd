@@ -199,7 +199,7 @@ func test_regular_attack_guard_payload_does_not_damage_blocker() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(400) / cfg.tick_rate
 	HitResolver._ball_vs_block(s, cfg,
-		[0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0])
+		[0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0])
 	check_eq(p.guard, 100, "ブロックは今回のガード損害対象外")
 
 func test_just_attack_ground_contacts_keep_mangled_control_loss() -> void:

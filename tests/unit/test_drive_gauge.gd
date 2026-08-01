@@ -174,7 +174,7 @@ func test_blocker_takes_incoming_damage_but_reflection_loses_attack_kind() -> vo
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(8)
 	HitResolver._ball_vs_block(s, cfg,
-		[0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0])
+		[0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0])
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.drive_gauge_stock,
 		"通常アタックを受けたブロッカー本人は1本削られる")
 	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
@@ -189,7 +189,7 @@ func test_blocker_takes_incoming_damage_but_reflection_loses_attack_kind() -> vo
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(8)
 	HitResolver._ball_vs_block(s, cfg,
-		[0, 0, Simulation.IN_ACTION | Simulation.IN_UP, 0])
+		[0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0])
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.drive_gauge_stock * 3,
 		"続けてジャストを受けたブロッカー本人は2本削られる")
 	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,

@@ -164,7 +164,7 @@ func test_burning_player_cannot_block() -> void:
 	s.ball_vx = -FP.from_int(10)
 	s.last_touch_team = 1
 	HitResolver._ball_vs_block(
-		s, cfg, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0])
+		s, cfg, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0])
 	check_eq(s.ball_vx, -FP.from_int(10), "炎上中はブロック反射できない")
 	check_eq(s.last_touch_team, 1, "炎上中のブロックはタッチにならない")
 
@@ -179,7 +179,7 @@ func test_last_burn_tick_still_cannot_block() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(10)
 	s.last_touch_team = 1
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(p.burn, 0, "ブロック判定前に炎上最終tickの物理更新が終わる")
 	check(s.ball_vx < 0, "炎上最終tickもブロック反射しない")
 	check_eq(s.last_touch_team, 1, "炎上最終tickのブロックはタッチにならない")

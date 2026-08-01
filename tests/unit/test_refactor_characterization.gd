@@ -147,7 +147,7 @@ func test_collision_order_hit_move_net_block() -> void:
 	s.ball_vx = FP.from_int(2)
 	s.ball_vy = 0
 	Simulation.step(s, [0, Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
-		0, Simulation.IN_ACTION | Simulation.IN_UP], cfg)
+		0, Simulation.IN_ACTION | Simulation.IN_LEFT], cfg)
 	# 2026-07-25: アタック速度をジャスト110→80%、通常80→50%へ引き下げたため座標と
 	# 速度が変化した。ブロックの成立自体(last_touch_team=1, touches=1, 両者cd=14)は
 	# 変わっていないので、検証している同tick順序は保たれている。実測値。
@@ -190,7 +190,7 @@ func _chain_hashes() -> Array[int]:
 	s.ball_vy = FP.from_int(5)
 	s.ball_power = 1
 	s.last_touch_team = 0
-	HitResolver._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_UP])
+	HitResolver._ball_vs_block(s, cfg, [0, 0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT])
 	out.append(s.state_hash())
 
 	# 帽子投げの溜めから発射まで進める。

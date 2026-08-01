@@ -89,24 +89,45 @@ func test_air_nine_grid_classifies_vertical_kind_and_horizontal_depth() -> void:
 			check_eq(safe[3], 0, "上段はジャストを許可しない")
 
 
-func test_block_requires_air_up_action_and_ignores_horizontal_direction() -> void:
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	var p = s.players[1]
-	p.on_ground = 0
-	p.y = cfg.floor_y - FP.from_int(140)
-	s.last_touch_team = 1
-	s.ball_vx = -FP.from_int(8)
-	for horizontal in [0, SimInput.IN_LEFT, SimInput.IN_RIGHT]:
-		check(HitResolver._is_active_block(
-			s, 1, SimInput.IN_ACTION | SimInput.IN_UP | horizontal, cfg),
-			"空中上+ボタンは横方向に関係なく明示ブロック")
-	check(not HitResolver._is_active_block(s, 1, SimInput.IN_ACTION, cfg),
-		"上なしボタンではパッシブブロックしない")
-	p.on_ground = 1
-	check(not HitResolver._is_active_block(
-		s, 1, SimInput.IN_ACTION | SimInput.IN_UP, cfg), "地上ではブロックしない")
+func test_block_requires_forward_action_and_existing_context_boundaries() -> void:
+	for team in 2:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var blocker_idx: int = 1 if team == 0 else 3
+		var p = s.players[blocker_idx]
+		var forward := SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+		var backward := SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
+		var block_input: int = SimInput.IN_ACTION | forward
+		p.x = cfg.net_x - SimState._dir_of_team(team) * FP.from_int(20)
+		p.y = cfg.floor_y - FP.from_int(140)
+		s.last_touch_team = 1 - team
+		s.ball_vx = -SimState._dir_of_team(team) * FP.from_int(8)
+		for on_ground in [0, 1]:
+			p.on_ground = on_ground
+			check(HitResolver._is_active_block(s, blocker_idx, block_input, cfg),
+				"前+ボタンは地上・空中共通ブロック team=%d ground=%d" % [
+					team, on_ground])
+		check(not HitResolver._is_active_block(
+			s, blocker_idx, SimInput.IN_ACTION | backward, cfg),
+			"後+ボタンはブロックしない")
+		check(not HitResolver._is_active_block(
+			s, blocker_idx, SimInput.IN_ACTION | SimInput.IN_UP, cfg),
+			"上+ボタンはブロックしない")
+		check(not HitResolver._is_active_block(
+			s, blocker_idx, block_input | SimInput.IN_DOWN, cfg),
+			"上下を含む前+ボタンはブロックしない")
+		s.last_touch_team = team
+		check(not HitResolver._is_active_block(s, blocker_idx, block_input, cfg),
+			"自チームが最後に触った球はブロックしない")
+		s.last_touch_team = 1 - team
+		p.x = cfg.net_x - SimState._dir_of_team(team) * FP.from_int(61)
+		check(not HitResolver._is_active_block(s, blocker_idx, block_input, cfg),
+			"ネットから60pxを越えたらブロックしない")
+		p.x = cfg.net_x - SimState._dir_of_team(team) * FP.from_int(20)
+		s.ball_vx = SimState._dir_of_team(team) * FP.from_int(8)
+		check(not HitResolver._is_active_block(s, blocker_idx, block_input, cfg),
+			"自陣から離れる球はブロックしない")
 
 
 func test_cpu_emits_new_toss_receive_and_block_inputs() -> void:

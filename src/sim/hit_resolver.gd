@@ -343,8 +343,6 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		if not force_dive_receive and not (input & IN_ACTION) \
 				and _special_for_input(p, input, cfg) == 0:
 			continue
-		if not force_dive_receive and _is_block_input(p, input):
-			continue
 		if not force_dive_receive and _is_active_block(s, i, input, cfg):
 			continue
 		if p.hit_cooldown > 0 or p.stun > 0 or p.burn > 0 or p.quake_stun > 0:
@@ -377,8 +375,11 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		return 1 - team_of(best_i) if s.touches > cfg.max_touches else HIT_NO_POINT
 	return NO_HIT
 
-static func _is_block_input(p, input: int) -> bool:
-	return p.on_ground == 0 and (input & IN_ACTION) != 0 and (input & IN_UP) != 0
+static func _is_block_input(team: int, input: int) -> bool:
+	if (input & IN_ACTION) == 0 or (input & (IN_UP | IN_DOWN)) != 0:
+		return false
+	var forward: int = IN_RIGHT if team == 0 else IN_LEFT
+	return (input & forward) != 0
 
 static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	if s.phase != SimStateScript.PHASE_RALLY \
@@ -388,7 +389,7 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	var p = s.players[i]
 	if p.burn > 0:
 		return false
-	if s.last_touch_team != 1 - team or not _is_block_input(p, input):
+	if s.last_touch_team != 1 - team or not _is_block_input(team, input):
 		return false
 	if absi(p.x - cfg.net_x) > FP.from_int(60):
 		return false
@@ -783,8 +784,8 @@ static func _scatter(s, actor: int, salt: int) -> int:
 static func _trait_roll_pct(s, actor: int, salt: int) -> int:
 	return _keyed_hash(s, actor, salt) % 100
 
-# ブロック: ネット際の空中で上+アクションを押した時だけ成立する。
-# 横方向は問わず、位置取りに加えて明示入力のタイミングを要求する。
+# ブロック: ネット際で前+アクションを押した時だけ地上・空中共通で成立する。
+# 上下入力はアタック用なので除外し、位置取りに加えて明示入力を要求する。
 # 反射は物理的に単純: 横速度を反転減衰(最低でもネット反発分は押し返す)、
 # 縦はそのまま=強打は下向きのままアタッカー側へ突き刺さる(キルブロック)。
 # サーブは受け手チームの初接触までブロック不可(バレーのルール準拠)。ボールのパワーは

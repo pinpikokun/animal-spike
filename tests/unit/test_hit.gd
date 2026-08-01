@@ -93,6 +93,10 @@ func _air_spike_input_with_vertical(
 		team: int, relative_hdir: int, vertical: int) -> int:
 	return (_air_spike_input(team, relative_hdir) & ~Simulation.IN_DOWN) | vertical
 
+func _block_input(team: int) -> int:
+	return Simulation.IN_ACTION | (Simulation.IN_RIGHT if team == 0 \
+		else Simulation.IN_LEFT)
+
 func test_up_attack_matches_nonjust_down_in_preview_and_apply() -> void:
 	for team in 2:
 		for relative_hdir in [-1, 0, 1]:
@@ -438,7 +442,7 @@ func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
+	Simulation.step(s, [_block_input(0), 0, 0, 0], cfg)
 	check_eq(p.guard, 60,
 		"燃える球のブロックはカタログ固定40ダメージ")
 	check_eq(p.burn, cfg.burn_stun_ticks, "炎球ブロックでも90tick行動不能")
@@ -1425,28 +1429,36 @@ func test_just_receive_holds_aim() -> void:
 	check_eq(incoming[0].ball_vx - no_incoming[0].ball_vx, inertia_vx,
 		"同じ接触項と散りにjust慣性分だけが加わる")
 
-func test_block_reflects_opponent_shot() -> void:
-	# 空中上+アクションの明示入力だけでブロックする。
-	var w := _rally_world()
-	var s = w[0]
-	var cfg = w[1]
-	var p = s.players[0]  # 左チームのブロッカー
-	p.x = cfg.net_x - FP.from_int(30)
-	p.y = cfg.floor_y - FP.from_int(140)
-	p.on_ground = 0
-	s.last_touch_team = 1  # 相手の打球
-	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = p.y - cfg.player_reach_up  # 手のひらゾーン
-	s.ball_vx = -FP.from_int(8)  # 左(自陣)へ向かう強打
-	s.ball_vy = FP.from_int(6)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0], cfg)
-	check(s.ball_vx > 0, "ブロックで打球が跳ね返る")
-	check_eq(s.last_touch_team, 0, "跳ね返した球はブロッカー側の球になる")
-	check_eq(s.last_touch_idx, 0, "最後に触ったのは左後衛ブロッカー")
-	check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
-		"ブロッカーと最終タッチチームが一致")
-	check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
-	check_eq(s.cpu_hit_count, 1, "ブロック打球でもCPU位置取り用カウンタを1増やす")
+func test_forward_action_blocks_on_ground_and_in_air_for_both_teams() -> void:
+	for team in 2:
+		for on_ground in [0, 1]:
+			var w := _rally_world()
+			var s = w[0]
+			var cfg = w[1]
+			var blocker_idx: int = 1 if team == 0 else 3
+			var dir: int = SimState._dir_of_team(team)
+			var p = s.players[blocker_idx]
+			p.x = cfg.net_x - dir * FP.from_int(30)
+			p.y = cfg.floor_y if on_ground == 1 \
+				else cfg.floor_y - FP.from_int(140)
+			p.on_ground = on_ground
+			s.last_touch_team = 1 - team
+			s.ball_x = p.x
+			s.ball_y = p.y - cfg.player_reach_up
+			s.ball_vx = -dir * FP.from_int(8)
+			s.ball_vy = FP.from_int(6)
+			var inputs: Array[int] = [0, 0, 0, 0]
+			inputs[blocker_idx] = _block_input(team)
+			Simulation.step(s, inputs, cfg)
+			check(s.ball_vx * dir > 0,
+				"前+ボタンで相手球を反射 team=%d ground=%d" % [team, on_ground])
+			check_eq(s.last_touch_team, team, "反射球はブロッカー側の球")
+			check_eq(s.last_touch_idx, blocker_idx, "最後に触った選手を記録")
+			check_eq(SimState.team_of(s.last_touch_idx), s.last_touch_team,
+				"ブロッカーと最終タッチチームが一致")
+			check_eq(s.touches, 1, "原作どおりブロックも1タッチに数える")
+			check_eq(s.cpu_hit_count, 1,
+				"ブロックでもCPU位置取り用カウンタを1増やす")
 
 func test_jump_alone_does_not_block() -> void:
 	var w := _rally_world()
@@ -1463,7 +1475,7 @@ func test_jump_alone_does_not_block() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check(s.ball_vx < 0, "ネット際でジャンプしただけではブロックしない")
 
-func test_block_requires_up_direction() -> void:
+func test_up_and_down_actions_do_not_create_block_context() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -1475,10 +1487,12 @@ func test_block_requires_up_direction() -> void:
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
-	check(s.ball_vx < 0, "上なしの横+アクションではブロックしない")
+	for vertical in [Simulation.IN_UP, Simulation.IN_DOWN]:
+		check(not HitResolver._is_active_block(
+			s, 0, _block_input(0) | vertical, cfg),
+			"上下入力を含むアクションはブロックしない")
 
-func test_ground_action_without_up_does_not_block() -> void:
+func test_neutral_ground_action_does_not_block() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -1489,7 +1503,35 @@ func test_ground_action_without_up_does_not_block() -> void:
 	s.last_touch_team = 1
 	s.ball_vx = -FP.from_int(8)
 	check(not HitResolver._is_active_block(s, 0, Simulation.IN_ACTION, cfg),
-		"地上ボタンだけではブロックしない")
+		"地上の方向なしボタンはブロックしない")
+
+func test_failed_forward_block_falls_through_to_forward_toss() -> void:
+	for team in 2:
+		for on_ground in [0, 1]:
+			var w := _rally_world()
+			var s = w[0]
+			var cfg = w[1]
+			var actor: int = team * 2
+			var dir: int = SimState._dir_of_team(team)
+			var p = s.players[actor]
+			p.x = cfg.net_x - dir * FP.from_int(100)
+			p.y = cfg.floor_y if on_ground == 1 \
+				else cfg.floor_y - FP.from_int(100)
+			p.on_ground = on_ground
+			s.last_touch_team = team
+			s.ball_x = p.x
+			s.ball_y = p.y - FP.from_int(5)
+			s.ball_vx = 0
+			s.ball_vy = 0
+			var inputs: Array[int] = [0, 0, 0, 0]
+			inputs[actor] = _block_input(team)
+			check_eq(HitResolver._resolve_hit(s, inputs, cfg),
+				HitResolver.HIT_NO_POINT, "条件外の前入力は空振りにしない")
+			check(s.ball_vx * dir > 0,
+				"条件外の前入力は敵陣方向へのトス team=%d ground=%d" % [
+					team, on_ground])
+			check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
+				"条件外の前トスはアタック属性を持たない")
 
 func test_own_shot_is_not_blocked() -> void:
 	# 自チームの打球は自分たちの空中の体に当たらない(空中戦の自滅防止)
@@ -1543,7 +1585,7 @@ func test_crossed_serve_cannot_be_blocked_before_receiver_touch() -> void:
 	s.ball_x = p.x - FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(600) / cfg.tick_rate
-	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	var block_input: int = _block_input(1)
 	check(not HitResolver._is_active_block(s, 2, block_input, cfg),
 		"ネット越え後も受球前のサーブには有効ブロックを作らない")
 	var before_vx: int = s.ball_vx
@@ -1565,7 +1607,7 @@ func test_normal_rally_ball_can_still_be_blocked() -> void:
 	s.ball_x = p.x - FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = FP.from_int(600) / cfg.tick_rate
-	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	var block_input: int = _block_input(1)
 	check(HitResolver._is_active_block(s, 2, block_input, cfg),
 		"通常ラリー球には有効ブロックが成立する")
 	HitResolver._ball_vs_block(s, cfg, [0, 0, block_input, 0])
@@ -1599,7 +1641,7 @@ func test_receiver_touch_clears_serve_ball_and_restores_blocking() -> void:
 	s.ball_x = blocker.x + FP.from_int(5)
 	s.ball_y = blocker.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(600) / cfg.tick_rate
-	var block_input: int = Simulation.IN_ACTION | Simulation.IN_UP
+	var block_input: int = _block_input(0)
 	HitResolver._ball_vs_block(s, cfg, [block_input, 0, 0, 0])
 	check(s.ball_vx > 0, "受球後に返ってきた球はブロックできる")
 
@@ -1749,31 +1791,35 @@ func test_air_neutral_toss_lifts_instead_of_spike() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
 	check(s.ball_vy < 0, "空中ニュートラルトスは上向き")
 
-func test_up_action_jumps_instead_of_ground_toss() -> void:
+func test_up_action_jumps_and_attacks_in_the_same_tick() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
 	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_y = cfg.floor_y - FP.from_int(40)
 	Simulation.step(s,
 		[Simulation.IN_ACTION | Simulation.IN_JUMP | Simulation.IN_UP, 0, 0, 0], cfg)
-	check_eq(p.on_ground, 0, "上+ボタンでも上キーはジャンプ専用")
-	check_eq(s.touches, 0, "上入力を地上トス照準には使わない")
+	check_eq(p.on_ground, 0, "上+ボタンでジャンプする")
+	check_eq(s.touches, 1, "ジャンプした同tickから届く球を攻撃できる")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+		"同tickの上アタックも通常属性")
 
-func test_up_action_does_not_create_toss_stance() -> void:
+func test_up_side_action_moves_jumps_and_attacks_without_ground_toss() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
 	var x0: int = p.x
 	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_y = cfg.floor_y - FP.from_int(40)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_JUMP
 		| Simulation.IN_UP | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check(p.x > x0, "上+横+ボタンでも横移動は抑制しない")
 	check_eq(p.on_ground, 0, "上入力でジャンプする")
-	check_eq(s.touches, 0, "旧トス構えは撤去される")
+	check_eq(s.touches, 1, "横移動を含めても同tickから上アタックする")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+		"地上トスではなく空中通常アタックになる")
 
 func test_jump_cut_on_release() -> void:
 	# 可変ジャンプ: 上昇中に上キーを離すと失速し、押し続けより早く落下に転じる

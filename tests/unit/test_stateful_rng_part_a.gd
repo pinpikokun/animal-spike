@@ -42,7 +42,7 @@ func _apply_block_hit(s, cfg) -> void:
 	s.ball_vx = -FP.from_int(8)
 	s.ball_vy = FP.from_int(6)
 	HitResolver._ball_vs_block(
-		s, cfg, [Simulation.IN_ACTION | Simulation.IN_UP, 0, 0, 0])
+		s, cfg, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0])
 
 func test_rng_fields_roundtrip_and_affect_hash() -> void:
 	var original = SimState.new()
