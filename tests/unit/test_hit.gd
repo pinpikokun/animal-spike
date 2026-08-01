@@ -1009,39 +1009,60 @@ func _air_toss_world(team: int, touches_before: int) -> Array:
 	s.touches = touches_before
 	return [s, cfg, actor, s.ball_x, s.ball_y]
 
-func test_first_and_second_air_toss_target_own_front_mirrors_teams() -> void:
+func test_first_and_second_air_toss_use_three_direction_targets() -> void:
 	for team in 2:
+		var dir: int = SimState._dir_of_team(team)
 		for touches_before in [0, 1]:
-			var w := _air_toss_world(team, touches_before)
-			var s = w[0]
-			var cfg = w[1]
-			var expected_vy: int = -cfg.toss_fwd_vy
-			var expected_vx: int = HitResolver.toss_aim_vx(
-				w[3], w[4], expected_vy,
-				HitResolver.toss_target_x(team, 0, cfg), cfg)
-			HitResolver._apply_hit(s, w[2], cfg, Simulation.IN_ACTION, 0)
-			check_eq(s.ball_vx, expected_vx,
-				"1・2打目の空中トスは自陣前方: team=%d touch=%d"
-				% [team, touches_before + 1])
-			check_eq(s.ball_vy, expected_vy,
-				"1・2打目の空中トスは既存の上向き速度")
+			for row in [
+				[-dir, Simulation.IN_LEFT if dir > 0 else Simulation.IN_RIGHT],
+				[0, 0],
+				[dir, Simulation.IN_RIGHT if dir > 0 else Simulation.IN_LEFT],
+			]:
+				var w := _air_toss_world(team, touches_before)
+				var s = w[0]
+				var cfg = w[1]
+				var actor: int = w[2]
+				var expected_vy: int = -cfg.toss_fwd_vy
+				var expected_vx: int
+				if row[0] == dir:
+					expected_vx = HitResolver.opponent_return_vx(
+						w[3], w[4], 0, team, s.players[actor].char_id, cfg)
+				else:
+					expected_vx = HitResolver.toss_aim_vx(
+						w[3], w[4], expected_vy,
+						HitResolver.toss_target_x(team, row[0], cfg), cfg)
+				HitResolver._apply_hit(
+					s, actor, cfg, Simulation.IN_ACTION | row[1], 0)
+				check_eq(s.ball_vx, expected_vx,
+					"1・2打目の空中トスを後・中・前へ打ち分け: team=%d touch=%d hdir=%d"
+					% [team, touches_before + 1, row[0]])
+				check_eq(s.ball_vy, expected_vy,
+					"1・2打目の空中トスは既存の上向き速度")
 
 func test_third_air_toss_returns_to_opponent_mirrors_teams() -> void:
 	for team in 2:
-		var w := _air_toss_world(team, 2)
-		var s = w[0]
-		var cfg = w[1]
-		var actor: int = w[2]
-		var expected_vx: int = HitResolver.opponent_return_vx(
-			s.ball_x, s.ball_y, 0, team, s.players[actor].char_id, cfg)
-		HitResolver._apply_hit(s, actor, cfg, Simulation.IN_ACTION, 0)
-		check_eq(s.ball_vx, expected_vx, "3打目の空中トスは敵陣返球式")
-		var landing_x: int = SimCpu._predict_landing_x(
-			s, cfg, cfg.floor_y - cfg.ball_radius, 3)
-		check((landing_x > cfg.net_x) == (team == 0),
-			"3打目の空中トスは相手コートへ着地")
-		check_eq(s.touches, cfg.max_touches,
-			"3打目は4回目接触にせず最大タッチ数で止まる")
+		var dir: int = SimState._dir_of_team(team)
+		for horizontal_input in [
+			Simulation.IN_LEFT if dir > 0 else Simulation.IN_RIGHT,
+			0,
+			Simulation.IN_RIGHT if dir > 0 else Simulation.IN_LEFT,
+		]:
+			var w := _air_toss_world(team, 2)
+			var s = w[0]
+			var cfg = w[1]
+			var actor: int = w[2]
+			var expected_vx: int = HitResolver.opponent_return_vx(
+				s.ball_x, s.ball_y, 0, team, s.players[actor].char_id, cfg)
+			HitResolver._apply_hit(
+				s, actor, cfg, Simulation.IN_ACTION | horizontal_input, 0)
+			check_eq(s.ball_vx, expected_vx,
+				"3打目の空中トスは全方向とも敵陣返球式")
+			var landing_x: int = SimCpu._predict_landing_x(
+				s, cfg, cfg.floor_y - cfg.ball_radius, 3)
+			check((landing_x > cfg.net_x) == (team == 0),
+				"3打目の空中トスは相手コートへ着地")
+			check_eq(s.touches, cfg.max_touches,
+				"3打目は4回目接触にせず最大タッチ数で止まる")
 
 func test_air_toss_serve_returns_to_opponent_mirrors_teams() -> void:
 	for team in 2:

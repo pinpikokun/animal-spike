@@ -130,26 +130,32 @@ func test_opponent_return_is_deterministic() -> void:
 
 func test_third_air_toss_uses_same_opponent_return_formula() -> void:
 	for team in 2:
-		var cfg = SimConfig.new()
-		var s = SimState.new()
-		var actor: int = team * 2
 		var dir: int = SimState._dir_of_team(team)
-		var p = s.players[actor]
-		p.char_id = Chars.CHAR_PANDA
-		p.on_ground = 0
-		p.y = cfg.floor_y - FP.from_int(80)
-		s.last_touch_team = team
-		s.touches = cfg.max_touches - 1
-		s.ball_x = cfg.net_x - dir * FP.from_int(120)
-		s.ball_y = p.y
-		s.ball_vx = -dir * _fast_incoming_vx(cfg)
-		var expected_vx: int = HitResolver.opponent_return_vx(
-			s.ball_x, s.ball_y, s.ball_vx, team, p.char_id, cfg)
-		HitResolver._apply_hit(s, actor, cfg, SimInput.IN_ACTION, 0)
-		check_eq(s.ball_vx, expected_vx,
-			"3打目の空中トスは地上と同じ敵陣返球式: team=%d" % team)
-		check_eq(s.ball_vy, -cfg.toss_fwd_vy,
-			"空中トスの上向き速度は既存値を維持: team=%d" % team)
+		for horizontal_input in [
+			SimInput.IN_LEFT if dir > 0 else SimInput.IN_RIGHT,
+			0,
+			SimInput.IN_RIGHT if dir > 0 else SimInput.IN_LEFT,
+		]:
+			var cfg = SimConfig.new()
+			var s = SimState.new()
+			var actor: int = team * 2
+			var p = s.players[actor]
+			p.char_id = Chars.CHAR_PANDA
+			p.on_ground = 0
+			p.y = cfg.floor_y - FP.from_int(80)
+			s.last_touch_team = team
+			s.touches = cfg.max_touches - 1
+			s.ball_x = cfg.net_x - dir * FP.from_int(120)
+			s.ball_y = p.y
+			s.ball_vx = -dir * _fast_incoming_vx(cfg)
+			var expected_vx: int = HitResolver.opponent_return_vx(
+				s.ball_x, s.ball_y, s.ball_vx, team, p.char_id, cfg)
+			HitResolver._apply_hit(
+				s, actor, cfg, SimInput.IN_ACTION | horizontal_input, 0)
+			check_eq(s.ball_vx, expected_vx,
+				"3打目の空中トスは全方向で地上と同じ敵陣返球式: team=%d" % team)
+			check_eq(s.ball_vy, -cfg.toss_fwd_vy,
+				"空中トスの上向き速度は既存値を維持: team=%d" % team)
 
 
 func test_ground_opponent_return_ignores_mangled_aim_reduction() -> void:

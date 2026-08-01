@@ -738,18 +738,19 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	else:
 		s.ball_guard_damage = 0
 		s.ball_defense_class = Chars.DEFENSE_NONE
-		# 空中トスは1・2打目なら自陣前方へ上げ、3打目だけ敵陣へ返す。
+		# 空中トスは1・2打目を後ろ=自陣奥、無入力=自陣前、前=敵陣へ打ち分ける。
+		# 3打目とサーブは方向入力によらず敵陣へ返す。
 		var avy: int = -cfg.toss_fwd_vy
 		var touches_after: int = s.touches + 1 if s.last_touch_team == team else 1
 		var returns_to_opponent: bool = serve_strike \
-			or touches_after >= cfg.max_touches
+			or touches_after >= cfg.max_touches or hdir == dir
 		if returns_to_opponent:
 			var air_return_incoming_vx: int = 0 if serve_strike else s.ball_vx
 			s.ball_vx = opponent_return_vx(
 				s.ball_x, s.ball_y, air_return_incoming_vx, team, p.char_id, cfg)
 		else:
 			s.ball_vx = toss_aim_vx(
-				s.ball_x, s.ball_y, avy, toss_target_x(team, 0, cfg), cfg)
+				s.ball_x, s.ball_y, avy, toss_target_x(team, hdir, cfg), cfg)
 		s.ball_vy = avy
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
