@@ -44,7 +44,6 @@ const INTENT_GROUND_TOSS := 1
 const INTENT_GROUND_FORWARD := 2
 const INTENT_AIR_SPIKE := 3
 const INTENT_AIR_TOSS := 4
-const INTENT_AIR_BLOCK := 5
 # 旧名は既存の表示・特性テストとの互換用。同じ空中トス分類へ統合した。
 const INTENT_AIR_TOSS_UP := INTENT_AIR_TOSS
 const INTENT_AIR_TOSS_SIDE := INTENT_AIR_TOSS
@@ -84,9 +83,9 @@ static func _classify_intent(on_ground: int, input: int, _d2: int,
 			return [INTENT_GROUND_RECEIVE, hdir, 0, 0]
 		return [INTENT_GROUND_TOSS, hdir, 0, 0]
 	if up == 1:
-		return [INTENT_AIR_BLOCK, hdir, up, 0]
-	if input & IN_DOWN:
 		return [INTENT_AIR_SPIKE, hdir, up, 0]
+	if input & IN_DOWN:
+		return [INTENT_AIR_SPIKE, hdir, up, 1]
 	return [INTENT_AIR_TOSS, hdir, up, 0]
 
 static func preview_air_spike_velocity(
@@ -105,6 +104,8 @@ static func preview_air_spike_velocity(
 	if special != 0:
 		sweet = true
 	if p.burnout_ticks > 0:
+		sweet = false
+	if intent[3] == 0:
 		sweet = false
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
 	var in_sp2: int = s.ball_vx * s.ball_vx + s.ball_vy * s.ball_vy
@@ -514,6 +515,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if p.burnout_ticks > 0:
 		sweet = false
 	if force_dive_receive:
+		sweet = false
+	if intent_kind == INTENT_AIR_SPIKE and intent[3] == 0:
 		sweet = false
 	var just_receive: bool = opposing_attack \
 		and intent_kind == INTENT_GROUND_RECEIVE \

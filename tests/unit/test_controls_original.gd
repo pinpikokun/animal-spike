@@ -65,21 +65,28 @@ func test_air_nine_grid_classifies_vertical_kind_and_horizontal_depth() -> void:
 		var forward := SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 		var backward := SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
 		for row in [[backward, -1], [0, 0], [forward, 1]]:
-			var spike := HitResolver._classify_intent(
+			var wager := HitResolver._classify_intent(
 				0, SimInput.IN_ACTION | SimInput.IN_DOWN | row[0],
 				0, cfg.player_reach, false)
-			check_eq(spike[0], HitResolver.INTENT_AIR_SPIKE, "下段3マスはアタック")
-			check_eq(spike[1] * SimState._dir_of_team(team), row[1],
+			check_eq(wager[0], HitResolver.INTENT_AIR_SPIKE,
+				"下段3マスはジャスト可アタック")
+			check_eq(wager[1] * SimState._dir_of_team(team), row[1],
 				"アタックの横軸は後ろ/中央/前")
+			check_eq(wager[3], 1, "下段だけジャストを許可")
 			var toss := HitResolver._classify_intent(
 				0, SimInput.IN_ACTION | row[0], 0, cfg.player_reach, false)
 			check_eq(toss[0], HitResolver.INTENT_AIR_TOSS, "中段3マスはトス")
 			check_eq(toss[1] * SimState._dir_of_team(team), row[1],
 				"トスの横軸は後ろ/中央/前")
-			var block := HitResolver._classify_intent(
+			check_eq(toss[3], 0, "トスはジャスト判定を持たない")
+			var safe := HitResolver._classify_intent(
 				0, SimInput.IN_ACTION | SimInput.IN_UP | row[0],
 				0, cfg.player_reach, false)
-			check_eq(block[0], HitResolver.INTENT_AIR_BLOCK, "上段3マスはブロック")
+			check_eq(safe[0], HitResolver.INTENT_AIR_SPIKE,
+				"上段3マスは通常アタック")
+			check_eq(safe[1] * SimState._dir_of_team(team), row[1],
+				"上アタックも横軸は後ろ/中央/前")
+			check_eq(safe[3], 0, "上段はジャストを許可しない")
 
 
 func test_block_requires_air_up_action_and_ignores_horizontal_direction() -> void:

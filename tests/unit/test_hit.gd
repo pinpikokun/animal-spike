@@ -89,6 +89,42 @@ func _air_spike_input(team: int, relative_hdir: int) -> int:
 		input |= Simulation.IN_RIGHT
 	return input
 
+func _air_spike_input_with_vertical(
+		team: int, relative_hdir: int, vertical: int) -> int:
+	return (_air_spike_input(team, relative_hdir) & ~Simulation.IN_DOWN) | vertical
+
+func test_up_attack_matches_nonjust_down_in_preview_and_apply() -> void:
+	for team in 2:
+		for relative_hdir in [-1, 0, 1]:
+			var safe_world := _preview_air_spike_world(team)
+			var safe_state = safe_world[0]
+			var cfg = safe_world[1]
+			var actor: int = safe_world[2]
+			var safe_input: int = _air_spike_input_with_vertical(
+				team, relative_hdir, Simulation.IN_UP)
+			var wager_input: int = _air_spike_input_with_vertical(
+				team, relative_hdir, Simulation.IN_DOWN)
+			var safe_preview: Vector2i = HitResolver.preview_air_spike_velocity(
+				safe_state, actor, cfg, safe_input, 0)
+			var normal_preview: Vector2i = HitResolver.preview_air_spike_velocity(
+				safe_state, actor, cfg, wager_input,
+				cfg.player_reach * cfg.player_reach)
+			check_eq(safe_preview, normal_preview,
+				"上と非ジャスト下の予測速度一致 team=%d dir=%d" % [
+					team, relative_hdir])
+			HitResolver._apply_hit(safe_state, actor, cfg, safe_input, 0)
+			var wager_world := _preview_air_spike_world(team)
+			var wager_state = wager_world[0]
+			HitResolver._apply_hit(wager_state, actor, cfg, wager_input,
+				cfg.player_reach * cfg.player_reach)
+			check_eq(Vector2i(safe_state.ball_vx, safe_state.ball_vy),
+				Vector2i(wager_state.ball_vx, wager_state.ball_vy),
+				"上と非ジャスト下の実打球速度一致 team=%d dir=%d" % [
+					team, relative_hdir])
+			check_eq(safe_state.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+				"上は芯でも通常属性")
+			check_eq(safe_state.ball_power, 0, "上は芯でもパワー球にしない")
+
 func test_preview_air_spike_velocity_matches_fixed_normal_values() -> void:
 	for team in 2:
 		var w := _preview_air_spike_world(team)

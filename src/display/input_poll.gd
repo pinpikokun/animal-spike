@@ -10,7 +10,8 @@ static func poll() -> int:
 		input |= SimInput.IN_LEFT
 	if Input.is_key_pressed(KEY_RIGHT):
 		input |= SimInput.IN_RIGHT
-	# 原作準拠の操作系: 上=ジャンプ(+上照準)、スペース=アクション(Xも可)、下=下照準
+	# 上=ジャンプ/空中通常アタック、下=地上レシーブ/空中ジャスト可アタック。
+	# スペースまたはXがアクション。
 	if Input.is_key_pressed(KEY_UP):
 		input |= SimInput.IN_JUMP | SimInput.IN_UP
 	if Input.is_key_pressed(KEY_DOWN):

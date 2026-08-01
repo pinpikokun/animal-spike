@@ -124,6 +124,22 @@ func test_just_attack_costs_half_and_shaves_receiver_two_stocks() -> void:
 	check_eq(s.players[2].drive_recovery_delay, cfg.drive_recovery_delay_ticks,
 		"被弾削りで受け手の回復ディレイ開始")
 
+func test_up_attack_stays_normal_at_sweet_spot_without_drive_cost() -> void:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.on_ground = 0
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_UP, 0)
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+		"上アタックは芯でも通常属性")
+	check_eq(s.ball_power, 0, "上アタックは芯でもパワーボールにならない")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max,
+		"上アタックはドライブを消費しない")
+	check_eq(p.drive_recovery_delay, 0,
+		"消費しない上アタックは回復ディレイを始めない")
+
 func test_toss_and_attack_return_do_not_take_incoming_drive_damage() -> void:
 	var w := _world()
 	var s = w[0]

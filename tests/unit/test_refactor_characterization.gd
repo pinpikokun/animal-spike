@@ -79,9 +79,9 @@ func test_intent_classifier_is_pure_and_complete() -> void:
 		[1, Simulation.IN_RIGHT, edge_d2, false, [1, 1, 0, 0]],
 		[1, Simulation.IN_RIGHT, edge_d2, true, [1, 1, 0, 0]],
 		[1, Simulation.IN_LEFT | Simulation.IN_UP, near_d2, false, [1, -1, 0, 0]],
-		[0, Simulation.IN_DOWN, near_d2, false, [3, 0, 0, 0]],
-		[0, Simulation.IN_DOWN | Simulation.IN_RIGHT, near_d2, false, [3, 1, 0, 0]],
-		[0, Simulation.IN_UP, near_d2, false, [5, 0, 1, 0]],
+		[0, Simulation.IN_DOWN, near_d2, false, [3, 0, 0, 1]],
+		[0, Simulation.IN_DOWN | Simulation.IN_RIGHT, near_d2, false, [3, 1, 0, 1]],
+		[0, Simulation.IN_UP, near_d2, false, [3, 0, 1, 0]],
 		[0, Simulation.IN_RIGHT, near_d2, false, [4, 1, 0, 0]],
 		[0, 0, near_d2, false, [4, 0, 0, 0]],
 	]
