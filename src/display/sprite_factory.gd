@@ -10,6 +10,16 @@ const FROG := "res://assets/third_party/sunny_land/PNG/sprites/frog"
 const MARIO := "res://assets/characters/mario"
 const PANDA := "res://assets/characters/panda"
 const ORIGINAL := "res://assets/reference/vb2211"
+const ORIGINAL_IDS: Array[int] = [
+	Chars.CHAR_TOME,
+	Chars.CHAR_HITO,
+	Chars.CHAR_PIYO,
+	Chars.CHAR_UME,
+	Chars.CHAR_CARBY,
+	Chars.CHAR_DUO,
+	Chars.CHAR_SEC1,
+	Chars.CHAR_SEC2,
+]
 
 # マリオのセル寸法(全アクション共通の枠)
 const M_CW := 22
@@ -20,7 +30,7 @@ const M_CH := 29
 const ANIMATIONS: Array[String] = [
 	"idle", "run", "jump", "attack", "block", "receive_stance", "ground_swing",
 	"toss", "toss_fwd", "dive", "crouch", "brake", "hurt", "shock",
-	"stun", "burn", "fly", "bubble", "victory", "fall_special",
+	"stun", "burn", "fly", "fly_hover", "bubble", "victory", "fall_special",
 	"hat-throw", "hat-catch", "hipdrop", "wallcling",
 ]
 const FALLBACK := {
@@ -41,6 +51,7 @@ const FALLBACK := {
 	"stun": ["hurt", "idle"],
 	"burn": ["stun", "hurt", "idle"],
 	"fly": ["jump", "idle"],
+	"fly_hover": ["fly", "jump", "idle"],
 	"bubble": ["hurt", "idle"],
 	"victory": ["jump", "idle"],
 	"fall_special": ["hurt", "jump", "idle"],
@@ -65,7 +76,7 @@ static func build_for(char_id: int) -> SpriteFrames:
 		Chars.CHAR_HITO:
 			sf = build_original(ORIGINAL + "/hito_sheet.png")
 		Chars.CHAR_PIYO:
-			sf = build_original(ORIGINAL + "/piyo_sheet.png")
+			sf = build_original(ORIGINAL + "/piyo_sheet.png", 4)
 		Chars.CHAR_UME:
 			sf = build_original(ORIGINAL + "/ume_sheet.png")
 		Chars.CHAR_CARBY:
@@ -80,6 +91,9 @@ static func build_for(char_id: int) -> SpriteFrames:
 			sf = build_fox()
 	ensure_fallbacks(sf)
 	return sf
+
+static func is_original_char(char_id: int) -> bool:
+	return char_id in ORIGINAL_IDS
 
 # 不足アクションを代役連鎖で埋める。埋めた場合は開発ログに警告を出す
 static func ensure_fallbacks(sf: SpriteFrames) -> void:
@@ -167,7 +181,7 @@ static func _add_original_sheet(sf: SpriteFrames, anim: String, path: String,
 		at.region = Rect2((index % 12) * 32, (index / 12) * 32, 32, 32)
 		sf.add_frame(anim, at, float(durs[k]))
 
-static func build_original(sheet_path: String) -> SpriteFrames:
+static func build_original(sheet_path: String, bubble_cell: int = 20) -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
 	_add_original_sheet(sf, "idle", sheet_path, [0, 1], [30, 30], true)
@@ -176,19 +190,20 @@ static func build_original(sheet_path: String) -> SpriteFrames:
 	_add_original_sheet(sf, "attack", sheet_path, [3, 4, 5], [2, 2, 2], false)
 	_add_original_sheet(sf, "block", sheet_path, [9], [1], false)
 	_add_original_sheet(sf, "receive_stance", sheet_path, [6], [1], false)
-	_add_original_sheet(sf, "ground_swing", sheet_path, [8, 9], [2, 2], false)
+	_add_original_sheet(sf, "ground_swing", sheet_path, [9, 8, 7, 6], [2, 2, 2, 4], false)
 	_add_original_sheet(sf, "toss", sheet_path, [7], [1], false)
-	_add_original_sheet(sf, "toss_fwd", sheet_path, [7], [1], false)
+	_add_original_sheet(sf, "toss_fwd", sheet_path, [9, 8, 7, 6], [2, 2, 2, 4], false)
 	_add_original_sheet(sf, "dive", sheet_path, [11, 10, 7, 0], [2, 2, 2, 2], false)
 	_add_original_sheet(sf, "crouch", sheet_path, [6], [1], false)
 	_add_original_sheet(sf, "hurt", sheet_path, [12], [1], false)
 	_add_original_sheet(sf, "shock", sheet_path, [12, 13], [3, 3], true)
 	_add_original_sheet(sf, "brake", sheet_path, [1], [1], false)
-	_add_original_sheet(sf, "stun", sheet_path, [14, 15], [8, 8], true)
-	_add_original_sheet(sf, "burn", sheet_path, [16, 17], [4, 4], true)
+	_add_original_sheet(sf, "stun", sheet_path, [14, 15], [3, 3], true)
+	_add_original_sheet(sf, "burn", sheet_path, [16, 17], [3, 3], true)
 	_add_original_sheet(sf, "fly", sheet_path, [18, 19, 20, 19], [3, 3, 3, 3], true)
-	_add_original_sheet(sf, "bubble", sheet_path, [20], [1], false)
-	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [8, 8], true)
+	_add_original_sheet(sf, "fly_hover", sheet_path, [18], [1], false)
+	_add_original_sheet(sf, "bubble", sheet_path, [bubble_cell], [1], false)
+	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [1, 1], true)
 	_add_original_sheet(sf, "fall_special", sheet_path, [23], [1], false)
 	return sf
 
