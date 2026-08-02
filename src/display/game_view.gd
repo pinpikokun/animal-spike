@@ -453,7 +453,9 @@ func _sync_sprites() -> void:
 				spr.animation = "burn"
 			spr.pause()
 			var burn_frames: int = spr.sprite_frames.get_frame_count("burn")
-			spr.frame = int(state.tick / 4) % burn_frames if burn_frames > 0 else 0
+			var burn_hold_ticks := 3 if SpriteFactory.is_original_char(cid) else 4
+			spr.frame = int(state.tick / burn_hold_ticks) % burn_frames \
+				if burn_frames > 0 else 0
 		elif anim == "hipdrop":
 			# ヒップアタック: 空中静止中(hip>0)は回転コマ0-8を進行に合わせて,
 			# 急降下中(hip==-1)は10枚目(index9)。フレームはhipから導出(時間再生しない)
@@ -469,6 +471,14 @@ func _sync_sprites() -> void:
 				spr.animation = "dive"
 			spr.pause()
 			spr.frame = AnimSelect.dive_frame_for(p)
+		elif SpriteFactory.is_original_char(cid) \
+				and (anim == "attack" or anim == "ground_swing" or anim == "toss_fwd"):
+			if spr.animation != anim:
+				spr.animation = anim
+			spr.pause()
+			spr.frame = AnimSelect.attack_frame_for(p, cfg.hit_cooldown_ticks) \
+				if anim == "attack" else \
+				AnimSelect.ground_swing_frame_for(p, cfg.hit_cooldown_ticks)
 		elif anim == "jump":
 			_land[i] = 0
 			if spr.animation != "jump":

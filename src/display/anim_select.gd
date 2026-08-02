@@ -4,7 +4,7 @@ extends RefCounted
 
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 
-# 優先順位: 被弾 > 横っ飛び > 固有動作 > ブロック > 空中打撃 > 空中 > 接地実打
+# 優先順位: 被弾 > 横っ飛び > 固有動作 > ブロック > 空中打球 > 空中 > 接地実打
 #         > レシーブ構え > 移動 > 静止
 static func anim_for(p) -> String:
 	if p.stun > 0:
@@ -21,15 +21,20 @@ static func anim_for(p) -> String:
 		return "block"
 	if p.on_ground == 0:
 		if p.hit_cooldown > 0:
-			return "attack"
+			if p.hit_kind == SimStateScript.HIT_KIND_ATTACK:
+				return "attack"
+			return "toss"
 		return "jump"
 	if p.brake != 0:
 		return "brake"
 	if p.hit_cooldown > 0:
-		# 地上のトス/レシーブ実打は原作セル8,9。前トスだけ専用姿勢を残す。
-		if p.hit_kind == SimStateScript.HIT_KIND_FORWARD:
-			return "toss_fwd"
-		return "ground_swing"
+		match p.hit_kind:
+			SimStateScript.HIT_KIND_TOSS:
+				return "toss"
+			SimStateScript.HIT_KIND_FORWARD:
+				return "toss_fwd"
+			_:
+				return "ground_swing"
 	if p.on_ground == 1 and p.receive_stance != 0:
 		return "receive_stance"
 	if p.vx != 0:
@@ -39,6 +44,18 @@ static func anim_for(p) -> String:
 # 原作セル11,10,7,0の4コマをsim経過から固定選択する。
 static func dive_frame_for(p) -> int:
 	return clampi(int(p.dive_age_ticks / 2), 0, 3)
+
+# 原作セル3,4,5を2tickずつ進めた後、4,5を交互に出す。
+static func attack_frame_for(p, total_ticks: int) -> int:
+	var age := maxi(total_ticks - p.hit_cooldown, 0)
+	if age < 6:
+		return int(age / 2)
+	return 1 + int((age - 6) / 2) % 2
+
+# 原作セル9,8,7を2tickずつ進め、最後のセル6を硬直終了まで保つ。
+static func ground_swing_frame_for(p, total_ticks: int) -> int:
+	var age := maxi(total_ticks - p.hit_cooldown, 0)
+	return clampi(int(age / 2), 0, 3)
 
 static func dive_rotation_for(p) -> float:
 	return float(signi(p.dive)) * 0.9

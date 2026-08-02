@@ -14,8 +14,9 @@ func test_air_is_jump() -> void:
 	check_eq(AnimSelect.anim_for(_player(0, 0, 0)), "jump", "空中はjump")
 
 func test_ground_hit_is_ground_swing() -> void:
-	# 原作セル8,9は地上のトス/レシーブ実打スイング。前トスだけ専用姿勢
-	check_eq(AnimSelect.anim_for(_player(1, 0, 5)), "ground_swing",
+	var p = _player(1, 0, 5)
+	p.hit_kind = SimState.HIT_KIND_RECEIVE
+	check_eq(AnimSelect.anim_for(p), "ground_swing",
 		"接地+ヒット硬直は地上スイング")
 
 func test_ground_moving_is_run() -> void:
@@ -43,8 +44,9 @@ func test_ground_hit_takes_priority_over_receive_stance() -> void:
 	check_eq(AnimSelect.anim_for(p), "ground_swing", "実打中は構えより地上スイング優先")
 
 func test_air_hit_is_attack() -> void:
-	# 空中でヒット中(hit_cooldown>0)=アタック(スパイク)。ただ飛んでるだけならjump
-	check_eq(AnimSelect.anim_for(_player(0, 0, 9)), "attack", "空中+ヒットはattack")
+	var p = _player(0, 0, 9)
+	p.hit_kind = SimState.HIT_KIND_ATTACK
+	check_eq(AnimSelect.anim_for(p), "attack", "空中アタックはattack")
 
 func test_hit_kind_constants_are_explicit() -> void:
 	var constants: Dictionary = SimState.new().get_script().get_script_constant_map()
@@ -63,15 +65,50 @@ func test_block_hit_uses_same_animation_on_ground_and_in_air() -> void:
 
 func test_ground_toss_kinds() -> void:
 	var t = _player(1, 0, 9)
-	t.hit_kind = 1
-	check_eq(AnimSelect.anim_for(t), "ground_swing", "地上+hit_kind1は地上スイング")
+	t.hit_kind = SimState.HIT_KIND_TOSS
+	check_eq(AnimSelect.anim_for(t), "toss", "地上味方トスはtoss")
 	var f = _player(1, 0, 9)
-	f.hit_kind = 2
+	f.hit_kind = SimState.HIT_KIND_FORWARD
 	check_eq(AnimSelect.anim_for(f), "toss_fwd", "地上+hit_kind2は前トス")
 	var r = _player(1, 0, 9)
-	r.hit_kind = 0
+	r.hit_kind = SimState.HIT_KIND_RECEIVE
 	check_eq(AnimSelect.anim_for(r), "ground_swing",
-		"地上+hit_kind0(ニュートラル上げ)も地上スイング")
+		"地上レシーブは地上スイング")
+
+func test_action_kind_selects_ground_and_air_animation() -> void:
+	for row in [
+		[1, SimState.HIT_KIND_RECEIVE, "ground_swing"],
+		[1, SimState.HIT_KIND_TOSS, "toss"],
+		[1, SimState.HIT_KIND_FORWARD, "toss_fwd"],
+		[0, SimState.HIT_KIND_TOSS, "toss"],
+		[0, SimState.HIT_KIND_FORWARD, "toss"],
+		[0, SimState.HIT_KIND_ATTACK, "attack"],
+		[0, SimState.HIT_KIND_BLOCK, "block"],
+	]:
+		var p = _player(row[0], 0, 10)
+		p.hit_kind = row[1]
+		check_eq(AnimSelect.anim_for(p), row[2],
+			"ground=%d kind=%dのアニメ" % [row[0], row[1]])
+
+func test_original_attack_frames_follow_the_source_tick_sequence() -> void:
+	var frame_for := Callable(AnimSelect, "attack_frame_for")
+	check(frame_for.is_valid(), "原作空中アタックの決定論的コマ選択")
+	if not frame_for.is_valid():
+		return
+	var expected := [0, 0, 1, 1, 2, 2, 1, 1, 2, 2]
+	for age in expected.size():
+		var p = _player(0, 0, 10 - age)
+		check_eq(frame_for.call(p, 10), expected[age], "アタック経過%d tick" % age)
+
+func test_original_ground_swing_frames_follow_the_source_tick_sequence() -> void:
+	var frame_for := Callable(AnimSelect, "ground_swing_frame_for")
+	check(frame_for.is_valid(), "原作地上スイングの決定論的コマ選択")
+	if not frame_for.is_valid():
+		return
+	var expected := [0, 0, 1, 1, 2, 2, 3, 3, 3, 3]
+	for age in expected.size():
+		var p = _player(1, 0, 10 - age)
+		check_eq(frame_for.call(p, 10), expected[age], "地上スイング経過%d tick" % age)
 
 func test_dive_uses_dive_animation() -> void:
 	var p = _player(0, 0, 5)
