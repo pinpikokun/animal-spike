@@ -2,6 +2,7 @@
 extends RefCounted
 
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
 class _BallProbe:
@@ -19,6 +20,12 @@ class _BallProbe:
 	var touches: int = 0
 	var serve_flight: int = 0
 	var last_touch_team: int = -1
+	var ball_attack_id: int = 0
+	var ball_last_contact_id: int = 0
+	var ball_attacker_id: int = -1
+	var ball_attack_commit_tick: int = -1
+	var ball_normal_gain_granted: int = 0
+	var ball_original_attack_pressure_consumed: int = 0
 
 static func wall_reflect_vx(vx: int, cfg) -> int:
 	return -vx * cfg.wall_bounce_num / cfg.ball_bounce_den
@@ -39,6 +46,13 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 	probe.touches = s.touches
 	probe.serve_flight = s.serve_flight
 	probe.last_touch_team = s.last_touch_team
+	probe.ball_attack_id = s.ball_attack_id
+	probe.ball_last_contact_id = s.ball_last_contact_id
+	probe.ball_attacker_id = s.ball_attacker_id
+	probe.ball_attack_commit_tick = s.ball_attack_commit_tick
+	probe.ball_normal_gain_granted = s.ball_normal_gain_granted
+	probe.ball_original_attack_pressure_consumed = \
+		s.ball_original_attack_pressure_consumed
 	var floor_limit: int = cfg.floor_y - cfg.ball_radius
 	for _tick in max_ticks:
 		_step_ball(probe, cfg)
@@ -46,9 +60,51 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 			return probe.ball_x
 	return -1
 
+static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
+		max_ticks: int = 240) -> bool:
+	if s.ball_attack_kind != SimStateScript.BALL_ATTACK_NORMAL:
+		return false
+	var probe := _BallProbe.new()
+	probe.ball_x = s.ball_x
+	probe.ball_y = s.ball_y
+	probe.ball_vx = s.ball_vx
+	probe.ball_vy = s.ball_vy
+	probe.ball_spin = s.ball_spin
+	probe.ball_power = s.ball_power
+	probe.ball_attack_kind = s.ball_attack_kind
+	probe.ball_guard_damage = s.ball_guard_damage
+	probe.ball_defense_class = s.ball_defense_class
+	probe.ball_ghost = s.ball_ghost
+	probe.ball_flame = s.ball_flame
+	probe.touches = s.touches
+	probe.serve_flight = s.serve_flight
+	probe.last_touch_team = s.last_touch_team
+	probe.ball_attack_id = s.ball_attack_id
+	probe.ball_last_contact_id = s.ball_last_contact_id
+	probe.ball_attacker_id = s.ball_attacker_id
+	probe.ball_attack_commit_tick = s.ball_attack_commit_tick
+	probe.ball_normal_gain_granted = s.ball_normal_gain_granted
+	probe.ball_original_attack_pressure_consumed = \
+		s.ball_original_attack_pressure_consumed
+	var floor_limit: int = cfg.floor_y - cfg.ball_radius
+	for _tick in max_ticks:
+		_step_ball(probe, cfg)
+		if probe.ball_attack_kind != SimStateScript.BALL_ATTACK_NORMAL:
+			return false
+		if probe.ball_y >= floor_limit and probe.ball_vy > 0:
+			var landing_team: int = 0 if probe.ball_x < cfg.net_x else 1
+			return landing_team != attacker_team
+	return false
+
 static func _clear_attack_effect(s) -> void:
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 	s.ball_guard_damage = 0
+	s.ball_attack_id = 0
+	s.ball_last_contact_id = 0
+	s.ball_attacker_id = -1
+	s.ball_attack_commit_tick = -1
+	s.ball_normal_gain_granted = 0
+	s.ball_original_attack_pressure_consumed = 0
 
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x
@@ -168,6 +224,11 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 		# ball_xが来た側へ戻されているため、この条件には入らない。
 		s.touches = 0
 		s.serve_flight = 0
+		var entered_team: int = 0 if is_left else 1
+		if s.has_method("alloc_attack_id"):
+			for i in s.players.size():
+				if SimStateScript.team_of(i) == entered_team:
+					CombatResources.stop_attack_recovery(s.players[i])
 		_clear_ghost_on_opponent_entry(s, is_left)
 
 static func _clear_ghost_on_opponent_entry(s, is_left: bool) -> void:

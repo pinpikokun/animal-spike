@@ -7,6 +7,7 @@ const SimStateScript := preload("res://src/sim/sim_state.gd")
 const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -454,6 +455,32 @@ static func _ignite_player(p, team: int, cfg) -> void:
 		FP.from_int(cfg.burn_launch_height_px), cfg.gravity)
 	p.on_ground = 0
 
+static func _grant_valid_normal_attack(s, attack_id: int, owner: int, cfg) -> void:
+	if attack_id <= 0 or attack_id != s.ball_attack_id \
+			or owner < 0 or owner >= s.players.size() \
+			or owner != s.ball_attacker_id \
+			or s.ball_attack_kind != SimStateScript.BALL_ATTACK_NORMAL \
+			or s.ball_normal_gain_granted != 0:
+		return
+	var attacker = s.players[owner]
+	if attacker.burnout_ticks > 0:
+		return
+	attacker.drive_gauge = mini(
+		attacker.drive_gauge + cfg.normal_attack_drive_gain,
+		cfg.drive_gauge_max)
+	s.ball_normal_gain_granted = 1
+	CombatResources.start_attack_recovery(attacker, 0, cfg)
+
+static func _begin_ball_attack(s, attacker: int) -> int:
+	var attack_id: int = s.alloc_attack_id()
+	s.ball_attack_id = attack_id
+	s.ball_last_contact_id = 0
+	s.ball_attacker_id = attacker
+	s.ball_attack_commit_tick = s.tick
+	s.ball_normal_gain_granted = 0
+	s.ball_original_attack_pressure_consumed = 0
+	return attack_id
+
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		force_dive_receive: bool = false) -> void:
 	var p = s.players[i]
@@ -475,6 +502,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if intent_kind == INTENT_AIR_SPIKE:
 		air_spike_velocity = preview_air_spike_velocity(s, i, cfg, input, d2)
 	var incoming_attack_kind: int = s.ball_attack_kind
+	var incoming_attack_id: int = s.ball_attack_id
+	var incoming_attacker_id: int = s.ball_attacker_id
 	var incoming_guard_damage: int = s.ball_guard_damage
 	var incoming_defense_class: int = s.ball_defense_class
 	var incoming_unblockable: bool = incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE
@@ -598,9 +627,13 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if flame_received:
 		# 通常被弾のしりもち計算より後で炎上専用ノックバックへ確定させる。
 		_ignite_player(p, team, cfg)
+	if opposing_attack:
+		CombatResources.stop_attack_recovery(p)
+	if opposing_attack and incoming_attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
+		_grant_valid_normal_attack(
+			s, incoming_attack_id, incoming_attacker_id, cfg)
 	s.ball_power = 0
-	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
-	s.ball_guard_damage = 0
+	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
 	if flame_received:
 		s.ball_flame = 0
@@ -724,6 +757,17 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_guard_damage = cfg.power_guard_damage_for_rank(
 				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER))
 			s.ball_defense_class = Chars.DEFENSE_NONE
+		if not is_attack_return:
+			var attack_id: int = _begin_ball_attack(s, i)
+			if special != 0:
+				CombatResources.start_attack_recovery(
+					p, cfg.special_recovery_delay_ticks, cfg)
+			elif drive_just_attack:
+				CombatResources.start_attack_recovery(
+					p, cfg.just_attack_recovery_delay_ticks, cfg)
+			elif BallPhysics.normal_attack_reaches_opponent_playable(
+					s, cfg, team):
+				_grant_valid_normal_attack(s, attack_id, i, cfg)
 	else:
 		s.ball_guard_damage = 0
 		s.ball_defense_class = Chars.DEFENSE_NONE
@@ -799,6 +843,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			continue
 		if p.stun > 0 or p.burn > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
 			continue
+		CombatResources.stop_attack_recovery(p)
 		if absi(p.x - cfg.net_x) > zone:
 			continue
 		# ボールが自陣へ向かって飛んでいる時だけ(離れる球に壁は要らない)
@@ -816,8 +861,10 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			continue
 		var incoming_guard_damage: int = s.ball_guard_damage
 		var incoming_defense_class: int = s.ball_defense_class
-		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
-		s.ball_guard_damage = 0
+		if s.ball_attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
+			_grant_valid_normal_attack(
+				s, s.ball_attack_id, s.ball_attacker_id, cfg)
+		BallPhysics._clear_attack_effect(s)
 		s.ball_defense_class = Chars.DEFENSE_NONE
 		s.ball_vx = -s.ball_vx * cfg.ball_bounce_num / cfg.ball_bounce_den
 		if team == 0:

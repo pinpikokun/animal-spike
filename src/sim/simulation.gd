@@ -219,11 +219,13 @@ static func _update_drive_recovery(state, cfg) -> void:
 		return
 	for p in state.players:
 		if p.burnout_ticks > 0:
+			CombatResources.stop_attack_recovery(p)
 			p.burnout_ticks -= 1
 			if p.burnout_ticks == 0:
 				p.drive_gauge = cfg.drive_gauge_max
 			continue
 		p.drive_gauge = clampi(p.drive_gauge, 0, cfg.drive_gauge_max)
+		CombatResources.tick_attack_recovery(p, true, cfg)
 
 static func _step_players_and_hits(state, inputs: Array[int],
 		cfg, action_edges: Array[bool] = []) -> Array[int]:
@@ -305,6 +307,7 @@ static func _try_start_dive_receives(state, _inputs: Array[int],
 				or distance > receive_reach + cfg.dive_receive_extra_reach:
 			continue
 		p.dive = signi(predicted_x - p.x)
+		CombatResources.stop_attack_recovery(p)
 		p.dive_contact_ticks = cfg.dive_receive_contact_ticks
 		p.dive_age_ticks = 0
 		p.vx = p.dive * cfg.dive_receive_speed
@@ -336,6 +339,8 @@ static func _update_receive_stances(state, inputs: Array[int], cfg) -> void:
 				and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
 				and (input & (IN_LEFT | IN_RIGHT)) == 0
 			p.receive_stance = cfg.just_receive_window_ticks if valid_edge else -1
+			if valid_edge:
+				CombatResources.stop_attack_recovery(p)
 		elif p.receive_stance > 1:
 			p.receive_stance -= 1
 		elif p.receive_stance == 1:
@@ -445,8 +450,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_vy = 0
 	s.ball_spin = 0
 	s.ball_power = 0
-	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
-	s.ball_guard_damage = 0
+	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
 	s.ball_ghost = 0
 	s.ball_flame = 0
@@ -473,6 +477,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.hip = 0
 		p.cling = 0
 		p.receive_stance = 0
+		CombatResources.stop_attack_recovery(p)
 		p.just_receive_flash = 0
 		p.quake_stun = 0
 		p.tap_dir = 0
@@ -516,6 +521,7 @@ static func reset_match(s, cfg, serving_team: int,
 		p.guard = p.guard_max
 		p.drive_gauge = cfg.drive_gauge_max
 		p.drive_reserved = 0
+		CombatResources.stop_attack_recovery(p)
 		p.receive_stance = 0
 		p.just_receive_flash = 0
 		p.just_receive_event = 0
@@ -581,8 +587,7 @@ static func _check_floor_point(s, cfg) -> void:
 	# 着地したらパワーボールを解除=通常ボールに戻す(レシーブ時と同様)。
 	# ポーズ中のバウンドで熱色や残像トレイルが残らないようにする
 	s.ball_power = 0
-	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
-	s.ball_guard_damage = 0
+	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
 	s.ball_flame = 0
 	var landed_left: bool = s.ball_x < cfg.net_x
@@ -590,6 +595,9 @@ static func _check_floor_point(s, cfg) -> void:
 
 static func _award_point(s, team: int, cfg) -> void:
 	s.serve_ball = 0
+	BallPhysics._clear_attack_effect(s)
+	for p in s.players:
+		CombatResources.stop_attack_recovery(p)
 	if team == 0:
 		s.score_l += 1
 	else:
