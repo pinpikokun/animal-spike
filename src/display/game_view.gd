@@ -8,6 +8,8 @@ const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const ViewTransform := preload("res://src/display/view_transform.gd")
 const SpriteFactory := preload("res://src/display/sprite_factory.gd")
 const AnimSelect := preload("res://src/display/anim_select.gd")
+const SpecialBall := preload("res://src/sim/special_ball.gd")
+const SpecialBallVisual := preload("res://src/display/special_ball_visual.gd")
 const InputPoll := preload("res://src/display/input_poll.gd")
 const Chars := preload("res://src/sim/chars.gd")
 
@@ -25,7 +27,7 @@ var cfg
 var state
 var _sprites: Array = []  # AnimatedSprite2D x4
 var _ball: Sprite2D
-var _flame_ball: Sprite2D
+var _special_ball: Sprite2D
 var _fx: Node2D  # エフェクト最前面レイヤー(FxLayer、通常合成)
 var _fxg: Node2D  # 発光エフェクトレイヤー(FxGlowLayer、加算合成)
 var _ball_frame_w := 0     # 転がりシート1フレームの辺(px)
@@ -159,15 +161,15 @@ func _ready() -> void:
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
 	_ball_base_scale = ball_px / float(_ball_frame_w)
 	_ball.scale = Vector2.ONE * _ball_base_scale
-	# 原作BALL.DAT由来の炎球。特殊球IDとtickだけで表示コマを決める。
-	_flame_ball = Sprite2D.new()
-	_flame_ball.texture = load("res://assets/reference/vb2211/ball_sheet.png")
-	_flame_ball.centered = true
-	_flame_ball.region_enabled = true
-	_flame_ball.region_rect = Rect2(32, 32, 32, 32)  # index13
-	_flame_ball.visible = false
-	_flame_ball.z_index = _ball.z_index
-	_ball.get_parent().add_child(_flame_ball)
+	# 原作BALL.DAT由来の汎用特殊球。特殊球IDとtickだけで表示コマを決める。
+	_special_ball = Sprite2D.new()
+	_special_ball.texture = load("res://assets/reference/vb2211/ball_sheet.png")
+	_special_ball.centered = true
+	_special_ball.region_enabled = true
+	_special_ball.region_rect = Rect2(0, 0, 32, 32)
+	_special_ball.visible = false
+	_special_ball.z_index = _ball.z_index
+	_ball.get_parent().add_child(_special_ball)
 	# エフェクトレイヤーは最後に追加し、z_indexでも最前面を保証する。
 	# 通常レイヤー(_fx)=影/マーカー等の暗色・単色UI。
 	# 加算合成レイヤー(_fxg)=発光エフェクト(重なると白飛びして光る=ROUNDS風)
@@ -392,7 +394,8 @@ func _sync_sprites() -> void:
 		var cid: int = p.char_id
 		# 帽子投げ中(has_hat=0)は帽子なしスプライトに差し替え(帽子なし版を持つキャラのみ)。
 		# 戻った瞬間はキャッチ演出。form(姿)の対応表はキャラ拡張の本実装で正式化する
-		if Chars.has_ability(cid, Chars.CA_HAT):
+		var locked_status: bool = anim in ["stun", "bubble", "shock", "burn"]
+		if not locked_status and Chars.has_ability(cid, Chars.CA_HAT):
 			if _prev_hat[i] == 0 and p.has_hat == 1:
 				_catch[i] = 12
 			_prev_hat[i] = p.has_hat
@@ -408,12 +411,10 @@ func _sync_sprites() -> void:
 				_catch[i] -= 1
 		# 勝利: ゲームセット後、ボールが止まってから勝者チームが演出開始(全キャラ、
 		# 専用スプライトが無いキャラは代役ルールのvictoryが出る)
-		if _victory_on and Simulation.team_of(i) == state.winner:
+		if not locked_status and _victory_on and Simulation.team_of(i) == state.winner:
 			anim = "victory"
 			if cid == Chars.CHAR_MARIO and spr.sprite_frames != _mario_hat:
 				spr.sprite_frames = _mario_hat
-		if p.burn > 0:
-			anim = "burn"
 		# 向き: 移動中はvxの符号で更新、静止中は保持。
 		# ただしアタック(空中打撃)だけはネット(相手)側を向く
 		if p.vx > 0:
@@ -538,7 +539,7 @@ func _sync_sprites() -> void:
 		# 保持中はサーバーの奥行きオフセットに合わせる(頭上からずれないように)
 		ball_pos += _depth_offset(SimState._server_index(state))
 	_ball.position = ball_pos.round()
-	_flame_ball.position = ball_pos.round()
+	_special_ball.position = ball_pos.round()
 	if _cap != null:
 		var cap_i := Simulation.ent_find(state, Simulation.KIND_CAP)
 		if cap_i >= 0:
@@ -559,13 +560,16 @@ func _sync_sprites() -> void:
 	else:
 		_ball.rotation = 0.0
 		_ball.scale = Vector2.ONE * _ball_base_scale
-	# ゴーストは8tick周期で点滅。炎球は原作シートindex13/14を4tickごとに交互表示。
-	_flame_ball.visible = state.ball_special_id == Chars.SUPER_FLAME_ATTACK
-	var flame_index: int = 13 if state.tick % 8 < 4 else 14
-	_flame_ball.region_rect = Rect2((flame_index % 12) * 32,
-		(flame_index / 12) * 32, 32, 32)
-	_ball.visible = state.ball_special_id != Chars.SUPER_FLAME_ATTACK \
+	# 不可視・点滅はsim由来の状態だけから決め、専用セル番号は一か所へ集約する。
+	var ball_visible: bool = SpecialBall.is_visible(state) \
 		and (state.ball_special_id != Chars.SUPER_GHOST_BALL or state.tick % 8 < 4)
+	var uses_special_sheet: bool = SpecialBallVisual.uses_special_sheet(state)
+	_special_ball.visible = ball_visible and uses_special_sheet
+	if uses_special_sheet:
+		var special_cell: int = SpecialBallVisual.cell_for(state)
+		_special_ball.region_rect = Rect2((special_cell % 12) * 32,
+			(special_cell / 12) * 32, 32, 32)
+	_ball.visible = ball_visible and not uses_special_sheet
 	_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。

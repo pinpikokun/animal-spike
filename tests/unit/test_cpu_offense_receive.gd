@@ -57,6 +57,8 @@ func test_max_tome_uses_flame_with_thirty_five_drive_at_high_contact() -> void:
 	var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_MAX)
 	var s = w[0]
 	var cfg = w[1]
+	s.players[1].y = cfg.ball_radius
+	s.ball_y = cfg.ball_radius
 	s.players[1].drive_gauge = cfg.special_drive_cost_default
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_ABILITY1, "最強TOMEは35以上の攻撃機会で炎を選ぶ")
@@ -67,6 +69,8 @@ func test_max_tome_special_threshold_is_exactly_thirty_five() -> void:
 		var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_MAX)
 		var s = w[0]
 		var cfg = w[1]
+		s.players[1].y = cfg.ball_radius
+		s.ball_y = cfg.ball_radius
 		s.players[1].drive_gauge = row[0]
 		var input: int = SimCpu.decide(s, 1, cfg)
 		check_eq((input & Simulation.IN_ABILITY1) != 0, row[1],

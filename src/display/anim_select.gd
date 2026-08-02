@@ -3,14 +3,25 @@
 extends RefCounted
 
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
-# 優先順位: 被弾 > 横っ飛び > 固有動作 > ブロック > 空中打球 > 空中 > 接地実打
+# 優先順位: 気絶 > 泡 > 感電 > 炎上 > 被弾 > 特殊動作 > 横っ飛び > 固有動作 > ブロック > 空中打球 > 空中 > 接地実打
 #         > レシーブ構え > 移動 > 静止
 static func anim_for(p) -> String:
 	if p.stun_ticks > 0:
 		return "stun"
+	if p.bubble_ticks > 0:
+		return "bubble"
+	if p.shock_ticks > 0:
+		return "shock"
+	if p.burn > 0:
+		return "burn"
 	if p.flinch > 0:
 		return "hurt"
+	if p.special_action == Chars.SUPER_SUCTION:
+		return "fly"
+	if p.special_action == Chars.SUPER_SUBSPACE_BLOCK:
+		return "fly_hover"
 	if p.dive != 0:
 		return "dive"
 	if p.hip != 0:

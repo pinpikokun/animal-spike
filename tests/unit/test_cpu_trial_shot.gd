@@ -643,6 +643,9 @@ func test_deep_flame_keeps_dedicated_input_and_velocity() -> void:
 	var cfg = w[1]
 	var actor: int = w[2]
 	var p = s.players[actor]
+	# deepは横位置の条件。炎球検査だけ原作y<152を満たす画面上端へ置く。
+	p.y = cfg.ball_radius
+	s.ball_y = cfg.ball_radius
 	p.drive_gauge = cfg.special_drive_cost_default
 	var flame_input := Simulation.IN_ABILITY1 | Simulation.IN_DOWN
 	check(SimCpu._should_use_flame(s, actor, p, cfg, p.cpu),

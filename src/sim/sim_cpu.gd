@@ -20,6 +20,7 @@ const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -721,6 +722,14 @@ static func decide(s, idx: int, cfg) -> int:
 				input = _ready_position(s, idx, p, cfg, team, ab, deadzone)
 		else:
 			input = _decide_positioning(s, idx, p, cfg, team, prof, deadzone)
+		# DUOの吸引は通常打球圏外でも届く自己行動。味方球だけを対象にすることで
+		# サーブ、相手球への緊急守備、敵陣へのブロック判断を上書きしない。
+		if on_own_side and s.last_touch_team == team and p.on_ground == 0 \
+				and p.char_id == Chars.CHAR_DUO and _wants_special(s, idx, prof):
+			var suction_input: int = SimInput.IN_ABILITY1 \
+				| (SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT)
+			if SpecialMoves.can_start_action(s, idx, suction_input, cfg):
+				input = suction_input
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
 	var dx: int = s.ball_x - p.x
 	var hit_y: int = p.y
@@ -757,31 +766,38 @@ static func decide(s, idx: int, cfg) -> int:
 				| SimInput.IN_UP | SimInput.IN_DOWN | SimInput.IN_ACTION)
 			input |= air_input
 		else:
+			var ground_special: int = 0
+			if p.char_id >= Chars.CHAR_TOME and p.char_id <= Chars.CHAR_SEC2:
+				ground_special = _special_hit_input(s, idx, p, cfg, team, prof)
+			if ground_special != 0:
+				input = ground_special
+			else:
 			# 地上ヒットの組み立て: 素のバンプは真上に上がるだけでネットを越えない。
 			# チームにアタッカーがいてタッチ数に余裕があれば真上に上げて呼び込み、
 			# そうでなければ(=これが最後のタッチ)ネット方向キーで前トスして越す
 			# JUMPも落とす: アクション+上ジャンプは小ホップ化(トス用)のため、
 			# 位置取りで立てたジャンプ意図が地上ヒットと混ざると跳躍が化ける
-			input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
-			var receive_target: int = _receive_target_x(s, cfg, prof)
-			var receive_aim_margin: int = reach * cfg.spike_sweet_pct / 200
-			var timing_receive: bool = not frozen \
-				and _plans_just_receive(s, idx, p, cfg, team, prof) \
-				and _can_prepare_just_receive(
-					s, p, cfg, reach, receive_target, receive_aim_margin)
-			var timing_chord: bool = (input & SimInput.IN_ACTION) != 0 \
-				and (input & SimInput.IN_DOWN) != 0
-			if timing_receive and not timing_chord:
+				input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT | SimInput.IN_JUMP)
+				var receive_target: int = _receive_target_x(s, cfg, prof)
+				var receive_aim_margin: int = reach * cfg.spike_sweet_pct / 200
+				var timing_receive: bool = not frozen \
+					and _plans_just_receive(s, idx, p, cfg, team, prof) \
+					and _can_prepare_just_receive(
+						s, p, cfg, reach, receive_target, receive_aim_margin)
+				var timing_chord: bool = (input & SimInput.IN_ACTION) != 0 \
+					and (input & SimInput.IN_DOWN) != 0
+				if timing_receive and not timing_chord:
 				# 精密計画中は位置取り側が作った5tick前エッジだけを採用する。
-				input &= ~(SimInput.IN_ACTION | SimInput.IN_DOWN)
-			else:
-				input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
+					input &= ~(SimInput.IN_ACTION | SimInput.IN_DOWN)
+				else:
+					input |= SimInput.IN_ACTION | _ground_hit_keys(s, idx, cfg, team, prof)
 	if p.on_ground == 1 and (input & SimInput.IN_ACTION) \
 			and _should_yield_hit_to_cpu_mate(s, idx, cfg, team, prof):
 		input &= ~SimInput.IN_ACTION
 	# 精密ジャンプは固定xで会合予測しているため、打撃入力を出すまでは空中横移動を止める。
 	# 打撃時の横キーは配球方向なので保持する。
 	if p.on_ground == 0 and not (input & SimInput.IN_ACTION) \
+			and (input & SimInput.IN_ABILITY1) == 0 \
 			and s.last_touch_team == team and (ab & AB_ATTACK) and (ab & AB_SWEET) \
 			and _sweet_ok(s, idx, prof):
 		input &= ~(SimInput.IN_LEFT | SimInput.IN_RIGHT)
@@ -1005,7 +1021,12 @@ static func _decide_block(
 			if p.on_ground == 1:
 				return SimInput.IN_JUMP | SimInput.IN_UP
 			var forward_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-			return SimInput.IN_ACTION | forward_key
+			var block_input: int = SimInput.IN_ACTION | forward_key
+			var enhanced_input: int = block_input | SimInput.IN_ABILITY1
+			if SpecialMoves.can_request_block_enhancement(
+					s, idx, enhanced_input, cfg):
+				block_input = enhanced_input
+			return block_input
 		return _walk_to(p, post, deadzone / 2)
 	return 0
 
@@ -1136,25 +1157,50 @@ static func _ticks_until_receive_at(s, p, cfg, receive_reach: int,
 			break
 	return 181
 
-static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
+static func _wants_special(s, idx: int, prof: int) -> bool:
 	var ab: int = prof_byte(prof, P_AB)
 	if not (ab & AB_ATTACK) or not (ab & AB_SWEET):
 		return false
-	if not Chars.has_super(p.char_id, Chars.SUPER_FLAME_ATTACK):
-		return false
-	if not CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
-		return false
-	if p.on_ground == 1 or p.y >= cfg.net_top_y:
-		return false
 	return prof_byte(prof, P_TIQ) >= 3 \
 		or _derived_roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
+
+# 既存テストと調整資料が参照する炎球専用の純粋判定。CPU入力はこの判定を
+# 特例として残しつつ、他キャラは下の共通カタログ走査へ合流する。
+static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
+	if not _wants_special(s, idx, prof):
+		return false
+	var flame_input: int = SimInput.IN_ABILITY1 | SimInput.IN_DOWN
+	return SpecialMoves.select_hit_special(s, idx, flame_input, cfg) \
+		== Chars.SUPER_FLAME_ATTACK
+
+static func _special_hit_input(s, idx: int, p, cfg, team: int, prof: int) -> int:
+	# 守備の緊急接触を必殺へ置き換えない。CPUは入力候補を選ぶだけで、合法性、
+	# 費用、成立結果は人間と同じSpecialMovesへ委ねる。
+	if p.char_id < Chars.CHAR_TOME or p.char_id > Chars.CHAR_SEC2 \
+			or (s.last_touch_team >= 0 and s.last_touch_team != team) \
+			or not _wants_special(s, idx, prof):
+		return 0
+	var d: int = SimInput.IN_ABILITY1
+	var candidates: Array[int]
+	if p.on_ground == 1:
+		candidates = [d | SimInput.IN_UP, d]
+	else:
+		var forward: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+		candidates = [d | SimInput.IN_DOWN, d, d | forward]
+	for candidate: int in candidates:
+		if SpecialMoves.select_hit_special(s, idx, candidate, cfg) != 0:
+			return candidate
+	return 0
 
 # 空中ヒットの打ち分け。距離ではなく実速度候補の着地とネット通過で安全性を決める。
 static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, dy: int) -> int:
 	var ab: int = prof_byte(prof, P_AB)
 	var can_spike: bool = _attack_ok(s, idx, prof)
-	if can_spike and _should_use_flame(s, idx, p, cfg, prof):
-		return SimInput.IN_ABILITY1 | SimInput.IN_DOWN
+	if can_spike and p.char_id >= Chars.CHAR_TOME \
+			and p.char_id <= Chars.CHAR_SEC2:
+		var special_input: int = _special_hit_input(s, idx, p, cfg, team, prof)
+		if special_input != 0:
+			return special_input
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
 		* Chars.stat(p.char_id, "just_window") / (100 * 100)
 	var use_sweet: bool = (ab & AB_SWEET) and _sweet_ok(s, idx, prof)

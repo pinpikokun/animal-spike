@@ -350,25 +350,25 @@ git commit -m "feat: 吸引と真亜空間ブロックを実装"
 - Produces: `SpecialBallVisual.cell_for(s) -> int`, `uses_special_sheet(s) -> bool`
 - Consumes: `ball_sheet.png` 12列x2行、原作キャラの `shock`、`burn`、`bubble`、`fly` 等の登録済みアニメ
 
-- [ ] **Step 1: CPUが共通入力へ入る赤いテストを書く**
+- [x] **Step 1: CPUが共通入力へ入る赤いテストを書く**
 
 決定論seedで、各キャラが合法条件ならD複合入力を返し、不合法条件・34・バーンアウトでは返さないことを検査する。最終成立は人間と同じ `SpecialMoves` 判定へ通して確認する。
 
-- [ ] **Step 2: 球セルと選手アニメ優先順位を赤くする**
+- [x] **Step 2: 球セルと選手アニメ優先順位を赤くする**
 
 `ball_sheet.png` の原作セルをID・phase・tickから純粋選択し、不可視期間は通常球も特殊球も非表示にする。選手は `stun > bubble > shock > burn > normal`、特殊動作中は対応する原作アニメを選ぶ。
 
-- [ ] **Step 3: 正規入口で赤を確認する**
+- [x] **Step 3: 正規入口で赤を確認する**
 
-- [ ] **Step 4: CPU入力を既存意思決定の低優先選択肢として実装する**
+- [x] **Step 4: CPU入力を既存意思決定の低優先選択肢として実装する**
 
 サーブ、守備緊急行動、確実な通常接触を壊さず、必殺候補が合法な時だけD入力を返す。結果やコストをCPU側で直接変更しない。
 
-- [ ] **Step 5: 特殊球Spriteと状態アニメを実装する**
+- [x] **Step 5: 特殊球Spriteと状態アニメを実装する**
 
 旧 `_flame_ball` を汎用 `_special_ball` へ置換し、セル番号は `special_ball_visual.gd` だけで決める。sim状態を表示層から変更しない。
 
-- [ ] **Step 6: 全件緑、Claudeレビュー、コミット**
+- [x] **Step 6: 全件緑、Claudeレビュー、コミット**
 
 ```powershell
 .\run_tests.ps1

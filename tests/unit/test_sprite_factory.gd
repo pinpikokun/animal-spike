@@ -102,6 +102,13 @@ func test_piyo_uses_its_own_bubble_cell_and_other_originals_use_cell_twenty() ->
 		check_eq(_cell_indices(sf, "bubble"), expected,
 			"ID %d の泡セル" % char_id)
 
+func test_special_runtime_animations_exist_for_every_original_character() -> void:
+	for char_id: int in ORIGINAL_IDS:
+		var sf: SpriteFrames = SpriteFactory.build_for(char_id)
+		for anim in ["shock", "burn", "bubble", "fly", "fly_hover"]:
+			check(sf.has_animation(anim),
+				"ID %d は必殺状態アニメ %s を持つ" % [char_id, anim])
+
 func test_missing_block_prefers_generated_ground_swing_fallback() -> void:
 	var sf: SpriteFrames = SpriteFactory.build_for(-1)
 	var block_frame: Texture2D = sf.get_frame_texture("block", 0)

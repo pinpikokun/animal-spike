@@ -77,7 +77,7 @@ static func apply_ball_contact(s, actor: int, special_id: int) -> void:
 
 # 吸引は打球接触ではなく空中の自己行動。Dの新規押下時、原作範囲内に
 # 前方の対象球がある場合だけ開始し、この場で一度だけ費用を確定する。
-static func try_start_action(s, actor: int, input: int, cfg) -> bool:
+static func can_start_action(s, actor: int, input: int, cfg) -> bool:
 	if actor < 0 or actor >= s.players.size():
 		return false
 	var p = s.players[actor]
@@ -91,6 +91,12 @@ static func try_start_action(s, actor: int, input: int, cfg) -> bool:
 		return false
 	if not _suction_target_in_range(s, actor, cfg):
 		return false
+	return true
+
+static func try_start_action(s, actor: int, input: int, cfg) -> bool:
+	if not can_start_action(s, actor, input, cfg):
+		return false
+	var p = s.players[actor]
 	if not commit_cost(p, cfg):
 		return false
 	p.special_action = Chars.SUPER_SUCTION
@@ -146,6 +152,24 @@ static func try_enhance_block(s, actor: int, input: int, cfg) -> bool:
 	SpecialBall.hold(s, actor)
 	CombatResources.stop_attack_recovery(p)
 	return true
+
+# CPUが通常ブロック開始前に、開始5+接触5+強化35の全額を見込めるか確認する。
+# 入力候補の合法判定だけを行い、予約・消費・状態変更はしない。
+static func can_request_block_enhancement(s, actor: int, input: int, cfg) -> bool:
+	if actor < 0 or actor >= s.players.size() or s.ball_held_by >= 0:
+		return false
+	var p = s.players[actor]
+	if s.phase != SimStateScript.PHASE_RALLY \
+			or not Chars.has_super(p.char_id, Chars.SUPER_SUBSPACE_BLOCK) \
+			or p.special_action != 0 or p.burnout_ticks > 0:
+		return false
+	if (input & (SimInput.IN_ACTION | SimInput.IN_ABILITY1)) \
+			!= (SimInput.IN_ACTION | SimInput.IN_ABILITY1) \
+			or not _direction_matches(actor, input, Chars.SPECIAL_DIR_FORWARD):
+		return false
+	var projected_cost: int = cfg.block_start_drive_cost \
+		+ cfg.block_contact_drive_cost + CombatResources.special_drive_cost(cfg)
+	return CombatResources.available_drive(p) >= projected_cost
 
 static func _suction_target_in_range(s, actor: int, cfg) -> bool:
 	if s.serve_ball != 0 or s.serve_flight != 0 or s.ball_held_by >= 0 \
