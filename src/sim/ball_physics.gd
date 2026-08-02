@@ -8,6 +8,10 @@ const SpecialBall := preload("res://src/sim/special_ball.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
 class _BallProbe:
+	class _PlayerProbe:
+		var x: int = 0
+
+	var players: Array = []
 	var ball_x: int = 0
 	var ball_y: int = 0
 	var ball_vx: int = 0
@@ -48,6 +52,7 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 	probe.ball_attack_kind = s.ball_attack_kind
 	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
+	_copy_player_positions(probe, s)
 	_copy_special_state(probe, s)
 	probe.touches = s.touches
 	probe.serve_flight = s.serve_flight
@@ -81,6 +86,7 @@ static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
 	probe.ball_attack_kind = s.ball_attack_kind
 	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
+	_copy_player_positions(probe, s)
 	_copy_special_state(probe, s)
 	probe.touches = s.touches
 	probe.serve_flight = s.serve_flight
@@ -122,15 +128,28 @@ static func _copy_special_state(target, source) -> void:
 	target.ball_special_origin_vx = source.ball_special_origin_vx
 	target.ball_held_by = source.ball_held_by
 
+static func _copy_player_positions(target, source) -> void:
+	target.players.clear()
+	for source_player in source.players:
+		var probe := _BallProbe._PlayerProbe.new()
+		probe.x = source_player.x
+		target.players.append(probe)
+
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
-	if (s.ball_special_id != 0 or s.ball_held_by >= 0) \
-			and SpecialBall.step(s, cfg):
+	if s.ball_held_by >= 0:
+		SpecialBall.step(s, cfg)
 		return
 	var prev_x: int = s.ball_x
 	var prev_y: int = s.ball_y
-	s.ball_vy += cfg.gravity
-	s.ball_x += s.ball_vx
-	s.ball_y += s.ball_vy
+	# 通常球は最頻経路。特殊球用boolを毎tick作らず、性能回帰を避ける。
+	if s.ball_special_id == 0:
+		s.ball_vy += cfg.gravity
+		s.ball_x += s.ball_vx
+		s.ball_y += s.ball_vy
+	elif not SpecialBall.step(s, cfg):
+		s.ball_vy += cfg.gravity
+		s.ball_x += s.ball_vx
+		s.ball_y += s.ball_vy
 	# 回転は横の勢いに比例して累積する(真上のトスはほぼ無回転、前へ飛ぶほど回る)
 	s.ball_spin += s.ball_vx
 	var left: int = cfg.ball_radius

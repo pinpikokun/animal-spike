@@ -72,7 +72,7 @@ func test_visibility_contact_and_minimal_step_are_derived_from_one_id() -> void:
 	SpecialBall.set_special(s, Chars.SUPER_GHOST_BALL, 0)
 	check(SpecialBall.is_visible(s), "ゴーストは点滅制御の対象だが存在する")
 	check(SpecialBall.is_contactable(s), "ゴーストは接触可能")
-	check(not SpecialBall.step(s, cfg), "ゴーストはTask2では通常積分を継続")
+	check(SpecialBall.step(s, cfg), "ゴーストは専用軌道が通常積分を消費")
 	SpecialBall.set_special(s, Chars.SUPER_DISAPPEARING_BALL, 0)
 	check(not SpecialBall.is_visible(s), "消える球は不可視")
 	check(not SpecialBall.is_contactable(s), "消える球は接触不能")
