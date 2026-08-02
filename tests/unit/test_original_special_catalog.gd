@@ -27,7 +27,8 @@ func test_catalog_has_all_fourteen_effects_and_required_fields() -> void:
 		check(entry.activations.size() > 0, "必殺技には一つ以上の発動経路がある")
 		for activation in entry.activations:
 			for field in ["contact", "direction", "requires_ability",
-					"original_height_y", "friendly_ball", "requires_apex"]:
+					"original_height_y", "friendly_ball", "requires_apex",
+					"requires_normal_ball"]:
 				check(activation.has(field), "発動経路に%sがある" % field)
 
 func test_approved_damage_values_are_fixed() -> void:

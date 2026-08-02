@@ -10,6 +10,7 @@ const CombatResources := preload("res://src/sim/combat_resources.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 const SpecialBall := preload("res://src/sim/special_ball.gd")
+const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -98,7 +99,7 @@ static func preview_air_spike_velocity(
 	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE \
 		and s.serve_tossed == 1
-	var special: int = _special_for_input(p, input, cfg)
+	var special: int = SpecialMoves.select_hit_special(s, actor, input, cfg)
 	var intent: Array[int] = _classify_intent(
 		p.on_ground, input, d2, cfg.player_reach, serve_strike)
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
@@ -298,27 +299,6 @@ static func reach_for_intent(char_id: int, base_reach: int, intent_kind: int) ->
 		return base_reach * 85 / 100
 	return base_reach
 
-static func _special_for_input(p, input: int, cfg) -> int:
-	if p.burnout_ticks > 0:
-		return 0
-	if not (input & IN_ABILITY1):
-		return 0
-	for super_id in Chars.SUPER_CATALOG:
-		if not Chars.has_super(p.char_id, super_id):
-			continue
-		var entry: Dictionary = Chars.super_def(super_id)
-		if not CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
-			continue
-		var condition: int = int(entry.condition)
-		if condition == Chars.CONDITION_GROUND_UP_ABILITY \
-				and p.on_ground == 1 and (input & IN_UP) and not (input & IN_DOWN):
-			return super_id
-		if condition == Chars.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET \
-				and p.on_ground == 0 and (input & IN_DOWN) and not (input & IN_UP) \
-				and p.y < cfg.net_top_y:
-			return super_id
-	return 0
-
 # 同一tickのヒットは最大1回。リーチ内の候補から最も近い1人を選ぶ。
 # 旧実装のインデックス後勝ちはネット際で右チームが常に競り勝ち、
 # 負けた側も硬直だけ食らう不公平があった。
@@ -343,7 +323,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 		var p = s.players[i]
 		var force_dive_receive: bool = p.dive != 0 and p.dive_contact_ticks > 0
 		if not force_dive_receive and not (input & IN_ACTION) \
-				and _special_for_input(p, input, cfg) == 0:
+				and SpecialMoves.select_hit_special(s, i, input, cfg) == 0:
 			continue
 		if not force_dive_receive and _is_active_block(s, i, input, cfg):
 			continue
@@ -496,7 +476,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var dir: int = SimStateScript._dir_of_team(team)
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	# 横っ飛びは開始済みの一行動。受付中の追加入力で必殺技へ化けさせない。
-	var special: int = 0 if force_dive_receive else _special_for_input(p, input, cfg)
+	var special: int = 0 if force_dive_receive \
+		else SpecialMoves.select_hit_special(s, i, input, cfg)
+	# 接触が確定したこの入口で先に全額を払う。万一支払いに失敗した場合は
+	# 通常打球へ戻し、特殊球状態だけが残る半成立を作らない。
+	if special != 0 and not SpecialMoves.commit_cost(p, cfg):
+		special = 0
 	var resolved_action_kind: int = PossessionTracker.ACTION_DIVE \
 		if force_dive_receive else PossessionTracker.ACTION_PASSIVE
 	if special != 0:
@@ -542,7 +527,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var sweet: bool = d2 >= 0 and d2 <= sweet_r * sweet_r
 	if special != 0:
 		sweet = true  # 必殺技は芯位置によらず、成立すれば常に同じ技になる
-	if p.burnout_ticks > 0:
+	if p.burnout_ticks > 0 and special == 0:
 		sweet = false
 	if force_dive_receive:
 		sweet = false
@@ -656,9 +641,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
 	SpecialBall.clear_special(s)
-	if special != 0:
-		CombatResources.spend_committed(
-			p, CombatResources.special_drive_cost(cfg), cfg)
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
 	var aim_pct: int = 100
 	if mangled:
@@ -703,11 +685,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		if is_ground_toss and not returns_to_opponent and toss_good:
 			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 				toss_target_x(team, ground_toss_hdir, cfg), cfg)
-		if special == Chars.SUPER_GHOST_BALL:
-			SpecialBall.set_special(s, special, i, s.ball_vx)
-			var ghost_def: Dictionary = Chars.super_def(special)
-			s.ball_health_damage = int(ghost_def.power)
-			s.ball_defense_class = int(ghost_def.defense_class)
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
 		# 反発なので入射速度を符号反転して加える。RHSは代入前の入射値を読む
@@ -762,29 +739,20 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.hit_freeze = maxi(s.hit_freeze, 4)
 		s.ball_vx = air_spike_velocity.x
 		s.ball_vy = air_spike_velocity.y
-		if special == Chars.SUPER_FLAME_ATTACK:
-			SpecialBall.set_special(s, special, i, s.ball_vx)
-		elif incoming_flame:
+		if incoming_flame:
 			# 燃える球をアタックで打ち返した時だけ、効果とパワーを通常球へ戻す。
 			SpecialBall.clear_special(s)
 			s.ball_power = 0
 		if special == 0 and not is_attack_return:
 			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
 				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
-		if special != 0:
-			var special_def: Dictionary = Chars.super_def(special)
-			s.ball_health_damage = int(special_def.power)
-			s.ball_defense_class = int(special_def.defense_class)
-		else:
+		if special == 0:
 			s.ball_health_damage = cfg.power_health_damage_for_rank(
 				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER))
 			s.ball_defense_class = Chars.DEFENSE_NONE
 		if not is_attack_return:
 			var attack_id: int = _begin_ball_attack(s, i)
-			if special != 0:
-				CombatResources.start_attack_recovery(
-					p, cfg.special_recovery_delay_ticks, cfg)
-			elif drive_just_attack:
+			if drive_just_attack:
 				CombatResources.start_attack_recovery(
 					p, cfg.just_attack_recovery_delay_ticks, cfg)
 			elif BallPhysics.normal_attack_reaches_opponent_playable(
@@ -809,6 +777,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_vx = toss_aim_vx(
 				s.ball_x, s.ball_y, avy, toss_target_x(team, hdir, cfg), cfg)
 		s.ball_vy = avy
+	if special != 0:
+		SpecialMoves.apply_ball_contact(s, i, special)
+		CombatResources.start_attack_recovery(
+			p, cfg.special_recovery_delay_ticks, cfg)
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if not serve_strike:

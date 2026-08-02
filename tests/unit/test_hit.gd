@@ -307,9 +307,10 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	p.char_id = Chars.CHAR_TOME
 	p.drive_gauge = cfg.drive_gauge_max
 	p.on_ground = 0
-	p.y = cfg.net_top_y - FP.from_int(1)
+	var flame_rhs: int = (291 - 152) * (cfg.floor_y - cfg.net_top_y)
+	p.y = cfg.floor_y - flame_rhs / 33 - 1
 	s.ball_x = p.x + FP.from_int(2)
-	s.ball_y = p.y - FP.from_int(2)
+	s.ball_y = p.y
 	Simulation.step(s, [Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_power, 1, "高所の下+Dはパワーボール")
 	check_eq(s.ball_special_id, Chars.SUPER_FLAME_ATTACK,
@@ -329,9 +330,10 @@ func test_flame_super_below_35_does_not_start_or_partially_spend() -> void:
 	p.char_id = Chars.CHAR_TOME
 	p.drive_gauge = cfg.special_drive_cost_default - 1
 	p.on_ground = 0
-	p.y = cfg.net_top_y - FP.from_int(1)
+	var flame_rhs: int = (291 - 152) * (cfg.floor_y - cfg.net_top_y)
+	p.y = cfg.floor_y - flame_rhs / 33 - 1
 	s.ball_x = p.x + FP.from_int(2)
-	s.ball_y = p.y - FP.from_int(2)
+	s.ball_y = p.y
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
 	check_eq(s.ball_special_id, 0, "35未満では必殺技にならない")
@@ -346,28 +348,30 @@ func test_flame_super_at_zero_drive_falls_back_to_normal_spike() -> void:
 	p.char_id = Chars.CHAR_TOME
 	p.drive_gauge = 0
 	p.on_ground = 0
-	p.y = cfg.net_top_y - FP.from_int(1)
+	var flame_rhs: int = (291 - 152) * (cfg.floor_y - cfg.net_top_y)
+	p.y = cfg.floor_y - flame_rhs / 33 - 1
 	s.ball_x = p.x + FP.from_int(2)
-	s.ball_y = p.y - FP.from_int(2)
+	s.ball_y = p.y
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
 	check_eq(s.ball_special_id, 0, "ゲージ0では必殺技にならない")
 	check_eq(s.ball_health_damage, 25, "ドライブ不足なら通常スパイクへフォールバック")
 
-func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
+func test_tome_flame_input_at_original_height_boundary_stays_normal_spike() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
 	p.char_id = Chars.CHAR_TOME
 	p.on_ground = 0
-	p.y = cfg.net_top_y
+	var flame_rhs: int = (291 - 152) * (cfg.floor_y - cfg.net_top_y)
+	p.y = cfg.floor_y - flame_rhs / 33
 	s.ball_x = p.x + FP.from_int(30)
 	s.ball_y = p.y
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN,
 		0, 0, 0], cfg)
 	check_eq(s.touches, 1, "高度不足でも通常アタック入力は維持")
-	check_eq(s.ball_special_id, 0, "ネット上端以下では炎にならない")
+	check_eq(s.ball_special_id, 0, "原作高さ境界同値では炎にならない")
 	check_eq(s.ball_power, 0, "スイート外の通常アタックのまま")
 
 func test_non_tome_ability_input_does_not_hit() -> void:

@@ -117,7 +117,8 @@ func test_special_starts_90_delay_without_normal_gain() -> void:
 	p.char_id = Chars.CHAR_TOME
 	p.drive_gauge = 100
 	p.on_ground = 0
-	p.y = cfg.net_top_y - FP.from_int(1)
+	var flame_rhs: int = (291 - 152) * (cfg.floor_y - cfg.net_top_y)
+	p.y = cfg.floor_y - flame_rhs / 33 - 1
 	s.ball_x = p.x
 	s.ball_y = p.y
 	HitResolver._apply_hit(s, 0, cfg,

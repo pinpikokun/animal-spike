@@ -8,6 +8,7 @@ const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
@@ -142,8 +143,8 @@ func test_burnout_seals_special_inputs() -> void:
 	var p = s.players[1]
 	p.burnout_ticks = cfg.burnout_recovery_ticks
 	p.char_id = Chars.CHAR_TOME
-	check_eq(HitResolver._special_for_input(
-		p, Simulation.IN_ABILITY1 | Simulation.IN_UP, cfg), 0,
+	check_eq(SpecialMoves.select_hit_special(
+		s, 1, Simulation.IN_ABILITY1 | Simulation.IN_UP, cfg), 0,
 		"バーンアウト中は必殺技入力を無効化")
 	p.char_id = Chars.CHAR_MARIO
 	p.has_hat = 1

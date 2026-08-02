@@ -93,57 +93,57 @@ const SPECIAL_DIR_AUTO := SpecialDirection.SPECIAL_DIR_AUTO
 const ACT_GROUND_UP := {
 	"contact": SPECIAL_CONTACT_GROUND_HIT, "direction": SPECIAL_DIR_UP,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 1,
 }
 const ACT_GROUND_NEUTRAL := {
 	"contact": SPECIAL_CONTACT_GROUND_HIT, "direction": SPECIAL_DIR_NEUTRAL,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 1,
 }
 const ACT_AIR_DOWN_152 := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
 	"requires_ability": 1, "original_height_y": 152, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_AIR_DOWN_160 := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
 	"requires_ability": 1, "original_height_y": 160, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_AIR_DOWN_ANY := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 1,
 }
 const ACT_AIR_DOWN_192 := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
 	"requires_ability": 1, "original_height_y": 192, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_AIR_FORWARD_FRIENDLY := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_FORWARD,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 1,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_AIR_NEUTRAL_APEX := {
 	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_NEUTRAL,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 1,
+	"requires_apex": 1, "requires_normal_ball": 0,
 }
 const ACT_AIR_BACK_ACTION := {
 	"contact": SPECIAL_CONTACT_AIR_ACTION, "direction": SPECIAL_DIR_BACK,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_BLOCK_FORWARD := {
 	"contact": SPECIAL_CONTACT_BLOCK, "direction": SPECIAL_DIR_FORWARD,
 	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 const ACT_AUTO_AIR_ATTACK := {
 	"contact": SPECIAL_CONTACT_AUTO_AIR_ATTACK, "direction": SPECIAL_DIR_AUTO,
 	"requires_ability": 0, "original_height_y": -1, "friendly_ball": 0,
-	"requires_apex": 0,
+	"requires_apex": 0, "requires_normal_ball": 0,
 }
 
 const GHOST_BALL_DEF := {
