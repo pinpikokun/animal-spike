@@ -242,11 +242,18 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	var dive_edges: Array[bool] = action_edges.duplicate()
 	while dive_edges.size() < state.players.size():
 		dive_edges.append(false)
-	# 現行ID 9以降だけが自己特殊行動を持つ。標準4キャラの熱い経路は、
-	# 4人分のIDをまとめた一回のビット判定で特殊行動処理を短絡する。
-	var action_roster: bool = ((state.players[0].char_id \
-		| state.players[1].char_id | state.players[2].char_id \
-		| state.players[3].char_id) & 8) != 0
+	# special_actionを使う吸い込み(DUO)か亜空間保持(ALIEN)がいる時だけ専用処理へ入る。
+	# UMAのリフレインは球側状態だけで進むため、この経路には含めない。
+	# キャラIDのビット配置へ依存させず、将来のID追加でも誤判定しない。
+	var action_roster: bool = \
+		state.players[0].char_id == Chars.CHAR_DUO \
+		or state.players[0].char_id == Chars.CHAR_SEC1 \
+		or state.players[1].char_id == Chars.CHAR_DUO \
+		or state.players[1].char_id == Chars.CHAR_SEC1 \
+		or state.players[2].char_id == Chars.CHAR_DUO \
+		or state.players[2].char_id == Chars.CHAR_SEC1 \
+		or state.players[3].char_id == Chars.CHAR_DUO \
+		or state.players[3].char_id == Chars.CHAR_SEC1
 	if status_lock_mask == 0 and not action_roster:
 		# 既存キャラだけの通常試合は、追加判定を選手ループへ持ち込まない。
 		for i in state.players.size():
@@ -262,7 +269,8 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	elif status_lock_mask == 0:
 		for i in state.players.size():
 			var p = state.players[i]
-			var special_actor: bool = p.char_id >= Chars.CHAR_DUO
+			var special_actor: bool = p.char_id == Chars.CHAR_DUO \
+				or p.char_id == Chars.CHAR_SEC1
 			if special_actor:
 				# 前tickのラッチを読むため、実レベルの保存は行動処理の後。
 				if p.char_id == Chars.CHAR_DUO:
@@ -291,8 +299,8 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	else:
 		for i in state.players.size():
 			var p = state.players[i]
-			var special_actor: bool = action_roster \
-				and p.char_id >= Chars.CHAR_DUO
+			var special_actor: bool = action_roster and (\
+				p.char_id == Chars.CHAR_DUO or p.char_id == Chars.CHAR_SEC1)
 			if special_actor and (status_lock_mask & (1 << i)) == 0:
 				if p.char_id == Chars.CHAR_DUO:
 					SpecialMoves.try_start_action(
@@ -781,6 +789,7 @@ static func _award_point(s, team: int, cfg) -> void:
 			CombatResources.recover_health_stun(
 				p, SimStateScript.STUN_END_RALLY)
 		CombatResources.stop_attack_recovery(p)
+		p.burn = 0
 		p.shock_ticks = 0
 		p.bubble_ticks = 0
 		p.special_action = 0

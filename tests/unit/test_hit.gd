@@ -29,6 +29,10 @@ func _rally_world() -> Array:
 	s.players[3].x = cfg.net_x + FP.from_int(46)
 	return [s, cfg]
 
+func _contact_y_clear_of_floor(cfg) -> int:
+	# 床判定線より10px上へ離し、選手リーチ内の接触だけを検査する。
+	return cfg.floor_y - cfg.ball_radius - FP.from_int(10)
+
 func _config_with_standard_toss_speed(speed_px_s: int):
 	var source := FileAccess.open("res://data/rules.json", FileAccess.READ)
 	var raw: Dictionary = JSON.parse_string(source.get_as_text())
@@ -380,10 +384,11 @@ func test_non_tome_ability_input_does_not_hit() -> void:
 	var cfg = w[1]
 	s.players[0].char_id = Chars.CHAR_FOX
 	s.ball_x = s.players[0].x + FP.from_int(2)
-	s.ball_y = cfg.floor_y - FP.from_int(2)
+	s.ball_y = _contact_y_clear_of_floor(cfg)
 	Simulation.step(s, [Simulation.IN_ABILITY1 | Simulation.IN_UP, 0, 0, 0], cfg)
 	check_eq(s.touches, 0, "必殺技未定義キャラのDは何も起こさない")
 	check_eq(s.ball_special_id, 0, "必殺技未定義キャラはゴースト化しない")
+	check_eq(s.score_l + s.score_r, 0, "床得点ではなく不成立入力を検査する")
 
 func test_tome_ability_input_out_of_range_does_nothing() -> void:
 	var w := _rally_world()
@@ -408,7 +413,7 @@ func test_flame_receive_deals_catalog_fixed_health_damage() -> void:
 	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_y = _contact_y_clear_of_floor(cfg)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, FP.from_int(30) * FP.from_int(30))
 	check_eq(s.players[0].health, 84,
@@ -430,7 +435,7 @@ func test_just_receive_cancels_flame_health_damage_but_not_burn() -> void:
 	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)
-	s.ball_y = cfg.floor_y - FP.from_int(2)
+	s.ball_y = _contact_y_clear_of_floor(cfg)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.players[0].health, 100,
 		"炎球も芯でレシーブすれば体力損害0")
@@ -472,8 +477,9 @@ func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
 	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
-	s.ball_x = teammate.x + FP.from_int(30)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	# 床から離した分だけ横距離を詰め、楕円リーチ内の味方接触を保つ。
+	s.ball_x = teammate.x + FP.from_int(10)
+	s.ball_y = _contact_y_clear_of_floor(cfg)
 	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
 	check_eq(teammate.health, 60, "味方の炎球でもカタログ固定40ダメージ")
 	check_eq(teammate.burn, cfg.burn_stun_ticks, "味方の炎球でも90tick行動不能")

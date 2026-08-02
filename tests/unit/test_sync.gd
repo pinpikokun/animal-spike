@@ -5,6 +5,8 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const BallPhysics := preload("res://src/sim/ball_physics.gd")
+const SpecialBall := preload("res://src/sim/special_ball.gd")
 
 const TICKS := 3600
 
@@ -306,3 +308,126 @@ func test_endgame_reaches_game_over_deterministically() -> void:
 			mismatch = i
 			break
 	check_eq(mismatch, -1, "終盤戦デシンクなし(検出indexは-1)")
+
+func _special_world(special_id: int) -> Array:
+	var cfg := SimConfig.new()
+	var s := SimState.new()
+	Simulation.reset_match(s, cfg, 0,
+		[Chars.CHAR_TOME, Chars.CHAR_DUO, Chars.CHAR_SEC1, Chars.CHAR_SEC2], 3, 5)
+	s.phase = SimState.PHASE_RALLY
+	s.serve_ball = 0
+	s.serve_flight = 0
+	s.ball_x = cfg.court_width / 4
+	s.ball_y = cfg.net_top_y - FP.from_int(100)
+	s.ball_vx = FP.from_int(180) / cfg.tick_rate
+	s.ball_vy = -FP.from_int(60) / cfg.tick_rate
+	s.last_touch_team = 0
+	SpecialBall.set_special(s, special_id, 0, s.ball_vx)
+	if special_id == Chars.SUPER_DISAPPEARING_BALL:
+		s.ball_special_phase = 1
+		s.ball_special_ticks = SpecialBall.original_ticks(10, cfg)
+	elif special_id == Chars.SUPER_REFRAIN_ATTACK:
+		s.ball_special_phase = 1
+		s.ball_special_ticks = 3
+	return [s, cfg]
+
+func test_every_special_state_snapshot_replays_each_tick_hash_exactly() -> void:
+	for special_id in Chars.SUPER_CATALOG:
+		var w := _special_world(special_id)
+		var a = w[0]
+		var cfg = w[1]
+		var b := SimState.new()
+		b.load_int_array(a.to_int_array())
+		for tick in 24:
+			BallPhysics._step_ball(a, cfg)
+			BallPhysics._step_ball(b, cfg)
+			check_eq(a.state_hash(), b.state_hash(),
+				"特殊状態の途中復元: id=%d tick=%d" % [special_id, tick])
+	var held := _special_world(Chars.SUPER_SUBSPACE_BLOCK)
+	var held_a = held[0]
+	var held_cfg = held[1]
+	held_a.players[2].special_action = Chars.SUPER_SUBSPACE_BLOCK
+	held_a.players[2].special_action_ticks = 7
+	held_a.players[2].ability_latch = 1
+	held_a.ball_held_by = 2
+	var held_b := SimState.new()
+	held_b.load_int_array(held_a.to_int_array())
+	for tick in 12:
+		Simulation.step(held_a, [0, 0, 0, 0], held_cfg)
+		Simulation.step(held_b, [0, 0, 0, 0], held_cfg)
+		check_eq(held_a.state_hash(), held_b.state_hash(),
+			"保持・Dラッチの途中復元: tick=%d" % tick)
+
+func _actual_first_floor_x(source, cfg, max_ticks: int = 600) -> int:
+	var probe := SimState.new()
+	probe.load_int_array(source.to_int_array())
+	var floor_limit: int = cfg.floor_y - cfg.ball_radius
+	for _tick in max_ticks:
+		BallPhysics._step_ball(probe, cfg)
+		if probe.ball_y >= floor_limit and probe.ball_vy > 0:
+			return probe.ball_x
+	return -1
+
+func test_special_floor_prediction_matches_manual_production_steps_and_preserves_source() -> void:
+	for special_id in [Chars.SUPER_GHOST_BALL, Chars.SUPER_DISAPPEARING_BALL,
+			Chars.SUPER_FEINT_ATTACK, Chars.SUPER_GUST_BALL,
+			Chars.SUPER_SNAKE_BALL, Chars.SUPER_TRANSFER_BALL]:
+		var w := _special_world(special_id)
+		var s = w[0]
+		var cfg = w[1]
+		var before: Array[int] = s.to_int_array()
+		check_eq(BallPhysics.predict_first_floor_x(s, cfg, 600),
+			_actual_first_floor_x(s, cfg, 600),
+			"特殊球の落下予測は本番物理と一致: %d" % special_id)
+		check_eq(s.to_int_array(), before, "特殊球予測は状態不変: %d" % special_id)
+	var held := _special_world(Chars.SUPER_SUBSPACE_BLOCK)
+	held[0].ball_held_by = 2
+	var held_before: Array[int] = held[0].to_int_array()
+	check_eq(BallPhysics.predict_first_floor_x(held[0], held[1], 20), -1,
+		"保持球は落下しない")
+	check_eq(held[0].to_int_array(), held_before, "保持球予測も状態不変")
+
+func _dirty_special_state(s) -> void:
+	SpecialBall.set_special(s, Chars.SUPER_THUNDER_BALL, 0, 123)
+	s.ball_special_phase = 2
+	s.ball_special_ticks = 9
+	s.ball_held_by = 0
+	for p in s.players:
+		p.burn = 7
+		p.shock_ticks = 8
+		p.bubble_ticks = 9
+		p.special_action = Chars.SUPER_SUCTION
+		p.special_action_ticks = 10
+		p.ability_latch = 1
+
+func _check_special_state_cleared(s, label: String) -> void:
+	check_eq(s.ball_special_id, 0, label + "で特殊球解除")
+	check_eq(s.ball_special_phase, 0, label + "で特殊phase解除")
+	check_eq(s.ball_special_ticks, 0, label + "で特殊tick解除")
+	check_eq(s.ball_special_owner_idx, -1, label + "で所有者解除")
+	check_eq(s.ball_special_origin_vx, 0, label + "で元速度解除")
+	check_eq(s.ball_held_by, -1, label + "で保持解除")
+	for i in s.players.size():
+		var p = s.players[i]
+		check_eq(p.burn, 0, label + "で炎上解除: %d" % i)
+		check_eq(p.shock_ticks, 0, label + "で感電解除: %d" % i)
+		check_eq(p.bubble_ticks, 0, label + "で泡解除: %d" % i)
+		check_eq(p.special_action, 0, label + "で特殊行動解除: %d" % i)
+		check_eq(p.special_action_ticks, 0, label + "で特殊行動tick解除: %d" % i)
+		check_eq(p.ability_latch, 0, label + "でDラッチ解除: %d" % i)
+
+func test_score_rally_reset_and_rematch_clear_every_special_state() -> void:
+	var cfg := SimConfig.new()
+	var s := SimState.new()
+	var roster := [Chars.CHAR_TOME, Chars.CHAR_DUO, Chars.CHAR_SEC1, Chars.CHAR_SEC2]
+	Simulation.reset_match(s, cfg, 0, roster, 1, 2)
+	s.phase = SimState.PHASE_RALLY
+	_dirty_special_state(s)
+	Simulation._award_point(s, 0, cfg)
+	_check_special_state_cleared(s, "得点直後")
+	_dirty_special_state(s)
+	Simulation.reset_rally(s, cfg, 1)
+	_check_special_state_cleared(s, "ラリー再開")
+	_dirty_special_state(s)
+	Simulation.reset_match(s, cfg, 0, roster, 3, 4)
+	_check_special_state_cleared(s, "再試合")

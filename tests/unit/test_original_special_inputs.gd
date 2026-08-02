@@ -11,6 +11,24 @@ const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 const D := SimInput.IN_ABILITY1
 
+const HIT_CASES: Array[Array] = [
+	[Chars.CHAR_TOME, true, D | SimInput.IN_UP, Chars.SUPER_GHOST_BALL, -1, false],
+	[Chars.CHAR_TOME, false, D | SimInput.IN_DOWN, Chars.SUPER_FLAME_ATTACK, 152, false],
+	[Chars.CHAR_HITO, true, D | SimInput.IN_UP, Chars.SUPER_DISAPPEARING_BALL, -1, false],
+	[Chars.CHAR_HITO, true, D, Chars.SUPER_FEINT_ATTACK, -1, false],
+	[Chars.CHAR_HITO, false, D | SimInput.IN_DOWN, Chars.SUPER_DISAPPEARING_BALL, 160, false],
+	[Chars.CHAR_PIYO, true, D | SimInput.IN_UP, Chars.SUPER_GUST_BALL, -1, false],
+	[Chars.CHAR_PIYO, false, D | SimInput.IN_RIGHT, Chars.SUPER_GUST_BALL, -1, true],
+	[Chars.CHAR_UME, true, D | SimInput.IN_UP, Chars.SUPER_SNAKE_BALL, -1, false],
+	[Chars.CHAR_UME, true, D, Chars.SUPER_BUMBLE_BALL, -1, false],
+	[Chars.CHAR_UME, false, D | SimInput.IN_RIGHT, Chars.SUPER_BUMBLE_BALL, -1, true],
+	[Chars.CHAR_CARBY, true, D | SimInput.IN_UP, Chars.SUPER_GHOST_BALL, -1, false],
+	[Chars.CHAR_CARBY, false, D, Chars.SUPER_THUNDER_BALL, -1, false],
+	[Chars.CHAR_DUO, false, D | SimInput.IN_DOWN, Chars.SUPER_BUBBLE_PACK, 160, false],
+	[Chars.CHAR_SEC1, false, D | SimInput.IN_DOWN, Chars.SUPER_TRANSFER_BALL, -1, false],
+	[Chars.CHAR_SEC2, false, D | SimInput.IN_DOWN, Chars.SUPER_REFRAIN_ATTACK, 192, false],
+]
+
 func _world(char_id: int, ground: bool = true) -> Array:
 	var cfg := SimConfig.new()
 	var s := SimState.new()
@@ -36,24 +54,7 @@ func _set_original_height(s, cfg, original_y: int) -> void:
 	s.players[0].y = s.ball_y
 
 func test_all_fifteen_hit_activation_routes_select_the_approved_effect() -> void:
-	var cases := [
-		[Chars.CHAR_TOME, true, D | SimInput.IN_UP, Chars.SUPER_GHOST_BALL, -1, false],
-		[Chars.CHAR_TOME, false, D | SimInput.IN_DOWN, Chars.SUPER_FLAME_ATTACK, 152, false],
-		[Chars.CHAR_HITO, true, D | SimInput.IN_UP, Chars.SUPER_DISAPPEARING_BALL, -1, false],
-		[Chars.CHAR_HITO, true, D, Chars.SUPER_FEINT_ATTACK, -1, false],
-		[Chars.CHAR_HITO, false, D | SimInput.IN_DOWN, Chars.SUPER_DISAPPEARING_BALL, 160, false],
-		[Chars.CHAR_PIYO, true, D | SimInput.IN_UP, Chars.SUPER_GUST_BALL, -1, false],
-		[Chars.CHAR_PIYO, false, D | SimInput.IN_RIGHT, Chars.SUPER_GUST_BALL, -1, true],
-		[Chars.CHAR_UME, true, D | SimInput.IN_UP, Chars.SUPER_SNAKE_BALL, -1, false],
-		[Chars.CHAR_UME, true, D, Chars.SUPER_BUMBLE_BALL, -1, false],
-		[Chars.CHAR_UME, false, D | SimInput.IN_RIGHT, Chars.SUPER_BUMBLE_BALL, -1, true],
-		[Chars.CHAR_CARBY, true, D | SimInput.IN_UP, Chars.SUPER_GHOST_BALL, -1, false],
-		[Chars.CHAR_CARBY, false, D, Chars.SUPER_THUNDER_BALL, -1, false],
-		[Chars.CHAR_DUO, false, D | SimInput.IN_DOWN, Chars.SUPER_BUBBLE_PACK, 160, false],
-		[Chars.CHAR_SEC1, false, D | SimInput.IN_DOWN, Chars.SUPER_TRANSFER_BALL, -1, false],
-		[Chars.CHAR_SEC2, false, D | SimInput.IN_DOWN, Chars.SUPER_REFRAIN_ATTACK, 192, false],
-	]
-	for case in cases:
+	for case in HIT_CASES:
 		var w := _world(case[0], case[1]); var s = w[0]; var cfg = w[1]
 		if case[4] >= 0:
 			_set_original_height(s, cfg, case[4])
@@ -120,17 +121,7 @@ func test_height_boundary_friendly_ball_and_apex_are_strict() -> void:
 		Chars.SUPER_THUNDER_BALL, "頂点窓内は成立")
 
 func test_each_hit_effect_commits_once_on_actual_contact() -> void:
-	var cases := [
-		[Chars.CHAR_TOME, true, D | SimInput.IN_UP, Chars.SUPER_GHOST_BALL, -1, false],
-		[Chars.CHAR_HITO, true, D, Chars.SUPER_FEINT_ATTACK, -1, false],
-		[Chars.CHAR_PIYO, false, D | SimInput.IN_RIGHT, Chars.SUPER_GUST_BALL, -1, true],
-		[Chars.CHAR_UME, false, D | SimInput.IN_RIGHT, Chars.SUPER_BUMBLE_BALL, -1, true],
-		[Chars.CHAR_CARBY, false, D, Chars.SUPER_THUNDER_BALL, -1, false],
-		[Chars.CHAR_DUO, false, D | SimInput.IN_DOWN, Chars.SUPER_BUBBLE_PACK, 160, false],
-		[Chars.CHAR_SEC1, false, D | SimInput.IN_DOWN, Chars.SUPER_TRANSFER_BALL, -1, false],
-		[Chars.CHAR_SEC2, false, D | SimInput.IN_DOWN, Chars.SUPER_REFRAIN_ATTACK, 192, false],
-	]
-	for case in cases:
+	for case in HIT_CASES:
 		var w := _world(case[0], case[1]); var s = w[0]; var cfg = w[1]
 		if case[4] >= 0:
 			_set_original_height(s, cfg, case[4])

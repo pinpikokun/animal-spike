@@ -58,3 +58,14 @@ func test_all_state_fields_are_int() -> void:
 		for p in e.get_property_list():
 			if (p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0:
 				check_eq(p["type"], TYPE_INT, "ent." + str(p["name"]) + " はintで宣言する(直列化規約)")
+
+func test_special_state_contract_fields_are_all_serialized_ints() -> void:
+	var s = SimState.new()
+	var state_fields := _int_props(s)
+	for field in ["ball_special_id", "ball_special_phase", "ball_special_ticks",
+			"ball_special_owner_idx", "ball_special_origin_vx", "ball_held_by"]:
+		check(field in state_fields, "特殊球同期欄: " + field)
+	var player_fields := _int_props(s.players[0])
+	for field in ["ability_latch", "shock_ticks", "bubble_ticks",
+			"special_action", "special_action_ticks"]:
+		check(field in player_fields, "選手必殺同期欄: " + field)

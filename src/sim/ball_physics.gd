@@ -10,6 +10,7 @@ const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半
 class _BallProbe:
 	class _PlayerProbe:
 		var x: int = 0
+		var y: int = 0
 
 	var players: Array = []
 	var ball_x: int = 0
@@ -133,6 +134,7 @@ static func _copy_player_positions(target, source) -> void:
 	for source_player in source.players:
 		var probe := _BallProbe._PlayerProbe.new()
 		probe.x = source_player.x
+		probe.y = source_player.y
 		target.players.append(probe)
 
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:

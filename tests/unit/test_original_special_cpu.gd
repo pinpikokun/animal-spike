@@ -23,6 +23,17 @@ const SPECIAL_CASES: Array[Array] = [
 	[Chars.CHAR_SEC2, Chars.SUPER_REFRAIN_ATTACK, false],
 ]
 
+const CPU_INPUT_GOLDEN: Array[int] = [
+	D | SimInput.IN_UP,
+	D | SimInput.IN_UP,
+	D | SimInput.IN_UP,
+	D | SimInput.IN_UP,
+	D | SimInput.IN_UP,
+	D | SimInput.IN_DOWN,
+	D | SimInput.IN_DOWN,
+	D | SimInput.IN_DOWN,
+]
+
 func _world(char_id: int, ground: bool, drive: int = 100) -> Array:
 	var cfg := SimConfig.new()
 	var s := SimState.new()
@@ -52,13 +63,18 @@ func _world(char_id: int, ground: bool, drive: int = 100) -> Array:
 	return [s, cfg, p]
 
 func test_each_original_cpu_returns_a_legal_shared_special_input_deterministically() -> void:
-	for row: Array in SPECIAL_CASES:
+	check_eq(CPU_INPUT_GOLDEN.size(), SPECIAL_CASES.size(),
+		"CPU入力ゴールデンと必殺技ケースの件数が一致")
+	for case_index in SPECIAL_CASES.size():
+		var row: Array = SPECIAL_CASES[case_index]
 		var first := _world(int(row[0]), bool(row[2]))
 		var second := _world(int(row[0]), bool(row[2]))
 		var before_drive: int = first[2].drive_gauge
 		var before_state: Array[int] = first[0].to_int_array()
 		var input_a: int = SimCpu.decide(first[0], 0, first[1])
 		var input_b: int = SimCpu.decide(second[0], 0, second[1])
+		check_eq(input_a, CPU_INPUT_GOLDEN[case_index],
+			"原作キャラCPU入力の決定論ゴールデン: %d" % row[0])
 		check_eq(input_a, input_b, "同じseedと状態なら入力一致: %d" % row[0])
 		check((input_a & D) != 0, "原作キャラが合法なD複合入力を選ぶ: %d" % row[0])
 		check_eq(SpecialMoves.select_hit_special(first[0], 0, input_a, first[1]),
