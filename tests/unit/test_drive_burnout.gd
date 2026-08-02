@@ -71,16 +71,17 @@ func test_moving_receive_does_not_trigger_just_receive() -> void:
 	check_eq(p.drive_gauge, 65, "通常レシーブでもドライブは減らない")
 	check_eq(p.just_receive_event, 0, "移動レシーブでは専用演出なし")
 
-func test_flame_cannot_be_nullified_by_just_receive() -> void:
+func test_flame_just_receive_blocks_damage_but_keeps_burn() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.health = 100
 	_press_receive(s, cfg)
 	p.drive_gauge = 65
 	_incoming_just(s, cfg, 0, true)
-	check_eq(p.health, 60, "防御不能系はカタログ固定40を通す")
-	check_eq(p.drive_gauge, 60, "防御不能技でも反応構えの予約5は確定")
-	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
+	check_eq(p.health, 100, "炎球もジャストレシーブなら体力損害0")
+	check_eq(p.drive_gauge, 60, "炎球でも反応構えの予約5は確定")
+	check_eq(p.just_receive_event, 1, "炎球でもジャストレシーブ演出あり")
+	check_eq(p.burn, cfg.burn_stun_ticks, "体力を防いでも炎上は受ける")
 
 func test_held_receive_after_window_expires_is_normal_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

@@ -6,6 +6,7 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 func test_match_starts_every_character_at_one_hundred_health() -> void:
 	var cfg = SimConfig.new()
@@ -97,7 +98,7 @@ func test_stun_and_burnout_advance_together_during_rally() -> void:
 	check_eq(p.stun_ticks, 9, "ラリー中はスタン時間が進む")
 	check_eq(p.burnout_ticks, 9, "スタン中もバーンアウト時間が進む")
 
-func test_contact_on_recovery_tick_applies_damage_once_after_full_recovery() -> void:
+func test_contact_after_recovery_tick_applies_damage_once_after_full_recovery() -> void:
 	var cfg = SimConfig.new()
 	var s = SimState.new()
 	s.phase = SimState.PHASE_RALLY
@@ -119,5 +120,13 @@ func test_contact_on_recovery_tick_applies_damage_once_after_full_recovery() -> 
 	s.ball_vx = 0
 	s.ball_vy = 0
 	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check_eq(p.stun_ticks, 0, "解除tickの接触で再スタンしない")
-	check_eq(p.health, 1, "100復帰後に一度損害を適用して最低1")
+	check_eq(p.stun_ticks, 0, "解除tickでスタンは終了")
+	check_eq(p.health, 100, "最終tick中は入力不能なので接触しない")
+	s.phase = SimState.PHASE_RALLY
+	s.last_touch_team = 1
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_attack_id = s.alloc_attack_id()
+	s.ball_health_damage = 150
+	s.ball_power = 1
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
+	check_eq(p.health, 1, "次tickの接触で一度損害を適用して最低1")

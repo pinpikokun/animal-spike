@@ -70,6 +70,8 @@ static func apply_ball_contact(s, actor: int, special_id: int) -> void:
 	var entry: Dictionary = Chars.super_def(special_id)
 	var power: int = int(entry.power)
 	s.ball_power = 1 if power > 0 else 0
+	if power > 0:
+		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NORMAL
 	s.ball_health_damage = power
 	s.ball_defense_class = int(entry.defense_class)
 

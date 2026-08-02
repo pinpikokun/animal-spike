@@ -11,6 +11,7 @@ const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 const SpecialBall := preload("res://src/sim/special_ball.gd")
 const SpecialMoves := preload("res://src/sim/special_moves.gd")
+const PlayerStatus := preload("res://src/sim/player_status.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -313,6 +314,9 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 	# 越えずに自陣へ落ちればサーブミス=床判定で相手の得点になる
 	if s.serve_flight == 1:
 		return NO_HIT
+	if s.ball_held_by >= 0 or (s.ball_special_id != 0 \
+			and not SpecialBall.is_contactable(s)):
+		return NO_HIT
 	var side_team: int = 0 if s.ball_x < cfg.net_x else 1
 	var best_i: int = -1
 	var best_d2: int = 0
@@ -327,7 +331,9 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			continue
 		if not force_dive_receive and _is_active_block(s, i, input, cfg):
 			continue
-		if p.hit_cooldown > 0 or p.stun_ticks > 0 or p.burn > 0 or p.quake_stun > 0:
+		if p.hit_cooldown > 0 \
+				or (p.stun_ticks | p.bubble_ticks | p.shock_ticks | p.burn) != 0 \
+				or p.quake_stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
@@ -369,7 +375,7 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 		return false
 	var team: int = team_of(i)
 	var p = s.players[i]
-	if p.burn > 0:
+	if (p.stun_ticks | p.bubble_ticks | p.shock_ticks | p.burn) != 0:
 		return false
 	if s.last_touch_team != 1 - team or not _is_block_input(team, input):
 		return false
@@ -499,8 +505,23 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var incoming_attack_kind: int = s.ball_attack_kind
 	var incoming_attack_id: int = s.ball_attack_id
 	var incoming_attacker_id: int = s.ball_attacker_id
+	var incoming_attack_commit_tick: int = s.ball_attack_commit_tick
+	var incoming_last_contact_id: int = s.ball_last_contact_id
+	var incoming_normal_gain_granted: int = s.ball_normal_gain_granted
+	var incoming_original_pressure_consumed: int = \
+		s.ball_original_attack_pressure_consumed
+	var incoming_soft_block_action_id: int = s.ball_soft_block_action_id
 	var incoming_health_damage: int = s.ball_health_damage
 	var incoming_defense_class: int = s.ball_defense_class
+	var incoming_special_id: int = s.ball_special_id
+	var incoming_special_owner_idx: int = s.ball_special_owner_idx
+	var incoming_special_origin_vx: int = s.ball_special_origin_vx
+	var incoming_ball_power: int = s.ball_power
+	var incoming_ball_vx: int = s.ball_vx
+	var incoming_ball_vy: int = s.ball_vy
+	var incoming_last_touch_team: int = s.last_touch_team
+	var incoming_last_touch_idx: int = s.last_touch_idx
+	var incoming_touches: int = s.touches
 	var incoming_pressure_consumed: bool = \
 		s.ball_original_attack_pressure_consumed != 0 \
 		and s.ball_soft_block_action_id > 0 and incoming_attack_id > 0
@@ -514,6 +535,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and not incoming_pressure_consumed
 	var is_attack_return: bool = opposing_attack \
 		and intent_kind == INTENT_AIR_SPIKE
+	var auto_gust_attack: bool = special == 0 \
+		and incoming_special_id == Chars.SUPER_GUST_BALL \
+		and p.char_id == Chars.CHAR_PIYO \
+		and intent_kind == INTENT_AIR_SPIKE
+	if auto_gust_attack:
+		resolved_action_kind = PossessionTracker.ACTION_SPECIAL
 	# 体力システム: パワーボールを受けると体力が減る。
 	# 静止した下レシーブ構えからのジャストレシーブだけが損害を無効化する。
 	# 自然回復はなく、通常スパイクはノーダメージ。
@@ -539,7 +566,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and p.stance_active != 0 \
 		and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
-		and p.burnout_ticks == 0 and not incoming_unblockable
+		and p.burnout_ticks == 0
 	var defense_contact_kind: int = _defense_contact_kind(
 		intent_kind, just_receive, force_dive_receive)
 	if just_receive:
@@ -549,8 +576,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		# タイミング成功は芯受けと同じ制御報酬を得る。
 		# 慣性カットに加え、パワー球のmangled化・よろけ・吹き飛びを防ぐ。
 		sweet = true
-	if intent_kind == INTENT_GROUND_RECEIVE and not just_receive \
-			and not incoming_flame:
+	if intent_kind == INTENT_GROUND_RECEIVE and not just_receive:
 		sweet = false
 	var inertia: int = cfg.hit_inertia_just_num if sweet else cfg.hit_inertia_num
 	# 支配権切替: 緩い球(閾値未満)は慣性ゼロ=完全に狙い通り打てる。
@@ -574,8 +600,13 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and not incoming_pressure_consumed
 	var unblockable_touch: bool = incoming_unblockable and s.ball_power == 1 \
 		and intent_kind != INTENT_AIR_SPIKE and not incoming_pressure_consumed
+	var special_defense_failed: bool = opposing_attack \
+		and incoming_special_id != 0 \
+		and defense_contact_kind == DEFENSE_CONTACT_NONE \
+		and not flame_spike_return
+	if special_defense_failed:
+		sweet = false
 	var regular_attack_defense_handled: bool = opposing_drive_attack \
-		and not incoming_unblockable \
 		and defense_contact_kind != DEFENSE_CONTACT_NONE
 	if regular_attack_defense_handled:
 		# 返球制御は従来どおり。パワー球の芯外しだけmangledを維持する。
@@ -588,7 +619,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				if incoming_flame:
 					flame_received = true
-					_ignite_player(p, team, cfg)
 				var was_stunned: bool = p.stun_ticks > 0
 				CombatResources.apply_health_damage(
 					p, incoming_health_damage, cfg)
@@ -607,7 +637,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				if incoming_flame:
 					flame_received = true
-					_ignite_player(p, team, cfg)
 			var was_stunned: bool = p.stun_ticks > 0
 			CombatResources.apply_health_damage(p, health_damage, cfg)
 			var started_stun: bool = not was_stunned and p.stun_ticks > 0
@@ -626,9 +655,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 				if not flame_received:
 					p.flinch = FLINCH_TICKS
 					s.hit_freeze = maxi(s.hit_freeze, 3)
-	if flame_received:
-		# 通常被弾のしりもち計算より後で炎上専用ノックバックへ確定させる。
-		_ignite_player(p, team, cfg)
+	if incoming_flame and opposing_attack and not flame_spike_return:
+		flame_received = true
 	if opposing_attack:
 		CombatResources.stop_attack_recovery(p)
 	if opposing_attack and incoming_attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
@@ -637,6 +665,15 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if intent_kind == INTENT_GROUND_RECEIVE and p.stance_active != 0:
 		CombatResources.resolve_stance_contact(
 			p, incoming_attack_id, s.ball_attack_commit_tick, cfg)
+	var successful_receive: bool = defense_contact_kind \
+		in [DEFENSE_CONTACT_GROUND_RECEIVE,
+			DEFENSE_CONTACT_JUST_RECEIVE, DEFENSE_CONTACT_DIVE]
+	var refrain_received: bool = opposing_attack and special == 0 \
+		and incoming_special_id == Chars.SUPER_REFRAIN_ATTACK \
+		and successful_receive
+	var bubble_failed: bool = opposing_attack \
+		and incoming_special_id == Chars.SUPER_BUBBLE_PACK \
+		and not successful_receive
 	s.ball_power = 0
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
@@ -647,7 +684,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		aim_pct = MANGLE_AIM_PCT
 		inertia = cfg.hit_inertia_den
 	var toss_good: bool = Chars.has_trait(p.char_id, Chars.Profile.TRAIT_TOSS_GOOD)
-	if p.on_ground == 1 or force_dive_receive:
+	if intent_kind <= INTENT_GROUND_FORWARD or force_dive_receive:
 		# 地上は下+ボタンだけがレシーブ。それ以外は横3種のトス。
 		var ground_toss_hdir: int = hdir
 		if intent_kind == INTENT_GROUND_TOSS and s.last_touch_team == team \
@@ -714,11 +751,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
-		if sweet and special == 0 and not is_attack_return \
+		if sweet and special == 0 and not auto_gust_attack and not is_attack_return \
 				and not CombatResources.can_pay(p, cfg.just_attack_drive_cost):
 			sweet = false
-		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
-		if special == 0:
+		var drive_just_attack: bool = sweet and special == 0 \
+			and not auto_gust_attack and not is_attack_return
+		if special == 0 and not auto_gust_attack:
 			resolved_action_kind = PossessionTracker.ACTION_JUST_ATTACK \
 				if drive_just_attack else PossessionTracker.ACTION_NORMAL_ATTACK
 		if drive_just_attack:
@@ -739,14 +777,14 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.hit_freeze = maxi(s.hit_freeze, 4)
 		s.ball_vx = air_spike_velocity.x
 		s.ball_vy = air_spike_velocity.y
-		if incoming_flame:
+		if flame_spike_return:
 			# 燃える球をアタックで打ち返した時だけ、効果とパワーを通常球へ戻す。
 			SpecialBall.clear_special(s)
 			s.ball_power = 0
-		if special == 0 and not is_attack_return:
+		if special == 0 and not auto_gust_attack and not is_attack_return:
 			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
 				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
-		if special == 0:
+		if special == 0 and not auto_gust_attack:
 			s.ball_health_damage = cfg.power_health_damage_for_rank(
 				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER))
 			s.ball_defense_class = Chars.DEFENSE_NONE
@@ -755,7 +793,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			if drive_just_attack:
 				CombatResources.start_attack_recovery(
 					p, cfg.just_attack_recovery_delay_ticks, cfg)
-			elif BallPhysics.normal_attack_reaches_opponent_playable(
+			elif not auto_gust_attack and BallPhysics.normal_attack_reaches_opponent_playable(
 					s, cfg, team):
 				_grant_valid_normal_attack(s, attack_id, i, cfg)
 	else:
@@ -777,10 +815,40 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_vx = toss_aim_vx(
 				s.ball_x, s.ball_y, avy, toss_target_x(team, hdir, cfg), cfg)
 		s.ball_vy = avy
+	if auto_gust_attack:
+		SpecialMoves.apply_ball_contact(s, i, Chars.SUPER_GUST_ATTACK)
 	if special != 0:
+		if int(Chars.super_def(special).power) > 0 and s.ball_attack_id == 0:
+			_begin_ball_attack(s, i)
 		SpecialMoves.apply_ball_contact(s, i, special)
 		CombatResources.start_attack_recovery(
 			p, cfg.special_recovery_delay_ticks, cfg)
+	if refrain_received:
+		SpecialBall.set_special(s, incoming_special_id,
+			incoming_special_owner_idx, incoming_special_origin_vx)
+		s.ball_special_phase = 1
+		s.ball_special_ticks = 0
+		s.ball_vx = incoming_ball_vx
+		s.ball_vy = incoming_ball_vy
+		s.ball_power = incoming_ball_power
+		s.ball_attack_kind = incoming_attack_kind
+		s.ball_health_damage = incoming_health_damage
+		s.ball_defense_class = incoming_defense_class
+		s.ball_attack_id = incoming_attack_id
+		s.ball_last_contact_id = incoming_last_contact_id
+		s.ball_attacker_id = incoming_attacker_id
+		s.ball_attack_commit_tick = incoming_attack_commit_tick
+		s.ball_normal_gain_granted = incoming_normal_gain_granted
+		s.ball_original_attack_pressure_consumed = \
+			incoming_original_pressure_consumed
+		s.ball_soft_block_action_id = incoming_soft_block_action_id
+	if flame_received:
+		_ignite_player(p, team, cfg)
+	elif opposing_attack and incoming_special_id == Chars.SUPER_THUNDER_BALL \
+			and not flame_spike_return:
+		PlayerStatus.apply_shock(p, team, cfg)
+	elif bubble_failed:
+		PlayerStatus.apply_bubble(p, cfg)
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	if not serve_strike:
@@ -794,12 +862,16 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		s.touches = 1
 	s.last_touch_team = team
 	s.last_touch_idx = i
+	if refrain_received:
+		s.last_touch_team = incoming_last_touch_team
+		s.last_touch_idx = incoming_last_touch_idx
+		s.touches = incoming_touches
 	s.aitick = SimRng.advance_hit(s.aitick, s.rng)
 	_advance_cpu_positioning_after_hit(s)
 	if force_dive_receive:
 		p.receive_stance = 0
 		p.dive_contact_ticks = 0
-		if p.flinch > 0 or p.stun_ticks > 0 or p.burn > 0:
+		if p.flinch > 0 or PlayerStatus.input_locked(p):
 			p.dive = 0
 			p.dive_age_ticks = 0
 			p.dive_resource_mode = SimStateScript.DIVE_NONE
@@ -831,21 +903,28 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		return
 	# ブロックの開始消費と種別は接触より前に確定する。入力を離すまで同じ行動なので、
 	# 5ちょうどでバーンアウトしても現在のブロックは通常版のまま守られる。
+	var has_active_block: bool = false
 	for i in s.players.size():
 		var p = s.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var active: bool = _is_active_block(s, i, input, cfg) \
-			and p.stun_ticks == 0 and p.burn == 0 and p.hit_cooldown == 0 \
+			and p.hit_cooldown == 0 \
 			and p.quake_stun == 0
 		if not active:
 			p.current_block_mode = SimStateScript.BLOCK_NONE
 			p.current_block_action_id = 0
 			p.block_contact_resolved = 0
 			continue
+		has_active_block = true
 		if p.current_block_mode == SimStateScript.BLOCK_NONE:
 			p.current_block_mode = CombatResources.start_block(p, cfg)
 			p.current_block_action_id = s.alloc_action_id()
 			p.block_contact_resolved = 0
+	if not has_active_block:
+		return
+	if s.ball_held_by >= 0 or (s.ball_special_id != 0 \
+			and not SpecialBall.is_contactable(s)):
+		return
 	var zone: int = FP.from_int(60)
 	for i in s.players.size():
 		var team: int = team_of(i)
@@ -855,7 +934,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not _is_active_block(s, i, input, cfg):
 			continue
-		if p.stun_ticks > 0 or p.burn > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
+		if p.hit_cooldown > 0 or p.quake_stun > 0:
 			continue
 		if absi(p.x - cfg.net_x) > zone:
 			continue
@@ -899,8 +978,6 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var flame_blocked: bool = s.ball_power == 1 \
 			and incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE \
 			and incoming_special_id == Chars.SUPER_FLAME_ATTACK
-		if flame_blocked:
-			_ignite_player(p, team, cfg)
 		var started_health_stun: bool = false
 		if p.current_block_mode == SimStateScript.BLOCK_BURNOUT:
 			var was_stunned: bool = p.stun_ticks > 0
@@ -911,11 +988,12 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			var back_dir: int = -1 if team == 0 else 1
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
-			if incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE:
-				if incoming_special_id == Chars.SUPER_FLAME_ATTACK:
-					_ignite_player(p, team, cfg)
 		# ブロック成功は球種を問わない通常接触。炎だけでなく全特殊球を解除する。
 		SpecialBall.clear_special(s)
+		if flame_blocked:
+			_ignite_player(p, team, cfg)
+		elif incoming_special_id == Chars.SUPER_THUNDER_BALL:
+			PlayerStatus.apply_shock(p, team, cfg)
 		if started_health_stun:
 			p.vx = 0
 			p.push = 0

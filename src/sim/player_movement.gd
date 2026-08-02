@@ -6,6 +6,7 @@ const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
+const PlayerStatus := preload("res://src/sim/player_status.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -43,38 +44,18 @@ static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 	var den := ticks * (ticks - 1) if rising else ticks * (ticks + 1)
 	return FP.from_int(height_px * 2) / den
 
-static func _step_player(p, input: int, cfg, team: int) -> void:
-	if p.burn > 0:
-		p.burn -= 1
-		# 炎上中は入力を完全に無視し、被弾時の慣性・摩擦・重力だけで動く。
-		# 原作と同じ2/3反発で床を跳ね、連打による時間短縮は行わない。
-		p.vx = p.vx * 3 / 4
-		p.vy += cfg.gravity
-		var burn_min_x: int = 0
-		var burn_max_x: int = cfg.court_width
-		if team == 0:
-			burn_max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
-		else:
-			burn_min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
-		p.x = clampi(p.x + p.vx, burn_min_x, burn_max_x)
-		p.y += p.vy
-		if p.y >= cfg.floor_y:
-			p.y = cfg.floor_y
-			p.vy = -p.vy * 2 / 3
-			if -p.vy <= cfg.gravity:
-				p.vy = 0
-				p.on_ground = 1
-			else:
-				p.on_ground = 0
-		if p.hit_cooldown > 0:
-			p.hit_cooldown -= 1
-		# 炎上は見た目と物理を優先するが、体力0の5秒時計とは並行して進む。
-		if p.stun_ticks > 0:
-			p.stun_ticks -= 1
-			if p.stun_ticks == 0:
-				CombatResources.recover_health_stun(
-					p, SimStateScript.STUN_END_TIMED)
-		return
+static func _step_player(p, input: int, cfg, team: int,
+		state_tick: int = 0, actor: int = 0, rng: int = 0) -> void:
+	var status_locked: bool = \
+		(p.stun_ticks | p.bubble_ticks | p.shock_ticks | p.burn) != 0
+	if status_locked:
+		if PlayerStatus.step(p, cfg, team, state_tick, actor, rng):
+			return
+		# 最終tick中にタイマーが0になっても、生入力は次tickまで通さない。
+		input = 0
+	_step_player_unlocked(p, input, cfg, team)
+
+static func _step_player_unlocked(p, input: int, cfg, team: int) -> void:
 	if p.quake_stun > 0:
 		p.quake_stun -= 1
 		p.vx = 0
@@ -111,13 +92,6 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		if p.hit_cooldown > 0:
 			p.hit_cooldown -= 1
 		return
-	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
-	if p.stun_ticks > 0:
-		p.stun_ticks -= 1
-		if p.stun_ticks == 0:
-			CombatResources.recover_health_stun(
-				p, SimStateScript.STUN_END_TIMED)
-		input = 0
 	if p.dive_recovery_ticks > 0:
 		p.dive_recovery_ticks -= 1
 		p.vx = 0

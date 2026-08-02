@@ -321,8 +321,8 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 		"防御不能分類を飛来球へ記録")
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.special_drive_cost_default,
 		"殺人燃えるアタックは標準35消費")
-	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
-		"必殺技は相手ドライブを削らない")
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NORMAL,
+		"攻撃型必殺技は通常攻撃球として防御判定へ渡す")
 
 func test_flame_super_below_35_does_not_start_or_partially_spend() -> void:
 	var w := _rally_world(); var s = w[0]; var cfg = w[1]
@@ -403,18 +403,21 @@ func test_flame_receive_deals_catalog_fixed_health_damage() -> void:
 	s.ball_power = 1
 	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_attack_id = s.alloc_attack_id()
 	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].health, 60,
-		"燃える球のレシーブはカタログ固定40ダメージ")
+	HitResolver._apply_hit(s, 0, cfg,
+		Simulation.IN_ACTION | Simulation.IN_DOWN, FP.from_int(30) * FP.from_int(30))
+	check_eq(s.players[0].health, 84,
+		"燃える球の通常レシーブは40%の16ダメージ")
 	check_eq(s.players[0].flinch, 0, "炎上専用の行動不能が通常しりもちを置き換える")
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "炎被弾で90tick行動不能")
 	check_eq(s.ball_special_id, 0, "レシーブで炎球効果を消費")
 
-func test_just_receive_cannot_cancel_flame_health_damage() -> void:
+func test_just_receive_cancels_flame_health_damage_but_not_burn() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -429,10 +432,11 @@ func test_just_receive_cannot_cancel_flame_health_damage() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(2)
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].health, 60,
-		"防御不能系は芯でレシーブしても固定40ダメージ")
+	check_eq(s.players[0].health, 100,
+		"炎球も芯でレシーブすれば体力損害0")
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "芯受けでも90tick行動不能")
 	check_eq(s.ball_special_id, 0, "芯レシーブでも炎球効果を消費")
+	s.hit_freeze = 0
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks - 1, "炎上残り時間は毎tick減衰")
 

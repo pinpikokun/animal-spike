@@ -10,6 +10,7 @@ const SimCpu := preload("res://src/sim/sim_cpu.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
+const PlayerStatus := preload("res://src/sim/player_status.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
@@ -235,23 +236,36 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	var effective_inputs: Array[int] = inputs.duplicate()
 	while effective_inputs.size() < state.players.size():
 		effective_inputs.append(0)
-	_update_receive_stances(state, effective_inputs, cfg, action_edges)
+	var status_lock_mask: int = _update_receive_stances(
+		state, effective_inputs, cfg, action_edges)
 	var dive_edges: Array[bool] = action_edges.duplicate()
 	while dive_edges.size() < state.players.size():
 		dive_edges.append(false)
-	for i in state.players.size():
-		var input: int = effective_inputs[i]
-		var p = state.players[i]
-		if i >= dive_edges.size() or not _can_start_dive_receive(p):
-			if i < dive_edges.size():
-				dive_edges[i] = false
-		# 炎上開始時点で入力を封じ、最終tickにburnが0へ減った後も同tick中は
-		# 打撃・構え・固有技へ生入力を漏らさない。
-		effective_inputs[i] = 0 if p.burn > 0 else input
-		var was_hip_drop: bool = p.hip == -1
-		PlayerMovement._step_player(p, effective_inputs[i], cfg, team_of(i))
-		if was_hip_drop and p.on_ground == 1 and p.hip == 0:
-			hip_landed = true
+	if status_lock_mask == 0:
+		for i in state.players.size():
+			var p = state.players[i]
+			if i >= dive_edges.size() or not _can_start_dive_receive(p):
+				if i < dive_edges.size():
+					dive_edges[i] = false
+			var was_hip_drop: bool = p.hip == -1
+			PlayerMovement._step_player_unlocked(
+				p, effective_inputs[i], cfg, team_of(i))
+			if was_hip_drop and p.on_ground == 1 and p.hip == 0:
+				hip_landed = true
+	else:
+		for i in state.players.size():
+			var p = state.players[i]
+			if i >= dive_edges.size() or not _can_start_dive_receive(p):
+				if i < dive_edges.size():
+					dive_edges[i] = false
+			var was_hip_drop: bool = p.hip == -1
+			if (status_lock_mask & (1 << i)) != 0 and PlayerStatus.step(
+					p, cfg, team_of(i), state.tick, i, state.rng):
+				continue
+			PlayerMovement._step_player_unlocked(
+				p, effective_inputs[i], cfg, team_of(i))
+			if was_hip_drop and p.on_ground == 1 and p.hip == 0:
+				hip_landed = true
 	if hip_landed:
 		state.hip_quake_event += 1
 		for p in state.players:
@@ -285,7 +299,8 @@ static func _advance_stance_exit_recovery(state, before: Array[int]) -> void:
 
 static func _can_start_dive_receive(p) -> bool:
 	return p.on_ground == 1 and p.dive == 0 and p.hit_cooldown == 0 \
-		and p.stun_ticks == 0 and p.burn == 0 and p.quake_stun == 0 \
+		and (p.stun_ticks | p.bubble_ticks | p.shock_ticks | p.burn) == 0 \
+		and p.quake_stun == 0 \
 		and p.throw == 0 and p.flinch == 0 and p.hip == 0 \
 		and p.stance_active == 0 and p.stance_exit_recovery_ticks == 0 \
 		and p.dive_recovery_ticks == 0 \
@@ -342,14 +357,21 @@ static func _advance_dive_contact_windows(state) -> void:
 			p.vx = 0
 
 static func _update_receive_stances(state, inputs: Array[int], cfg,
-		action_edges: Array[bool] = []) -> void:
+		action_edges: Array[bool] = []) -> int:
+	var status_lock_mask: int = 0
 	for i in state.players.size():
 		var p = state.players[i]
+		# 構え開始より前に封じ、最終tick中も後段へ0を渡す。
+		var status_locked: bool = \
+			(p.stun_ticks | p.bubble_ticks | p.shock_ticks | p.burn) != 0
+		if status_locked and i < inputs.size():
+			status_lock_mask |= 1 << i
+			inputs[i] = 0
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var chord: bool = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
 		var action_edge: bool = action_edges[i] if i < action_edges.size() \
 			else chord and p.action_latch == 0
-		var unable: bool = p.on_ground == 0 or p.stun_ticks > 0 or p.burn > 0 \
+		var unable: bool = p.on_ground == 0 or status_locked \
 			or p.quake_stun > 0 or p.throw > 0 or p.flinch > 0 \
 			or p.hip != 0 or p.dive != 0
 		if p.stance_active == 0 and p.stance_exit_recovery_ticks > 0 \
@@ -391,6 +413,7 @@ static func _update_receive_stances(state, inputs: Array[int], cfg,
 			CombatResources.stop_attack_recovery(p)
 		else:
 			p.receive_stance = 0
+	return status_lock_mask
 
 static func _resolve_stance_contact(state, actor: int,
 		attack_id: int, cfg) -> int:

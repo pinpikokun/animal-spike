@@ -25,7 +25,11 @@ static func is_visible(s) -> bool:
 		and s.ball_special_id != Chars.SUPER_TRANSFER_BALL
 
 static func is_contactable(s) -> bool:
-	return is_visible(s) and s.ball_held_by < 0
+	return s.ball_held_by < 0 \
+		and s.ball_special_id != Chars.SUPER_DISAPPEARING_BALL \
+		and s.ball_special_id != Chars.SUPER_TRANSFER_BALL \
+		and not (s.ball_special_id == Chars.SUPER_REFRAIN_ATTACK \
+			and s.ball_special_phase == 1)
 
 static func step(s, cfg) -> bool:
 	if s.ball_held_by >= 0:
@@ -45,6 +49,8 @@ static func step(s, cfg) -> bool:
 		Chars.SUPER_TRANSFER_BALL:
 			_step_transfer(s, cfg)
 			return true
+		Chars.SUPER_REFRAIN_ATTACK:
+			return _step_refrain(s, cfg)
 	return false
 
 static func original_ticks(original_tick_count: int, cfg) -> int:
@@ -126,6 +132,16 @@ static func _reappear_as_normal(s, cfg) -> void:
 	clear_special(s)
 	s.ball_vx = vx
 	s.ball_vy = _original_vy(8, cfg)
+
+static func _step_refrain(s, cfg) -> bool:
+	if s.ball_special_phase != 1:
+		return false
+	s.ball_special_ticks += 1
+	if s.ball_special_ticks >= original_ticks(10, cfg):
+		s.ball_special_phase = 2
+		# 21tick目に保存速度で再発射し、同tickの共通物理へ戻す。
+		return false
+	return true
 
 static func _step_wave_ball(s, cfg) -> void:
 	s.ball_special_ticks += 1
