@@ -689,7 +689,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			s.ball_vy = desired_vy
 		elif just_receive:
 			s.ball_vy = desired_vy
-		elif p.hit_kind == SimStateScript.HIT_KIND_RECEIVE:
+		elif intent_kind == INTENT_GROUND_RECEIVE:
 			s.ball_vy = desired_vy * aim_pct / 100 - s.ball_vy * inertia / cfg.hit_inertia_den
 		else:
 			s.ball_vy = desired_vy * aim_pct / 100

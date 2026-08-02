@@ -152,6 +152,8 @@ func test_m1a_keys_loaded() -> void:
 	check(cfg.spike_vx > 0, "spike_vxが正")
 	check(cfg.serve_vy > 0, "serve_vy(上向き量)が正")
 	check(cfg.hit_cooldown_ticks > 0, "hit_cooldownが正")
+	check(cfg.hit_cooldown_ticks >= 10,
+		"原作アタックの3コマ表示と4・5往復に必要な10tick以上")
 	# 2026-07-26: 原作どおり壁際(ボール1個ぶん内側=14)にする決定はあるが、
 	# 14にするとCPUのアタックサーブがネットに当たる。原因はスパイクの横速度が
 	# 打つ位置で決まる作りにあり、先に 2026-07-26-spike-fixed-velocity-design.md を

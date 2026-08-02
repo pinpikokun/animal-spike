@@ -7,6 +7,7 @@ const SimInput := preload("res://src/sim/sim_input.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const SimCpu := preload("res://src/sim/sim_cpu.gd")
+const Simulation := preload("res://src/sim/simulation.gd")
 
 
 func _rally_world() -> Array:
@@ -175,6 +176,24 @@ func test_next_air_hit_clears_previous_block_hit_kind() -> void:
 		HitResolver._apply_hit(s, 0, cfg, row[0], 0)
 		check_eq(p.hit_kind, row[1],
 			"次の空中打撃は成立した動作種別へ更新 input=%d" % row[0])
+
+
+func test_serve_self_toss_overwrites_stale_hit_kind() -> void:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	s.phase = SimState.PHASE_SERVE
+	s.serving_team = 0
+	var server_idx: int = SimState._server_index(s)
+	var server = s.players[server_idx]
+	server.hit_kind = SimState.HIT_KIND_BLOCK
+	server.hit_cooldown = 0
+	var inputs: Array[int] = [0, 0, 0, 0]
+	inputs[server_idx] = SimInput.IN_ACTION
+	Simulation._try_serve(s, inputs, cfg)
+	check_eq(server.hit_cooldown, cfg.hit_cooldown_ticks,
+		"サーブのセルフトスは表示期間を開始")
+	check_eq(server.hit_kind, SimState.HIT_KIND_TOSS,
+		"サーブのセルフトスは古い動作種別を再利用しない")
 
 
 func test_every_successful_contact_records_its_action_kind() -> void:

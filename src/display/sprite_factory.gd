@@ -190,6 +190,7 @@ static func build_original(sheet_path: String, bubble_cell: int = 20) -> SpriteF
 	_add_original_sheet(sf, "attack", sheet_path, [3, 4, 5], [2, 2, 2], false)
 	_add_original_sheet(sf, "block", sheet_path, [9], [1], false)
 	_add_original_sheet(sf, "receive_stance", sheet_path, [6], [1], false)
+	# 表示中はGameViewが同じ保持tickを決定論的に選ぶ。ここにも素材契約として残す。
 	_add_original_sheet(sf, "ground_swing", sheet_path, [9, 8, 7, 6], [2, 2, 2, 4], false)
 	_add_original_sheet(sf, "toss", sheet_path, [7], [1], false)
 	_add_original_sheet(sf, "toss_fwd", sheet_path, [9, 8, 7, 6], [2, 2, 2, 4], false)

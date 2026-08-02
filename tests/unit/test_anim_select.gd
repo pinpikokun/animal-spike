@@ -82,6 +82,7 @@ func test_action_kind_selects_ground_and_air_animation() -> void:
 		[1, SimState.HIT_KIND_FORWARD, "toss_fwd"],
 		[0, SimState.HIT_KIND_TOSS, "toss"],
 		[0, SimState.HIT_KIND_FORWARD, "toss"],
+		[0, SimState.HIT_KIND_RECEIVE, "toss"],
 		[0, SimState.HIT_KIND_ATTACK, "attack"],
 		[0, SimState.HIT_KIND_BLOCK, "block"],
 	]:

@@ -586,6 +586,7 @@ static func _try_serve(s, inputs: Array[int], cfg) -> void:
 	var dx: int = cfg.serve_toss_range * aim / AIM_MAX
 	s.ball_vx = net_dir * (dx / flight)
 	s.ball_vy = -vy_mag
+	s.players[idx].hit_kind = SimStateScript.HIT_KIND_TOSS
 	s.players[idx].hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
 	s.serve_tossed = 1
