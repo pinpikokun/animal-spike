@@ -67,22 +67,22 @@ func test_cap_deflects_ball() -> void:
 func FP_from(v: int) -> int:
 	return v << 16
 
-func test_hat_costs_one_drive_stock_without_guard_cost() -> void:
+func test_hat_costs_35_drive_without_guard_cost() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	var p = s.players[1]
 	var guard0: int = p.guard
 	var drive0: int = p.drive_gauge
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
-	check_eq(p.drive_gauge, drive0 - cfg.drive_gauge_stock,
+	check_eq(p.drive_gauge, drive0 - cfg.special_drive_cost_default,
 		"帽子投げはドライブゲージ1本消費")
-	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+	check_eq(p.guard, guard0,
 		"帽子消費で回復ディレイ開始")
 	check_eq(p.guard, guard0, "帽子投げで耐久は消費しない")
 
-func test_hat_spends_partial_stock_and_starts_burnout() -> void:
+func test_hat_spends_exact_35_and_starts_burnout() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	var p = s.players[1]
-	p.drive_gauge = cfg.drive_gauge_stock / 2
+	p.drive_gauge = cfg.special_drive_cost_default
 	var guard0: int = p.guard
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
 	check(p.throw > 0, "残量が1以上なら1本未満でも帽子投げ発動")

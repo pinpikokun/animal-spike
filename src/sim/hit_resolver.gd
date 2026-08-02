@@ -6,6 +6,7 @@ const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -304,8 +305,7 @@ static func _special_for_input(p, input: int, cfg) -> int:
 		if not Chars.has_super(p.char_id, super_id):
 			continue
 		var entry: Dictionary = Chars.super_def(super_id)
-		# スト6式使い切り: 1でも残っていれば発動し、コスト超過分は下限0へ丸める。
-		if p.drive_gauge <= 0:
+		if not CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
 			continue
 		var condition: int = int(entry.condition)
 		if condition == Chars.CONDITION_GROUND_UP_ABILITY \
@@ -395,22 +395,6 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 		return false
 	var incoming_dir: int = -1 if team == 0 else 1
 	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
-
-static func _drive_damage_for_attack(attack_kind: int, cfg) -> int:
-	if attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
-		return cfg.drive_gauge_stock
-	if attack_kind == SimStateScript.BALL_ATTACK_JUST:
-		return cfg.drive_gauge_stock * 2
-	return 0
-
-static func _spend_drive(p, amount: int, cfg) -> void:
-	var before: int = p.drive_gauge
-	p.drive_gauge = maxi(p.drive_gauge - amount, 0)
-	if p.drive_gauge < before:
-		p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
-	if amount > 0 and p.drive_gauge == 0 and p.burnout_ticks == 0:
-		p.burnout_ticks = cfg.burnout_recovery_ticks
-		p.drive_recovery_progress = 0
 
 static func _burnout_guard_damage(p, damage: int) -> int:
 	return damage * 3 / 2 if p.burnout_ticks > 0 else damage
@@ -529,9 +513,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and p.burnout_ticks == 0 and not incoming_unblockable
 	var defense_contact_kind: int = _defense_contact_kind(
 		intent_kind, just_receive, force_dive_receive)
-	if opposing_drive_attack and intent_kind == INTENT_GROUND_RECEIVE \
-			and not just_receive and not force_dive_receive:
-		_spend_drive(p, _drive_damage_for_attack(incoming_attack_kind, cfg), cfg)
 	if just_receive:
 		p.just_receive_flash = 30
 		p.just_receive_event += 1
@@ -624,7 +605,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if flame_received:
 		s.ball_flame = 0
 	if special != 0:
-		_spend_drive(p, int(Chars.super_def(special).gauge_cost), cfg)
+		CombatResources.spend_committed(
+			p, CombatResources.special_drive_cost(cfg), cfg)
 	# 制御喪失時: 狙い成分を大幅に削り、入射の反発を100%にする(弾かれるだけの絵)
 	var aim_pct: int = 100
 	if mangled:
@@ -703,9 +685,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		# 空中アタックにも地上と同じ慣性反射がかかる: 上がり際のボールを叩けば
 		# 反発が乗って鋭く速く、落ち際なら浮いて深く飛ぶ=打つタイミングが着弾を変える。
 		# ジャストミート(芯)なら慣性が10%に落ち、狙い通りに飛ぶ
+		if sweet and special == 0 and not is_attack_return \
+				and not CombatResources.can_pay(p, cfg.just_attack_drive_cost):
+			sweet = false
 		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
 		if drive_just_attack:
-			_spend_drive(p, cfg.drive_gauge_stock / 2, cfg)
+			CombatResources.spend_committed(p, cfg.just_attack_drive_cost, cfg)
 		if sweet:
 			s.ball_power = 1
 			# ジャストスマッシュ=最大の見せ所。短い瞬止(5tick=83ms)で「止め」を作った直後、
@@ -831,7 +816,6 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			continue
 		var incoming_guard_damage: int = s.ball_guard_damage
 		var incoming_defense_class: int = s.ball_defense_class
-		_spend_drive(p, _drive_damage_for_attack(s.ball_attack_kind, cfg), cfg)
 		s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
 		s.ball_guard_damage = 0
 		s.ball_defense_class = Chars.DEFENSE_NONE

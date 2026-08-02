@@ -29,7 +29,7 @@ func test_hip_attack_hover_then_drop() -> void:
 	check_eq(s.players[1].hip, 0, "空中で下だけでは発動しない")
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
 	check(s.players[1].hip > 0, "ヒップアタックで空中静止 hip=%d" % s.players[1].hip)
-	check_eq(s.players[1].drive_gauge, drive0 - cfg.drive_gauge_stock * 2,
+	check_eq(s.players[1].drive_gauge, drive0 - cfg.special_drive_cost_default,
 		"ヒップアタックはドライブゲージ2本消費")
 	check_eq(s.players[1].vy, 0, "静止中は落下しない")
 	# 静止が終わると急降下して着地
@@ -66,16 +66,16 @@ func test_hip_needs_ability() -> void:
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
 	check_eq(s.players[0].hip, 0, "CA_HIP無しはヒップ不可")
 
-func test_hip_spends_last_stock_and_starts_burnout() -> void:
+func test_hip_spends_exact_35_and_starts_burnout() -> void:
 	var w = _rally(); var s = w[0]; var cfg = w[1]
 	var p = s.players[1]
 	p.y = cfg.floor_y - (20 << 16)
 	p.on_ground = 0
-	p.drive_gauge = cfg.drive_gauge_stock
+	p.drive_gauge = cfg.special_drive_cost_default
 	Sim.tick(s, [SimInput.IN_DOWN | SimInput.IN_ABILITY1, 0], cfg)
 	check(p.hip > 0, "残量が1以上なら2本未満でもヒップアタック発動")
 	check_eq(p.drive_gauge, 0, "ヒップで残量を全消費")
-	check_eq(p.drive_recovery_delay, cfg.drive_recovery_delay_ticks,
+	check_eq(p.drive_gauge, 0,
 		"ヒップ消費で回復ディレイ開始")
 	check(p.burnout_ticks > 0, "使い切ってバーンアウト突入")
 

@@ -22,15 +22,15 @@ func test_only_tome_has_pilot_supers() -> void:
 		check(not Chars.has_super(cid, Chars.SUPER_GHOST_BALL), "トメ以外はゴーストなし")
 		check(not Chars.has_super(cid, Chars.SUPER_FLAME_ATTACK), "トメ以外は燃えるアタックなし")
 
-func test_super_catalog_has_complete_mechanical_fields() -> void:
+func test_super_catalog_has_complete_non_resource_fields() -> void:
 	check_eq(Chars.SUPER_CATALOG.size(), 2, "パイロット必殺技2種を登録")
 	for super_id in Chars.SUPER_CATALOG:
 		var entry: Dictionary = Chars.super_def(super_id)
-		for field in ["power", "gauge_cost", "condition", "defense_class"]:
+		for field in ["power", "condition", "defense_class"]:
 			check(entry.has(field), "必殺技%dに%sを完備" % [super_id, field])
 	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).power, 40,
 		"殺人燃えるアタックは固定威力40")
-	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).gauge_cost, 3000,
+	check(not Chars.super_def(Chars.SUPER_FLAME_ATTACK).has("gauge_cost"),
 		"殺人燃えるアタックは3本")
 	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).condition,
 		Chars.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
@@ -39,7 +39,7 @@ func test_super_catalog_has_complete_mechanical_fields() -> void:
 		Chars.DEFENSE_UNBLOCKABLE, "炎属性ではなく防御不能分類")
 	check_eq(Chars.super_def(Chars.SUPER_GHOST_BALL).power, 0,
 		"ゴーストボールは威力0")
-	check_eq(Chars.super_def(Chars.SUPER_GHOST_BALL).gauge_cost, 1000,
+	check(not Chars.super_def(Chars.SUPER_GHOST_BALL).has("gauge_cost"),
 		"ゴーストボールは暫定1本")
 	check_eq(Chars.super_def(Chars.SUPER_GHOST_BALL).condition,
 		Chars.CONDITION_GROUND_UP_ABILITY,

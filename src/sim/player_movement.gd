@@ -4,6 +4,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -231,14 +232,10 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	var want_hip: bool = p.on_ground == 0 and (input & IN_DOWN) != 0 \
 			and (input & IN_ABILITY1) != 0 \
 			and Chars.has_ability(p.char_id, Chars.CA_HIP) \
-			and p.burnout_ticks == 0 \
-			and p.drive_gauge > 0
+			and CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg))
 	if p.hip == 0 and want_hip:
-		p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock * 2, 0)
-		p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
-		if p.drive_gauge == 0:
-			p.burnout_ticks = cfg.burnout_recovery_ticks
-			p.drive_recovery_progress = 0
+		CombatResources.spend_committed(
+			p, CombatResources.special_drive_cost(cfg), cfg)
 		p.hip = HIP_HOVER_TICKS
 	if p.hip > 0:
 		p.vx = 0

@@ -11,6 +11,7 @@ const Chars := preload("res://src/sim/chars.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -221,24 +222,8 @@ static func _update_drive_recovery(state, cfg) -> void:
 			p.burnout_ticks -= 1
 			if p.burnout_ticks == 0:
 				p.drive_gauge = cfg.drive_gauge_max
-				p.drive_recovery_progress = 0
-				p.drive_recovery_delay = 0
 			continue
-		if p.drive_recovery_delay > 0:
-			p.drive_recovery_delay -= 1
-			continue
-		if p.drive_gauge >= cfg.drive_gauge_max:
-			p.drive_gauge = cfg.drive_gauge_max
-			p.drive_recovery_progress = 0
-			continue
-		p.drive_recovery_progress += cfg.drive_gauge_stock
-		var recovered: int = p.drive_recovery_progress \
-			/ cfg.drive_recovery_ticks_per_stock
-		p.drive_recovery_progress = p.drive_recovery_progress \
-			% cfg.drive_recovery_ticks_per_stock
-		p.drive_gauge = mini(p.drive_gauge + recovered, cfg.drive_gauge_max)
-		if p.drive_gauge == cfg.drive_gauge_max:
-			p.drive_recovery_progress = 0
+		p.drive_gauge = clampi(p.drive_gauge, 0, cfg.drive_gauge_max)
 
 static func _step_players_and_hits(state, inputs: Array[int],
 		cfg, action_edges: Array[bool] = []) -> Array[int]:
@@ -371,12 +356,9 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 				and p.flinch == 0 and p.burnout_ticks == 0 \
 				and p.hip == 0 and p.quake_stun == 0 \
 				and ent_find(state, KIND_CAP) < 0:
-			if p.drive_gauge > 0:
-				p.drive_gauge = maxi(p.drive_gauge - cfg.drive_gauge_stock, 0)
-				p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
-				if p.drive_gauge == 0:
-					p.burnout_ticks = cfg.burnout_recovery_ticks
-					p.drive_recovery_progress = 0
+			if CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
+				CombatResources.spend_committed(
+					p, CombatResources.special_drive_cost(cfg), cfg)
 				p.throw = THROW_TICKS
 		if p.throw > 0:
 			p.throw -= 1
@@ -533,8 +515,7 @@ static func reset_match(s, cfg, serving_team: int,
 			Chars.rank(p.char_id, Chars.Profile.ABILITY_GUARD))
 		p.guard = p.guard_max
 		p.drive_gauge = cfg.drive_gauge_max
-		p.drive_recovery_progress = 0
-		p.drive_recovery_delay = 0
+		p.drive_reserved = 0
 		p.receive_stance = 0
 		p.just_receive_flash = 0
 		p.just_receive_event = 0

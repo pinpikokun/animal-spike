@@ -19,6 +19,7 @@ const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 
 # 能力フラグ(プロファイルの能力バイト)
 const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
@@ -601,7 +602,7 @@ static func _air_spike_candidate(
 
 # ①手前、②中央、③奥を実打球速度で評価し、30/30/30/10の政策を適用する。
 static func _cpu_attack_vertical(p, cfg) -> int:
-	if p.burnout_ticks > 0 or p.drive_gauge < cfg.drive_gauge_stock:
+	if not CombatResources.can_pay(p, cfg.just_attack_drive_cost):
 		return SimInput.IN_UP
 	return SimInput.IN_DOWN
 
@@ -1021,8 +1022,7 @@ static func _decide_hat(s, p, cfg, team: int) -> int:
 	if p.has_hat != 1 or p.throw != 0 or _cap_exists(s) or p.on_ground != 1 \
 			or p.burnout_ticks > 0:
 		return 0
-	# スト6式使い切り: CPUも残量1以上なら最後の一手として発動できる。
-	if p.drive_gauge <= 0:
+	if not CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
 		return 0
 	# サーブ打球の飛行中は場が動く前=無駄撃ちになるので投げない
 	if s.serve_flight != 0:
@@ -1114,8 +1114,7 @@ static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
 		return false
 	if not Chars.has_super(p.char_id, Chars.SUPER_FLAME_ATTACK):
 		return false
-	var flame: Dictionary = Chars.super_def(Chars.SUPER_FLAME_ATTACK)
-	if p.drive_gauge < int(flame.gauge_cost) or p.burnout_ticks > 0:
+	if not CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg)):
 		return false
 	if p.on_ground == 1 or p.y >= cfg.net_top_y:
 		return false

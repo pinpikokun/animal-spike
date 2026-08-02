@@ -67,10 +67,10 @@ func test_three_tier_receive_rules_loaded() -> void:
 
 func test_drive_gauge_rules_loaded() -> void:
 	var cfg = SimConfig.new()
-	check_eq(cfg.drive_gauge_stock, 1000, "ドライブゲージ1本の内部単位")
-	check_eq(cfg.drive_gauge_max, 6000, "ドライブゲージ6本満タン")
-	check_eq(cfg.drive_recovery_ticks_per_stock, 240, "自然回復は1本240tick")
-	check_eq(cfg.drive_recovery_delay_ticks, 180, "ゲージ減少後の自然回復停止は180tick")
+	check_eq(cfg.drive_gauge_max, 100, "ドライブゲージは0から100")
+	check_eq(cfg.just_attack_drive_cost, 25, "ジャストアタックは25消費")
+	check_eq(cfg.special_drive_cost_default, 35, "必殺技の標準消費は35")
+	check_eq(cfg.receive_stance_reserve_cost, 5, "構えは5を予約")
 	check_eq(cfg.just_receive_window_ticks, 10, "ジャストレシーブ入力窓は10tick")
 	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
 	check_eq(cfg.hip_quake_stun_ticks, 6, "ヒップ着地地震の全員硬直は6tick")

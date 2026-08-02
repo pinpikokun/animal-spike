@@ -50,14 +50,14 @@ func test_unblockable_class_not_visual_flame_blocks_just_receive() -> void:
 	var p = s.players[0]
 	p.guard = 100
 	p.receive_stance = 1
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	_arm_flame(s)
 	s.ball_flame = 0
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 	check_eq(p.guard, 60, "炎表示なしでも防御不能分類なら固定40を受ける")
 	check_eq(p.just_receive_event, 0, "分類フラグによりジャストレシーブ不可")
-	check_eq(p.drive_gauge, 3000, "必殺技は相手ドライブを削らない")
+	check_eq(p.drive_gauge, 65, "必殺技は相手ドライブを削らない")
 
 func test_flame_attack_return_cancels_without_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

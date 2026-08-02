@@ -12,6 +12,7 @@ func _rally_world() -> Array:
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
 		p.y = cfg.floor_y
+		p.drive_gauge = cfg.drive_gauge_max
 	s.players[0].x = cfg.net_x - FP.from_int(124)
 	s.players[1].x = cfg.net_x - FP.from_int(49)
 	s.players[2].x = cfg.net_x + FP.from_int(156)

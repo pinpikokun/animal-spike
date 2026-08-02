@@ -23,8 +23,8 @@ func test_hash_changes_on_diff() -> void:
 	c.players[3].vy = -1
 	check(a.state_hash() != c.state_hash(), "プレイヤー差分でも変わる")
 	var d = SimState.new()
-	d.players[1].drive_recovery_delay = 1
-	check(a.state_hash() != d.state_hash(), "回復ディレイ差分でも変わる")
+	d.players[1].drive_reserved = 1
+	check(a.state_hash() != d.state_hash(), "予約ドライブ差分でも変わる")
 	var e = SimState.new()
 	e.players[0].dive_contact_ticks = 1
 	check(a.state_hash() != e.state_hash(), "横っ飛び受付差分でも変わる")
@@ -36,9 +36,9 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != g.state_hash(), "ACTIONラッチ差分でも変わる")
 
 func test_serialize_length() -> void:
-	# 基本状態と次ID(9) + プレイヤー4体x53 + 全体48 + エンティティ8スロットx8欄
-	# 9 + 4x53 + 48 + 8x8 = 333
-	check_eq(SimState.new().to_int_array().size(), 333,
+	# 基本状態と次ID(9) + プレイヤー4体x51 + 全体48 + エンティティ8スロットx8欄
+	# 9 + 4x51 + 48 + 8x8 = 325
+	check_eq(SimState.new().to_int_array().size(), 325,
 		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -54,9 +54,8 @@ func test_load_int_array_roundtrip() -> void:
 	a.winner = 1
 	a.players[2].x = 999
 	a.players[2].burn = 37
-	a.players[2].drive_gauge = 3456
-	a.players[2].drive_recovery_progress = 78
-	a.players[2].drive_recovery_delay = 123
+	a.players[2].drive_gauge = 65
+	a.players[2].drive_reserved = 5
 	a.players[2].receive_stance = 2
 	a.players[2].just_receive_flash = 7
 	a.players[2].just_receive_event = 11
@@ -81,9 +80,8 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.state_hash(), a.state_hash(), "往復でハッシュ一致")
 	check_eq(b.players[2].x, 999, "プレイヤー座標の復元")
 	check_eq(b.players[2].burn, 37, "炎上残りtickの復元")
-	check_eq(b.players[2].drive_gauge, 3456, "ドライブゲージ残量の復元")
-	check_eq(b.players[2].drive_recovery_progress, 78, "ドライブ回復端数の復元")
-	check_eq(b.players[2].drive_recovery_delay, 123, "ドライブ回復ディレイの復元")
+	check_eq(b.players[2].drive_gauge, 65, "ドライブゲージ残量の復元")
+	check_eq(b.players[2].drive_reserved, 5, "予約ドライブ量の復元")
 	check_eq(b.players[2].receive_stance, 2, "レシーブ構えの復元")
 	check_eq(b.players[2].just_receive_flash, 7, "ジャストレシーブフラッシュの復元")
 	check_eq(b.players[2].just_receive_event, 11, "ジャストレシーブ演出イベントの復元")

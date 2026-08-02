@@ -19,6 +19,7 @@ func _rally_world() -> Array:
 	var s = SimState.new()
 	for p in s.players:
 		p.char_id = STANDARD_CHAR
+		p.drive_gauge = cfg.drive_gauge_max
 	s.phase = SimState.PHASE_RALLY
 	for p in s.players:
 		p.y = cfg.floor_y
@@ -271,8 +272,9 @@ func test_tome_ghost_ball_matches_plain_up_toss_trajectory() -> void:
 	check_eq(ghost[0].players[0].on_ground, 1, "Dを技モディファイアとして押す間は跳ばない")
 	check_eq(ghost[0].ball_vx, normal[0].ball_vx, "通常ニュートラルトスと横軌道が同一")
 	check_eq(ghost[0].ball_vy, normal[0].ball_vy, "通常ニュートラルトスと縦軌道が同一")
-	check_eq(ghost[0].players[0].drive_gauge, ghost[1].drive_gauge_max - 1000,
-		"ゴーストボールはゲージ1本消費")
+	check_eq(ghost[0].players[0].drive_gauge,
+		ghost[1].drive_gauge_max - ghost[1].special_drive_cost_default,
+		"ゴーストボールは標準35消費")
 	check_eq(ghost[0].ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"必殺技は相手ドライブを削らない")
 
@@ -313,26 +315,27 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	check_eq(s.ball_guard_damage, 40, "カタログ固定威力40を記録")
 	check_eq(s.ball_defense_class, Chars.DEFENSE_UNBLOCKABLE,
 		"防御不能分類を飛来球へ記録")
-	check_eq(p.drive_gauge, cfg.drive_gauge_max - 3000,
-		"殺人燃えるアタックはゲージ3本消費")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.special_drive_cost_default,
+		"殺人燃えるアタックは標準35消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"必殺技は相手ドライブを削らない")
 
-func test_flame_super_spends_all_remaining_drive_and_starts_burnout() -> void:
+func test_flame_super_below_35_does_not_start_or_partially_spend() -> void:
 	var w := _rally_world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.char_id = Chars.CHAR_TOME
-	p.drive_gauge = 2999
+	p.drive_gauge = cfg.special_drive_cost_default - 1
 	p.on_ground = 0
 	p.y = cfg.net_top_y - FP.from_int(1)
 	s.ball_x = p.x + FP.from_int(2)
 	s.ball_y = p.y - FP.from_int(2)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
-	check_eq(s.ball_flame, 1, "残量が1以上なら3本未満でも必殺技になる")
-	check_eq(s.ball_guard_damage, 40, "使い切り発動でも固定威力40")
-	check_eq(p.drive_gauge, 0, "不足分を問わず残量を全消費")
-	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks, "使い切ってバーンアウト突入")
+	check_eq(s.ball_flame, 0, "35未満では必殺技にならない")
+	check_eq(p.drive_gauge,
+		cfg.special_drive_cost_default - 1 - cfg.just_attack_drive_cost,
+		"必殺技分は引かず、フォールバックしたジャスト分だけ消費")
+	check_eq(p.burnout_ticks, 0, "不成立ではバーンアウトしない")
 
 func test_flame_super_at_zero_drive_falls_back_to_normal_spike() -> void:
 	var w := _rally_world(); var s = w[0]; var cfg = w[1]
@@ -346,7 +349,7 @@ func test_flame_super_at_zero_drive_falls_back_to_normal_spike() -> void:
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
 	check_eq(s.ball_flame, 0, "ゲージ0では必殺技にならない")
-	check_eq(s.ball_guard_damage, 25, "通常ジャストスパイクへフォールバック")
+	check_eq(s.ball_guard_damage, 25, "ドライブ不足なら通常スパイクへフォールバック")
 
 func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
 	var w := _rally_world()
@@ -541,7 +544,7 @@ func test_wall_softened_attack_neither_drains_drive_nor_triggers_just_receive() 
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	p.receive_stance = cfg.just_receive_window_ticks
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
@@ -552,20 +555,20 @@ func test_wall_softened_attack_neither_drains_drive_nor_triggers_just_receive() 
 	BallPhysics._step_ball(s, cfg)
 	HitResolver._apply_hit(
 		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
-	check_eq(p.drive_gauge, 3000, "壁で弱った球のレシーブはドライブを削らない")
+	check_eq(p.drive_gauge, 65, "壁で弱った球のレシーブはドライブを削らない")
 	check_eq(p.just_receive_event, 0, "壁で弱った球にはジャストレシーブが成立しない")
 
-func test_unimpeded_attack_still_drains_drive_on_receive() -> void:
+func test_unimpeded_attack_does_not_drain_drive_on_receive() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
 	HitResolver._apply_hit(
 		s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
-	check_eq(p.drive_gauge, 2000, "何にも当たっていない通常アタックは従来どおり1本削る")
+	check_eq(p.drive_gauge, 65, "通常レシーブではドライブを削らない")
 
 func test_bump_on_ground() -> void:
 	var w := _rally_world()

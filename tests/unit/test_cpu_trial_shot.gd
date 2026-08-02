@@ -381,7 +381,7 @@ func test_air_shot_candidates_use_cpu_drive_vertical_input() -> void:
 	check_eq(rich_input & Simulation.IN_UP, 0,
 		"ゲージ十分のCPU候補に上を混ぜない")
 	var poor := _all_candidates_world(0)
-	poor[0].players[poor[2]].drive_gauge = poor[1].drive_gauge_stock - 1
+	poor[0].players[poor[2]].drive_gauge = poor[1].just_attack_drive_cost - 1
 	var poor_input: int = _decide_fixture(poor)
 	check(poor_input & Simulation.IN_ACTION,
 		"ゲージ不足のCPUも通常アタック候補を選ぶ")
@@ -635,7 +635,7 @@ func test_deep_flame_keeps_dedicated_input_and_velocity() -> void:
 	var cfg = w[1]
 	var actor: int = w[2]
 	var p = s.players[actor]
-	p.drive_gauge = cfg.drive_gauge_stock * 3
+	p.drive_gauge = cfg.special_drive_cost_default
 	var flame_input := Simulation.IN_ABILITY1 | Simulation.IN_DOWN
 	check(SimCpu._should_use_flame(s, actor, p, cfg, p.cpu),
 		"120px条件と独立した炎必殺専用条件が成立")

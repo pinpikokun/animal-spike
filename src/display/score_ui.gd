@@ -159,7 +159,7 @@ func draw_hud(c: Control) -> void:
 				col = Color(0.6, 0.6, 0.6)
 			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), col)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)
-		# ドライブゲージ(水色): 既存の第2ゲージ枠を6本のセグメントとして使う。
+		# ドライブゲージ(水色): 6区画は連続値0..100を読むための目盛りだけ。
 		var burnout: bool = p.burnout_ticks > 0
 		var burnout_dim: bool = burnout and (_state.tick / 5) % 2 == 0
 		var drive_bg := Color(0.3, 0.3, 0.32, 0.45) \
@@ -168,13 +168,12 @@ func draw_hud(c: Control) -> void:
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 13.0, bar_w, 7.0), drive_bg)
 		var segment_gap := 1.0
 		var segment_w := (bar_w - segment_gap * 5.0) / 6.0
+		var drive_ratio := clampf(float(p.drive_gauge) / float(_cfg.drive_gauge_max), 0.0, 1.0)
 		for segment in 6:
 			var segment_x := bar_x + float(segment) * (segment_w + segment_gap)
-			var fill_units: int = clampi(
-				p.drive_gauge - segment * _cfg.drive_gauge_stock,
-				0, _cfg.drive_gauge_stock)
-			var fill_w := segment_w * float(fill_units) / float(_cfg.drive_gauge_stock)
-			if fill_units > 0:
+			var segment_fill := clampf(drive_ratio * 6.0 - float(segment), 0.0, 1.0)
+			var fill_w := segment_w * segment_fill
+			if segment_fill > 0.0:
 				var drive_color := Color(0.35, 0.35, 0.38, 0.45) \
 					if burnout_dim else Color(0.45, 0.45, 0.48, 0.9) \
 					if burnout else Color(0.25, 0.75, 1.0, 0.95)

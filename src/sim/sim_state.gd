@@ -66,8 +66,6 @@ class Player:
 	var guard_max: int = 100
 	var drive_gauge: int = 0
 	var drive_reserved: int = 0
-	var drive_recovery_progress: int = 0
-	var drive_recovery_delay: int = 0
 	var attack_recovery_delay_ticks: int = 0
 	var attack_recovery_window_ticks: int = 0
 	var attack_recovery_fraction_ticks: int = 0
@@ -239,8 +237,6 @@ func to_int_array() -> Array[int]:
 		out.append(p.guard_max)
 		out.append(p.drive_gauge)
 		out.append(p.drive_reserved)
-		out.append(p.drive_recovery_progress)
-		out.append(p.drive_recovery_delay)
 		out.append(p.attack_recovery_delay_ticks)
 		out.append(p.attack_recovery_window_ticks)
 		out.append(p.attack_recovery_fraction_ticks)
@@ -364,8 +360,6 @@ func load_int_array(arr: Array) -> void:
 		p.guard_max = arr[k]; k += 1
 		p.drive_gauge = arr[k]; k += 1
 		p.drive_reserved = arr[k]; k += 1
-		p.drive_recovery_progress = arr[k]; k += 1
-		p.drive_recovery_delay = arr[k]; k += 1
 		p.attack_recovery_delay_ticks = arr[k]; k += 1
 		p.attack_recovery_window_ticks = arr[k]; k += 1
 		p.attack_recovery_fraction_ticks = arr[k]; k += 1

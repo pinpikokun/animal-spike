@@ -60,12 +60,25 @@ var spike_steep_vy: int
 var spike_sweet_pct: int   # ジャスト判定: リーチの何%以内ならパーフェクト
 var spike_normal_pct: int  # 通常アタックの速度倍率(%)
 var spike_power_pct: int   # パーフェクト時のスパイク速度倍率(%)
-var drive_gauge_stock: int
 var drive_gauge_max: int
-var drive_recovery_ticks_per_stock: int
-var drive_recovery_delay_ticks: int
+var normal_attack_drive_gain: int
+var attack_recovery_ticks_per_point: int
+var attack_recovery_window_ticks: int
+var just_attack_drive_cost: int
+var just_attack_recovery_delay_ticks: int
+var special_drive_cost_default: int
+var special_recovery_delay_ticks: int
+var passive_return_drive_cost: int
+var receive_stance_reserve_cost: int
+var receive_stance_exit_recovery_ticks: int
 var just_receive_window_ticks: int
+var dive_receive_drive_cost: int
+var dive_burnout_distance_pct: int
+var dive_burnout_recovery_pct: int
+var block_start_drive_cost: int
+var block_contact_drive_cost: int
 var burnout_recovery_ticks: int
+var burnout_exit_drive: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 耐久力が尽きた時のスタン時間
 var burn_stun_ticks: int   # 燃えるアタック被弾後の行動不能時間
@@ -197,26 +210,45 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if spike_power_pct <= spike_normal_pct:
 		_fail("spike_power_pctはspike_normal_pctより大きいこと")
 		return
-	drive_gauge_stock = _int_of(raw, "drive_gauge_stock")
 	drive_gauge_max = _int_of(raw, "drive_gauge_max")
-	drive_recovery_ticks_per_stock = _int_of(raw, "drive_recovery_ticks_per_stock")
-	drive_recovery_delay_ticks = _int_of(raw, "drive_recovery_delay_ticks")
+	normal_attack_drive_gain = _int_of(raw, "normal_attack_drive_gain")
+	attack_recovery_ticks_per_point = _int_of(raw, "attack_recovery_ticks_per_point")
+	attack_recovery_window_ticks = _int_of(raw, "attack_recovery_window_ticks")
+	just_attack_drive_cost = _int_of(raw, "just_attack_drive_cost")
+	just_attack_recovery_delay_ticks = _int_of(raw, "just_attack_recovery_delay_ticks")
+	special_drive_cost_default = _int_of(raw, "special_drive_cost_default")
+	special_recovery_delay_ticks = _int_of(raw, "special_recovery_delay_ticks")
+	passive_return_drive_cost = _int_of(raw, "passive_return_drive_cost")
+	receive_stance_reserve_cost = _int_of(raw, "receive_stance_reserve_cost")
+	receive_stance_exit_recovery_ticks = _int_of(raw, "receive_stance_exit_recovery_ticks")
 	just_receive_window_ticks = _int_of(raw, "just_receive_window_ticks")
-	if drive_gauge_stock <= 0 or drive_gauge_max != drive_gauge_stock * 6:
-		_fail("drive_gauge_maxはdrive_gauge_stockの6本分であること")
-		return
-	if drive_recovery_ticks_per_stock <= 0:
-		_fail("drive_recovery_ticks_per_stockは正であること")
-		return
-	if drive_recovery_delay_ticks <= 0:
-		_fail("drive_recovery_delay_ticksは正であること")
-		return
-	if just_receive_window_ticks <= 0:
-		_fail("just_receive_window_ticksは正であること")
+	dive_receive_drive_cost = _int_of(raw, "dive_receive_drive_cost")
+	dive_burnout_distance_pct = _int_of(raw, "dive_burnout_distance_pct")
+	dive_burnout_recovery_pct = _int_of(raw, "dive_burnout_recovery_pct")
+	block_start_drive_cost = _int_of(raw, "block_start_drive_cost")
+	block_contact_drive_cost = _int_of(raw, "block_contact_drive_cost")
+	if drive_gauge_max != 100:
+		_fail("drive_gauge_maxは100であること")
 		return
 	burnout_recovery_ticks = _int_of(raw, "burnout_recovery_ticks")
-	if burnout_recovery_ticks <= 0:
-		_fail("burnout_recovery_ticksは正であること")
+	burnout_exit_drive = _int_of(raw, "burnout_exit_drive")
+	var drive_rules: Array[int] = [
+		normal_attack_drive_gain, attack_recovery_ticks_per_point,
+		attack_recovery_window_ticks, just_attack_drive_cost,
+		just_attack_recovery_delay_ticks, special_drive_cost_default,
+		special_recovery_delay_ticks, passive_return_drive_cost,
+		receive_stance_reserve_cost, receive_stance_exit_recovery_ticks,
+		just_receive_window_ticks, dive_receive_drive_cost,
+		dive_burnout_distance_pct, dive_burnout_recovery_pct,
+		block_start_drive_cost, block_contact_drive_cost,
+		burnout_recovery_ticks, burnout_exit_drive,
+	]
+	for value in drive_rules:
+		if value <= 0:
+			_fail("ドライブ設定はすべて正であること")
+			return
+	if burnout_exit_drive > drive_gauge_max:
+		_fail("burnout_exit_driveはdrive_gauge_max以下であること")
 		return
 	hip_quake_stun_ticks = _int_of(raw, "hip_quake_stun_ticks")
 	if hip_quake_stun_ticks <= 0:

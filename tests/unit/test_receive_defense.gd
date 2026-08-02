@@ -78,14 +78,14 @@ func test_normal_attack_carries_power_guard_damage() -> void:
 
 func test_standard_c_contact_matrix() -> void:
 	for row in [
-		[SimState.BALL_ATTACK_NORMAL, CONTACT_TOSS, 75, 6000, true],
-		[SimState.BALL_ATTACK_NORMAL, CONTACT_RECEIVE, 90, 5000, false],
-		[SimState.BALL_ATTACK_NORMAL, CONTACT_JUST, 100, 6000, false],
-		[SimState.BALL_ATTACK_NORMAL, CONTACT_DIVE, 75, 6000, false],
-		[SimState.BALL_ATTACK_JUST, CONTACT_TOSS, 75, 6000, true],
-		[SimState.BALL_ATTACK_JUST, CONTACT_RECEIVE, 90, 4000, false],
-		[SimState.BALL_ATTACK_JUST, CONTACT_JUST, 100, 6000, false],
-		[SimState.BALL_ATTACK_JUST, CONTACT_DIVE, 75, 6000, false],
+		[SimState.BALL_ATTACK_NORMAL, CONTACT_TOSS, 75, 100, true],
+		[SimState.BALL_ATTACK_NORMAL, CONTACT_RECEIVE, 90, 100, false],
+		[SimState.BALL_ATTACK_NORMAL, CONTACT_JUST, 100, 100, false],
+		[SimState.BALL_ATTACK_NORMAL, CONTACT_DIVE, 75, 100, false],
+		[SimState.BALL_ATTACK_JUST, CONTACT_TOSS, 75, 100, true],
+		[SimState.BALL_ATTACK_JUST, CONTACT_RECEIVE, 90, 100, false],
+		[SimState.BALL_ATTACK_JUST, CONTACT_JUST, 100, 100, false],
+		[SimState.BALL_ATTACK_JUST, CONTACT_DIVE, 75, 100, false],
 	]:
 		var result := _resolve_contact(row[0], row[1], 25)
 		var p = result[2]
@@ -132,7 +132,7 @@ func test_dive_takes_full_guard_damage_without_butt_drop() -> void:
 			var p = _resolve_contact(attack_kind, CONTACT_DIVE, 25,
 				false, 100, dive_input)[2]
 			check_eq(p.guard, 75, "飛びつきは全量: %d/%d" % [attack_kind, dive_input])
-			check_eq(p.drive_gauge, 6000,
+			check_eq(p.drive_gauge, 100,
 				"飛びつきはdrive 0: %d/%d" % [attack_kind, dive_input])
 			check_eq(p.flinch, 0,
 				"飛びつき後にしりもちしない: %d/%d" % [attack_kind, dive_input])

@@ -126,6 +126,7 @@ git commit -m "refactor: 戦闘リソースの同期状態を追加"
 
 **Files:**
 - Create: `src/sim/combat_resources.gd`
+- Modify: `src/sim/chars.gd`
 - Modify: `src/sim/sim_config.gd:55-245`
 - Modify: `data/rules.json:45-76`
 - Modify: `src/sim/hit_resolver.gd:298-416,706-740`
@@ -134,11 +135,13 @@ git commit -m "refactor: 戦闘リソースの同期状態を追加"
 - Modify: `src/sim/sim_cpu.gd:590-1125`
 - Modify: `src/display/score_ui.gd:160-186`
 - Modify: `tests/unit/test_config.gd`
+- Modify: `tests/unit/test_chars.gd`
 - Create: `tests/unit/test_combat_drive_values.gd`
 - Update: `tests/unit/test_drive_gauge.gd`, `test_hat.gd`, `test_hip_cling.gd`, `test_hit.gd`
 
 **Interfaces:**
 - Produces: `CombatResources.available_drive(p) -> int`
+- Produces: `CombatResources.special_drive_cost(cfg) -> int`
 - Produces: `CombatResources.can_pay(p, amount: int) -> bool`
 - Produces: `CombatResources.spend_committed(p, amount: int, cfg) -> Dictionary`
 - Produces: `CombatResources.spend_mandatory(p, amount: int, cfg) -> int`
@@ -201,7 +204,7 @@ static func spend_mandatory(p, amount: int, cfg) -> int:
 
 - [ ] **Step 5: 全攻撃系消費を数値へ接続する**
 
-ジャストアタックは25全額がなければ通常へ戻す。帽子、ヒップ、炎など現行全必殺技を35へ揃え、不足時は開始しない。旧1、2、3ストックと残量全消費成立をテストごと撤去する。
+ジャストアタックは25全額がなければ通常へ戻す。帽子、ヒップ、炎など現行全必殺技を35へ揃え、不足時は開始しない。技カタログから旧 `gauge_cost` を削除し、行動可否、実消費、CPU判断は `CombatResources.special_drive_cost(cfg)` だけを通す。旧1、2、3ストックと残量全消費成立をテストごと撤去する。
 旧受動回復ロジックはこのTaskで停止し、Task 3の攻撃後回復が入るまで自動回復0とする。CPUと6分割表示も `drive_gauge_stock` を読まず、0から100の値を直接扱う。
 旧stock参照を使っていたブロックの被弾側ドライブ削りは0へ置換し、Task 7の開始5・接触5へ移すまで無料ブロックとして固定する。飛びつきは現行どおり無料のままTask 7へ送る。全消費経路は実体値0で `start_burnout()` を呼び、予約による利用可能値0では呼ばない。
 Task 2単体は攻撃後回復がまだ無い一時状態であり、Task 3と対で最終経済を構成することをコミット説明とタスク記録へ明記する。

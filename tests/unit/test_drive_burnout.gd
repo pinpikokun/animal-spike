@@ -39,7 +39,7 @@ func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_he
 	var p = s.players[0]
 	p.guard = 40
 	_press_receive(s, cfg)
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	# 位置の芯判定は撤去。リーチ端相当でもタイミング窓だけで成立する。
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
@@ -48,7 +48,7 @@ func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_he
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
 	check_eq(p.guard, 40, "ジャストレシーブはガード削りを無効化し回復もしない")
-	check_eq(p.drive_gauge, 3000, "ジャストレシーブはドライブ削りを無効化し回復もしない")
+	check_eq(p.drive_gauge, 65, "ジャストレシーブはドライブを変化させない")
 	check_eq(p.just_receive_flash, 30, "JUST表示と本体発光を約30tick維持")
 	check_eq(p.just_receive_event, 1, "専用SE用イベント番号")
 	check_eq(s.hit_freeze, 10, "ジャストレシーブのヒットストップは10tick")
@@ -57,7 +57,7 @@ func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_he
 func test_moving_receive_does_not_trigger_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	p.vx = 1
 	Simulation._update_receive_stances(s,
 		[Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
@@ -66,7 +66,7 @@ func test_moving_receive_does_not_trigger_just_receive() -> void:
 	s.ball_power = 1
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
-	check_eq(p.drive_gauge, 1000, "移動中の押下では窓が開かず2本削りを受ける")
+	check_eq(p.drive_gauge, 65, "通常レシーブでもドライブは減らない")
 	check_eq(p.just_receive_event, 0, "移動レシーブでは専用演出なし")
 
 func test_flame_cannot_be_nullified_by_just_receive() -> void:
@@ -74,23 +74,23 @@ func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	var p = s.players[0]
 	p.guard = 100
 	_press_receive(s, cfg)
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	_incoming_just(s, cfg, 0, true)
 	check_eq(p.guard, 60, "防御不能系はカタログ固定40を通す")
-	check_eq(p.drive_gauge, 1000, "人工的なジャスト属性分だけドライブを削る")
+	check_eq(p.drive_gauge, 65, "防御不能技のレシーブでもドライブは減らない")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
 
 func test_held_receive_after_window_expires_is_normal_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.drive_gauge = 3000
+	p.drive_gauge = 65
 	_press_receive(s, cfg)
 	var held: Array[int] = [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0]
 	for i in cfg.just_receive_window_ticks:
 		Simulation._update_receive_stances(s, held, cfg)
 	check(p.receive_stance < 0, "押しっぱなしでは窓切れ後に再発動しない")
 	_incoming_just(s, cfg)
-	check_eq(p.drive_gauge, 1000, "窓切れ後は通常どおり2本削られる")
+	check_eq(p.drive_gauge, 65, "窓切れ後の通常レシーブでもドライブは減らない")
 	check_eq(p.just_receive_event, 0, "窓切れ後はジャスト演出なし")
 
 func test_releasing_and_pressing_again_opens_new_window() -> void:
@@ -152,13 +152,13 @@ func test_burnout_seals_special_inputs() -> void:
 func test_drive_reaching_zero_starts_burnout() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.drive_gauge = cfg.drive_gauge_stock
-	s.last_touch_team = 1
-	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	p.drive_gauge = cfg.just_attack_drive_cost
+	p.on_ground = 0
 	HitResolver._apply_hit(s, 0, cfg,
-		Simulation.IN_ACTION | Simulation.IN_DOWN,
-		cfg.player_reach * cfg.player_reach)
-	check_eq(p.drive_gauge, 0, "通常アタック1本削りでゼロになる")
+		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
+	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_JUST,
+		"25ちょうどならジャストアタック成立")
+	check_eq(p.drive_gauge, 0, "ジャストアタック25消費でゼロになる")
 	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks,
 		"ドライブがゼロになった瞬間にバーンアウト開始")
 
@@ -188,7 +188,6 @@ func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var p = s.players[0]
 	p.drive_gauge = 0
 	p.burnout_ticks = cfg.burnout_recovery_ticks
-	p.drive_recovery_delay = cfg.drive_recovery_delay_ticks
 	s.phase = SimState.PHASE_POINT_PAUSE
 	for i in 100:
 		Simulation._update_drive_recovery(s, cfg)
@@ -198,6 +197,4 @@ func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	for i in cfg.burnout_recovery_ticks:
 		Simulation._update_drive_recovery(s, cfg)
 	check_eq(p.burnout_ticks, 0, "600ラリーtickでバーンアウト解除")
-	check_eq(p.drive_gauge, cfg.drive_gauge_max, "解除時に6本全回復")
-	check_eq(p.drive_recovery_delay, 0,
-		"バーンアウト復帰は通常回復ディレイに阻害されない")
+	check_eq(p.drive_gauge, cfg.drive_gauge_max, "解除時に100へ全回復")

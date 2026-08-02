@@ -52,14 +52,12 @@ const CONDITION_AIR_DOWN_ABILITY_ABOVE_NET := \
 
 const GHOST_BALL_DEF := {
 	"power": 0,
-	"gauge_cost": 1000,
 	"condition": CONDITION_GROUND_UP_ABILITY,
 	"defense_class": DEFENSE_DELAYED,
 	"visual": "ghost",
 }
 const FLAME_ATTACK_DEF := {
 	"power": 40,
-	"gauge_cost": 3000,
 	"condition": CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
 	"defense_class": DEFENSE_UNBLOCKABLE,
 	"visual": "flame",

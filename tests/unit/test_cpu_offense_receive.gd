@@ -57,7 +57,7 @@ func test_max_tome_uses_flame_with_three_stocks_at_high_contact() -> void:
 	var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_MAX)
 	var s = w[0]
 	var cfg = w[1]
-	s.players[1].drive_gauge = cfg.drive_gauge_stock * 3
+	s.players[1].drive_gauge = cfg.special_drive_cost_default
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check(input & Simulation.IN_ABILITY1, "最強TOMEは3本以上の攻撃機会で炎を選ぶ")
 	check(input & Simulation.IN_DOWN, "炎は空中の下+Dで明示入力する")
@@ -66,7 +66,7 @@ func test_weak_cpu_does_not_use_flame_at_same_opportunity() -> void:
 	var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_WEAK)
 	var s = w[0]
 	var cfg = w[1]
-	s.players[1].drive_gauge = cfg.drive_gauge_stock * 6
+	s.players[1].drive_gauge = cfg.drive_gauge_max
 	var input: int = SimCpu.decide(s, 1, cfg)
 	check_eq(input & Simulation.IN_ABILITY1, 0, "弱CPUは必殺技を選ばない")
 
