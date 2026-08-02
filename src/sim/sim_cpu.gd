@@ -685,8 +685,13 @@ static func decide(s, idx: int, cfg) -> int:
 	if p.on_ground == 1 and _is_pre_attack_receiver(s, idx, cfg, team):
 		# 予備動作へのコートカバーは打球後反応ではないため、frozenより先に処理する。
 		return _walk_to(p, _pre_attack_cover_x(cfg, team), deadzone / 2)
+	if not frozen and on_own_side \
+			and _plans_dive_receive(s, idx, p, cfg, team):
+		# 人間と同じACTIONエッジだけを出す。消費と通常/弱体の最終判定は
+		# SimulationからCombatResources.start_diveへ委ねる。
+		return SimInput.IN_ACTION
 	if frozen and on_own_side and p.on_ground == 1 and p.vx == 0 \
-			and _plans_just_receive(s, idx, p, team, prof):
+			and _plans_just_receive(s, idx, p, cfg, team, prof):
 		var frozen_receive_reach: int = _hit_reach(
 			p.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
 		var frozen_target: int = _receive_target_x(s, cfg, prof)
@@ -761,7 +766,7 @@ static func decide(s, idx: int, cfg) -> int:
 			var receive_target: int = _receive_target_x(s, cfg, prof)
 			var receive_aim_margin: int = reach * cfg.spike_sweet_pct / 200
 			var timing_receive: bool = not frozen \
-				and _plans_just_receive(s, idx, p, team, prof) \
+				and _plans_just_receive(s, idx, p, cfg, team, prof) \
 				and _can_prepare_just_receive(
 					s, p, cfg, reach, receive_target, receive_aim_margin)
 			var timing_chord: bool = (input & SimInput.IN_ACTION) != 0 \
@@ -815,7 +820,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		p.char_id, reach, HitResolver.INTENT_GROUND_RECEIVE)
 	# 精密待ちは、反応遅延後の残り時間で「到着→静止→5tick前押下」が
 	# 実現できる時だけ選ぶ。間に合わない球は通常レシーブへ即フォールバック。
-	var just_receive_plan: bool = _plans_just_receive(s, idx, p, team, prof) \
+	var just_receive_plan: bool = _plans_just_receive(s, idx, p, cfg, team, prof) \
 		and _can_prepare_just_receive(
 			s, p, cfg, receive_reach, land_x, stance_deadzone)
 	# 狙い誤差: 正確に計算した落下点をタッチ毎に1回だけ汚す(tick毎だと震える)。
@@ -1064,14 +1069,37 @@ static func _attack_ok(s, idx: int, prof: int) -> bool:
 		return true
 	return s.aitick % 256 < tiq * 64
 
-static func _plans_just_receive(s, idx: int, p, team: int, prof: int) -> bool:
+static func _plans_just_receive(s, idx: int, p, cfg, team: int, prof: int) -> bool:
 	var ab: int = prof_byte(prof, P_AB)
 	if not (ab & AB_SWEET) or p.on_ground == 0 or p.burnout_ticks > 0:
+		return false
+	if not CombatResources.can_pay(p, cfg.receive_stance_reserve_cost):
 		return false
 	if s.last_touch_team < 0 or s.last_touch_team == team \
 			or s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE:
 		return false
 	return _sweet_ok(s, idx, prof)
+
+static func _plans_dive_receive(s, _idx: int, p, cfg, team: int) -> bool:
+	if s.phase != SimStateScript.PHASE_RALLY or s.last_touch_team < 0 \
+			or s.last_touch_team == team or p.on_ground == 0 \
+			or p.dive != 0 or p.hit_cooldown > 0 or p.stun_ticks > 0 \
+			or p.burn > 0 or p.quake_stun > 0 or p.throw > 0 \
+			or p.flinch > 0 or p.hip != 0 or p.stance_active != 0 \
+			or p.stance_exit_recovery_ticks > 0 or p.dive_recovery_ticks > 0 \
+			or p.current_block_mode != SimStateScript.BLOCK_NONE:
+		return false
+	var predicted_x: int = BallPhysics.predict_first_floor_x(s, cfg)
+	if predicted_x < 0:
+		return false
+	var landing_team: int = 0 if predicted_x < cfg.net_x else 1
+	if landing_team != team:
+		return false
+	var receive_reach: int = _hit_reach(
+		p.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+	var distance: int = absi(predicted_x - p.x)
+	return distance > receive_reach \
+		and distance <= receive_reach + cfg.dive_receive_extra_reach
 
 static func _can_receive_from_stand_x(
 		s, p, cfg, receive_reach: int, stand_x: int) -> bool:

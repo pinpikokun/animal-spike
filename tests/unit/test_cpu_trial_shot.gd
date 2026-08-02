@@ -395,6 +395,14 @@ func test_air_shot_candidates_use_cpu_drive_vertical_input() -> void:
 	check(burnout_input & Simulation.IN_UP,
 		"バーンアウト中のCPU候補は上アタック")
 
+func test_just_attack_cpu_threshold_is_exactly_twenty_five() -> void:
+	for row in [[24, false], [25, true]]:
+		var w := _all_candidates_world(0)
+		w[0].players[w[2]].drive_gauge = row[0]
+		var input: int = _decide_fixture(w)
+		check_eq((input & Simulation.IN_DOWN) != 0, row[1],
+			"CPUジャスト選択境界 drive=%d" % row[0])
+
 func test_policy_one_uses_first_valid_candidate() -> void:
 	var decided: int = _decide_fixture(_all_candidates_world(0))
 	check_eq(decided,

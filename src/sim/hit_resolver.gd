@@ -411,15 +411,20 @@ static func _defense_contact_kind(intent_kind: int, just_receive: bool,
 static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
 		base_health_damage: int, cfg) -> void:
 	var health_damage: int = base_health_damage
+	var health_multiplier_pct: int = 100
 	if contact_kind == DEFENSE_CONTACT_GROUND_RECEIVE:
 		health_damage = base_health_damage * 2 / 5
+		health_multiplier_pct = 40
 	elif contact_kind == DEFENSE_CONTACT_JUST_RECEIVE:
 		health_damage = 0
+		health_multiplier_pct = 0
 	elif contact_kind == DEFENSE_CONTACT_DIVE \
 			and p.dive_resource_mode == SimStateScript.DIVE_NORMAL:
 		health_damage = base_health_damage / 2
+		health_multiplier_pct = 50
 	var was_stunned: bool = p.stun_ticks > 0
-	var applied: int = CombatResources.apply_health_damage(p, health_damage, cfg)
+	var applied: int = CombatResources.apply_health_damage(
+		p, health_damage, cfg, health_multiplier_pct)
 	var started_stun: bool = not was_stunned and p.stun_ticks > 0
 	if started_stun:
 		s.hit_freeze = maxi(s.hit_freeze, 10)
@@ -435,7 +440,6 @@ static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
 static func _ignite_player(p, team: int, cfg) -> void:
 	var back: int = -1 if team == 0 else 1
 	p.burn = cfg.burn_stun_ticks
-	p.stun_ticks = 0
 	p.flinch = 0
 	p.push = 0
 	# 原作の摩擦停止まで約15座標単位=本作換算約47pxに対し、標準重量で約48px。
@@ -928,7 +932,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		if p.current_block_mode == SimStateScript.BLOCK_BURNOUT:
 			var was_stunned: bool = p.stun_ticks > 0
 			CombatResources.apply_health_damage(
-				p, incoming_health_damage / 2, cfg)
+				p, incoming_health_damage / 2, cfg, 50)
 			started_health_stun = not was_stunned and p.stun_ticks > 0
 		if s.ball_power == 1:
 			var back_dir: int = -1 if team == 0 else 1

@@ -53,14 +53,24 @@ func test_max_cpu_prefers_attack_over_air_toss() -> void:
 	check(input & Simulation.IN_ACTION, "最強CPUは攻撃機会で打球する")
 	check(input & Simulation.IN_DOWN, "成立するアタックを空中トスより優先する")
 
-func test_max_tome_uses_flame_with_three_stocks_at_high_contact() -> void:
+func test_max_tome_uses_flame_with_thirty_five_drive_at_high_contact() -> void:
 	var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_MAX)
 	var s = w[0]
 	var cfg = w[1]
 	s.players[1].drive_gauge = cfg.special_drive_cost_default
 	var input: int = SimCpu.decide(s, 1, cfg)
-	check(input & Simulation.IN_ABILITY1, "最強TOMEは3本以上の攻撃機会で炎を選ぶ")
+	check(input & Simulation.IN_ABILITY1, "最強TOMEは35以上の攻撃機会で炎を選ぶ")
 	check(input & Simulation.IN_DOWN, "炎は空中の下+Dで明示入力する")
+
+func test_max_tome_special_threshold_is_exactly_thirty_five() -> void:
+	for row in [[34, false], [35, true]]:
+		var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_MAX)
+		var s = w[0]
+		var cfg = w[1]
+		s.players[1].drive_gauge = row[0]
+		var input: int = SimCpu.decide(s, 1, cfg)
+		check_eq((input & Simulation.IN_ABILITY1) != 0, row[1],
+			"CPU必殺選択境界 drive=%d" % row[0])
 
 func test_weak_cpu_does_not_use_flame_at_same_opportunity() -> void:
 	var w := _air_attack_world(Chars.CHAR_TOME, SimCpu.PRESET_WEAK)
@@ -104,6 +114,60 @@ func test_max_cpu_presses_receive_inside_predicted_timing_window() -> void:
 	Simulation._update_receive_stances(s, [0, input, 0, 0], w[1])
 	check_eq(s.players[1].receive_stance, w[1].just_receive_window_ticks,
 		"CPU入力でジャストレシーブ窓が開く")
+
+func test_cpu_receive_stance_threshold_is_exactly_five_available_drive() -> void:
+	for row in [[4, false], [5, true]]:
+		var w := _incoming_attack_world(SimCpu.PRESET_MAX)
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[1]
+		p.drive_gauge = row[0]
+		var planned: bool = SimCpu._plans_just_receive(s, 1, p, cfg, 0, p.cpu)
+		check_eq(planned, row[1],
+			"CPU構え選択境界 drive=%d" % row[0])
+		var input: int = SimCpu.decide(s, 1, cfg)
+		check_eq((input & Simulation.IN_ACTION) != 0 \
+			and (input & Simulation.IN_DOWN) != 0, row[1],
+			"CPUは共通予約可能時だけ構え入力 drive=%d" % row[0])
+
+func _cpu_dive_world(drive: int, burnout_ticks: int) -> Array:
+	var w := _world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[1]
+	s.phase = SimState.PHASE_RALLY
+	s.tick = 1000
+	s.last_hit_tick = 0
+	s.last_touch_team = 1
+	p.cpu = SimCpu.PRESET_MAX
+	p.drive_gauge = drive
+	p.burnout_ticks = burnout_ticks
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y
+	p.on_ground = 1
+	var receive_reach: int = HitResolver.reach_for_intent(
+		p.char_id, cfg.player_reach, HitResolver.INTENT_GROUND_RECEIVE)
+	s.ball_x = p.x + receive_reach + cfg.dive_receive_extra_reach / 2
+	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(2)
+	s.ball_vx = 0
+	s.ball_vy = FP.from_int(1)
+	return [s, cfg, p]
+
+func test_cpu_dive_selection_uses_common_normal_and_weak_fallbacks() -> void:
+	for row in [
+			[15, 0, SimState.DIVE_NORMAL],
+			[14, 0, SimState.DIVE_WEAK],
+			[0, 120, SimState.DIVE_WEAK]]:
+		var w := _cpu_dive_world(row[0], row[1])
+		var s = w[0]
+		var cfg = w[1]
+		var p = w[2]
+		var input: int = SimCpu.decide(s, 1, cfg)
+		check(input & Simulation.IN_ACTION,
+			"CPUも飛びつき入力を選ぶ drive=%d burnout=%d" % [row[0], row[1]])
+		Simulation.step(s, [0, input, 0, 0], cfg)
+		check_eq(p.dive_resource_mode, row[2],
+			"最終種別は人間と同じ共通APIが決める drive=%d" % row[0])
 
 func test_max_cpu_can_press_timing_receive_while_reaction_is_frozen() -> void:
 	var w := _incoming_attack_world(SimCpu.PRESET_MAX)

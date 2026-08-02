@@ -46,6 +46,8 @@ func test_stun_lasts_exactly_three_hundred_ticks_without_mash_shortening() -> vo
 	check_eq(b.stun_ticks, 0, "連打なしと同じtickで解除")
 	check_eq(a.health, 100, "時間解除で体力100")
 	check_eq(b.health, 100, "連打側も体力100")
+	check_eq(a.last_stun_end_reason, SimState.STUN_END_TIMED, "時間解除理由を記録")
+	check_eq(b.last_stun_end_reason, SimState.STUN_END_TIMED, "連打側も時間解除")
 
 func test_same_rally_recovery_clamps_damage_to_one_then_next_rally_can_stun() -> void:
 	var cfg = SimConfig.new()
@@ -78,6 +80,7 @@ func test_rally_end_recovers_stun_immediately_without_drive_changes() -> void:
 	check_eq(p.stun_ticks, 0, "ラリー終了でスタン解除")
 	check_eq(p.drive_gauge, 17, "スタン解除はドライブを変えない")
 	check_eq(p.burnout_ticks, 321, "スタン解除はバーンアウトを変えない")
+	check_eq(p.last_stun_end_reason, SimState.STUN_END_RALLY, "ラリー終了理由を記録")
 
 func test_stun_and_burnout_advance_together_during_rally() -> void:
 	var cfg = SimConfig.new()

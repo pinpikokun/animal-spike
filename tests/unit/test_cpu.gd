@@ -1092,6 +1092,18 @@ func test_non_blocker_jumps_when_role_mate_cannot_meet() -> void:
 	check(input & Simulation.IN_JUMP,
 		"役持ち相方が会合不能なら非ブロッカー役が代わりに跳ぶ")
 
+func test_cpu_keeps_block_selection_during_burnout() -> void:
+	var w := _block_priority_world()
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 0
+	p.burnout_ticks = 120
+	check_eq(SimCpu._decide_block(
+		s, 0, p, cfg, 0, SimCpu.AB_BLOCK, 0),
+		Simulation.IN_JUMP | Simulation.IN_UP,
+		"CPUもバーンアウト中に体力版ブロックを選ぶ")
+
 func _deep_block_priority_world() -> Array:
 	var w := _block_priority_world()
 	var s = w[0]

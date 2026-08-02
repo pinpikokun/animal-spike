@@ -50,21 +50,23 @@ func test_burn_expiry_returns_to_normal_control() -> void:
 	PlayerMovement._step_player(p, Simulation.IN_RIGHT, cfg, 0)
 	check(p.x > before_x, "炎上解除後は通常の移動入力へ戻る")
 
-func test_health_zero_waits_for_burn_expiry_before_stun() -> void:
+func test_burn_and_health_stun_timers_advance_together() -> void:
 	var cfg = SimConfig.new()
 	var p = SimState.Player.new()
 	p.max_health = 100
 	p.health = 0
 	p.burn = 2
+	p.stun_ticks = cfg.stun_ticks
+	p.stunned_this_rally = 1
 	p.y = cfg.floor_y
 	p.on_ground = 1
 	PlayerMovement._step_player(p, Simulation.IN_ACTION, cfg, 0)
 	check_eq(p.burn, 1, "炎上は連打で余分に減らない")
-	check_eq(p.stun_ticks, 0, "炎上中の体力0は即気絶させない")
+	check_eq(p.stun_ticks, cfg.stun_ticks - 1, "炎上中も5秒時計を進める")
 	check_eq(p.health, 0, "炎上中は体力0を保持")
 	PlayerMovement._step_player(p, 0, cfg, 0)
 	check_eq(p.burn, 0, "炎上終了")
-	check_eq(p.stun_ticks, cfg.stun_ticks, "炎上が明けてから気絶へ移行")
+	check_eq(p.stun_ticks, cfg.stun_ticks - 2, "炎上後は残りスタンへ移行")
 	check_eq(p.health, 0, "スタン解除までは体力0を維持")
 
 func test_burn_physics_bounces_on_floor() -> void:

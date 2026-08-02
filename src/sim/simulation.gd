@@ -524,8 +524,14 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	for i in s.players.size():
 		var p = s.players[i]
 		if p.stun_ticks > 0:
-			CombatResources.recover_health_stun(p)
+			CombatResources.recover_health_stun(
+				p, SimStateScript.STUN_END_RALLY)
 		p.stunned_this_rally = 0
+		p.last_stance_result = SimStateScript.STANCE_RESULT_NONE
+		p.last_stance_cost_resolution = SimStateScript.STANCE_COST_NONE
+		p.last_health_damage = 0
+		p.last_health_multiplier_pct = 100
+		p.last_stun_end_reason = SimStateScript.STUN_END_NONE
 		p.burn = 0
 		p.dive = 0
 		p.dive_contact_ticks = 0
@@ -606,6 +612,11 @@ static func reset_match(s, cfg, serving_team: int,
 		p.just_receive_event = 0
 		p.burnout_ticks = 0
 		p.stunned_this_rally = 0
+		p.last_stance_result = SimStateScript.STANCE_RESULT_NONE
+		p.last_stance_cost_resolution = SimStateScript.STANCE_COST_NONE
+		p.last_health_damage = 0
+		p.last_health_multiplier_pct = 100
+		p.last_stun_end_reason = SimStateScript.STUN_END_NONE
 		p.quake_stun = 0
 	s.hip_quake_event = 0
 	s.ball_health_damage = 0
@@ -678,7 +689,8 @@ static func _award_point(s, team: int, cfg) -> void:
 	PossessionTracker.reset_for_rally(s)
 	for p in s.players:
 		if p.stun_ticks > 0:
-			CombatResources.recover_health_stun(p)
+			CombatResources.recover_health_stun(
+				p, SimStateScript.STUN_END_RALLY)
 		CombatResources.stop_attack_recovery(p)
 	if team == 0:
 		s.score_l += 1

@@ -5,6 +5,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
+const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const FP := preload("res://src/sim/fp.gd")
 
 func _world() -> Array:
@@ -97,7 +98,7 @@ func test_flame_hit_starts_configured_burn_knockback() -> void:
 	check(p.vy < 0, "炎上被弾で上へ舞い上がる")
 	check_eq(p.on_ground, 0, "炎上ノックバックは空中物理へ移す")
 
-func test_flame_health_zero_defers_stun_until_burn_ends() -> void:
+func test_flame_health_zero_starts_five_second_stun_while_burn_animates() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.health = 40
@@ -106,8 +107,17 @@ func test_flame_health_zero_defers_stun_until_burn_ends() -> void:
 		Simulation.IN_ACTION | Simulation.IN_DOWN,
 		cfg.player_reach * cfg.player_reach)
 	check_eq(p.health, 0, "炎上中は割れた耐久を0のまま保持")
-	check_eq(p.stun_ticks, 0, "炎上被弾tickでは即気絶しない")
-	check_eq(p.burn, cfg.burn_stun_ticks, "気絶より先に炎上状態へ入る")
+	check_eq(p.stun_ticks, cfg.stun_ticks, "体力0の被弾tickから5秒を数える")
+	check_eq(p.burn, cfg.burn_stun_ticks, "最初の90tickは炎上表示と物理を優先")
+	for _tick in cfg.burn_stun_ticks:
+		PlayerMovement._step_player(p, 0, cfg, 0)
+	check_eq(p.burn, 0, "90tickで炎上表示を終える")
+	check_eq(p.stun_ticks, cfg.stun_ticks - cfg.burn_stun_ticks,
+		"炎上中も同じ5秒スタン時計を進める")
+	for _tick in cfg.stun_ticks - cfg.burn_stun_ticks:
+		PlayerMovement._step_player(p, 0, cfg, 0)
+	check_eq(p.stun_ticks, 0, "被弾から合計300tickでスタン解除")
+	check_eq(p.health, p.max_health, "5秒解除で体力を全回復")
 
 func test_burning_player_cannot_ground_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

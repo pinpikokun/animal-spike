@@ -68,8 +68,12 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 				p.on_ground = 0
 		if p.hit_cooldown > 0:
 			p.hit_cooldown -= 1
-		if p.burn == 0 and p.health <= 0:
-			CombatResources.start_health_stun(p, cfg)
+		# 炎上は見た目と物理を優先するが、体力0の5秒時計とは並行して進む。
+		if p.stun_ticks > 0:
+			p.stun_ticks -= 1
+			if p.stun_ticks == 0:
+				CombatResources.recover_health_stun(
+					p, SimStateScript.STUN_END_TIMED)
 		return
 	if p.quake_stun > 0:
 		p.quake_stun -= 1
@@ -111,7 +115,8 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 	if p.stun_ticks > 0:
 		p.stun_ticks -= 1
 		if p.stun_ticks == 0:
-			CombatResources.recover_health_stun(p)
+			CombatResources.recover_health_stun(
+				p, SimStateScript.STUN_END_TIMED)
 		input = 0
 	if p.dive_recovery_ticks > 0:
 		p.dive_recovery_ticks -= 1

@@ -74,7 +74,7 @@ func test_hat_costs_35_drive_without_health_cost() -> void:
 	var drive0: int = p.drive_gauge
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
 	check_eq(p.drive_gauge, drive0 - cfg.special_drive_cost_default,
-		"帽子投げはドライブゲージ1本消費")
+		"帽子投げはドライブ35消費")
 	check_eq(p.health, health0,
 		"帽子消費で回復ディレイ開始")
 	check_eq(p.health, health0, "帽子投げで耐久は消費しない")
@@ -85,7 +85,7 @@ func test_hat_spends_exact_35_and_starts_burnout() -> void:
 	p.drive_gauge = cfg.special_drive_cost_default
 	var health0: int = p.health
 	Sim.tick(s, [SimInput.IN_ABILITY1, 0], cfg)
-	check(p.throw > 0, "残量が1以上なら1本未満でも帽子投げ発動")
+	check(p.throw > 0, "残量35ちょうどで帽子投げ発動")
 	check_eq(p.drive_gauge, 0, "残量を全消費")
 	check(p.burnout_ticks > 0, "使い切ってバーンアウト突入")
 	check(s.hit_freeze > 0, "バーンアウト突入瞬間にヒットストップ")

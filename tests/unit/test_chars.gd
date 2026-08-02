@@ -31,7 +31,7 @@ func test_super_catalog_has_complete_non_resource_fields() -> void:
 	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).power, 40,
 		"殺人燃えるアタックは固定威力40")
 	check(not Chars.super_def(Chars.SUPER_FLAME_ATTACK).has("gauge_cost"),
-		"殺人燃えるアタックは3本")
+		"必殺コストはカタログでなく共通35")
 	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).condition,
 		Chars.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
 		"殺人燃えるアタックはネット上空の空中下+D")
@@ -40,7 +40,7 @@ func test_super_catalog_has_complete_non_resource_fields() -> void:
 	check_eq(Chars.super_def(Chars.SUPER_GHOST_BALL).power, 0,
 		"ゴーストボールは威力0")
 	check(not Chars.super_def(Chars.SUPER_GHOST_BALL).has("gauge_cost"),
-		"ゴーストボールは暫定1本")
+		"ゴーストボールも共通35")
 	check_eq(Chars.super_def(Chars.SUPER_GHOST_BALL).condition,
 		Chars.CONDITION_GROUND_UP_ABILITY,
 		"ゴーストボールは地上上+D")

@@ -245,10 +245,10 @@ func test_cpu_attack_vertical_uses_drive_and_burnout() -> void:
 	var p = SimState.new().players[0]
 	p.drive_gauge = cfg.just_attack_drive_cost
 	check_eq(helper.call(p, cfg), SimInput.IN_DOWN,
-		"1本以上ならジャスト可能アタック")
+		"25以上ならジャスト可能アタック")
 	p.drive_gauge = cfg.just_attack_drive_cost - 1
 	check_eq(helper.call(p, cfg), SimInput.IN_UP,
-		"1本未満なら通常アタック")
+		"25未満なら通常アタック")
 	p.drive_gauge = cfg.drive_gauge_max
 	p.burnout_ticks = 1
 	check_eq(helper.call(p, cfg), SimInput.IN_UP,

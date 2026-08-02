@@ -27,6 +27,19 @@ const BLOCK_NONE := 0
 const BLOCK_NORMAL := 1
 const BLOCK_BURNOUT := 2
 
+const STANCE_RESULT_NONE := 0
+const STANCE_RESULT_PRE_READ := 1
+const STANCE_RESULT_REACTION := 2
+const STANCE_RESULT_FAILED := 3
+
+const STANCE_COST_NONE := 0
+const STANCE_COST_RELEASED := 1
+const STANCE_COST_SPENT := 2
+
+const STUN_END_NONE := 0
+const STUN_END_TIMED := 1
+const STUN_END_RALLY := 2
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -93,6 +106,12 @@ class Player:
 	var just_receive_event: int = 0
 	var burnout_ticks: int = 0
 	var stunned_this_rally: int = 0
+	# 開発計器へ最後に確定した戦闘リソース結果を渡す同期診断値。
+	var last_stance_result: int = STANCE_RESULT_NONE
+	var last_stance_cost_resolution: int = STANCE_COST_NONE
+	var last_health_damage: int = 0
+	var last_health_multiplier_pct: int = 100
+	var last_stun_end_reason: int = STUN_END_NONE
 	var quake_stun: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
@@ -268,6 +287,11 @@ func to_int_array() -> Array[int]:
 		out.append(p.just_receive_event)
 		out.append(p.burnout_ticks)
 		out.append(p.stunned_this_rally)
+		out.append(p.last_stance_result)
+		out.append(p.last_stance_cost_resolution)
+		out.append(p.last_health_damage)
+		out.append(p.last_health_multiplier_pct)
+		out.append(p.last_stun_end_reason)
 		out.append(p.quake_stun)
 		out.append(p.cpu)
 	out.append(possession_id)
@@ -395,6 +419,11 @@ func load_int_array(arr: Array) -> void:
 		p.just_receive_event = arr[k]; k += 1
 		p.burnout_ticks = arr[k]; k += 1
 		p.stunned_this_rally = arr[k]; k += 1
+		p.last_stance_result = arr[k]; k += 1
+		p.last_stance_cost_resolution = arr[k]; k += 1
+		p.last_health_damage = arr[k]; k += 1
+		p.last_health_multiplier_pct = arr[k]; k += 1
+		p.last_stun_end_reason = arr[k]; k += 1
 		p.quake_stun = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
 	possession_id = arr[k]; k += 1

@@ -38,8 +38,8 @@ func test_hash_changes_on_diff() -> void:
 func test_serialize_length() -> void:
 	# 基本状態と次ID(9) + プレイヤー4体x56 + 全体49 + エンティティ8スロットx8欄
 	# Task 7で飛びつき2欄、ブロック3欄、ソフトブロックID1欄を追加した実測値。
-	# 9 + 4x54 + 49 + 8x8 = 338
-	check_eq(SimState.new().to_int_array().size(), 338,
+	# 9 + 4x59 + 49 + 8x8 = 358
+	check_eq(SimState.new().to_int_array().size(), 358,
 		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:

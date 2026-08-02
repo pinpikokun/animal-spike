@@ -13,6 +13,27 @@ var cfg
 var state
 var label: Label
 
+static func combat_debug_text(s) -> String:
+	var lines: Array[String] = [
+		"POS=%d ATK=%d CONTACT=%d" % [
+			s.possession_id, s.ball_attack_id, s.ball_last_contact_id],
+	]
+	for i in s.players.size():
+		var p = s.players[i]
+		lines.append(
+			"P%d HP=%d/%d DMG=%d MUL=%d DRV=%d RES=%d " % [
+				i, p.health, p.max_health, p.last_health_damage,
+				p.last_health_multiplier_pct, p.drive_gauge, p.drive_reserved]
+			+ "REC=%d/%d/%d/%d POS=%d ATK=%d STANCE=%d PRE=%d " % [
+				p.attack_recovery_delay_ticks, p.attack_recovery_window_ticks,
+				p.attack_recovery_fraction_ticks, p.attack_recovery_granted,
+				s.possession_id, s.ball_attack_id, p.stance_action_id,
+				p.stance_pre_read_candidate]
+			+ "RESULT=%d COST=%d BO=%d STUN=%d END=%d" % [
+				p.last_stance_result, p.last_stance_cost_resolution,
+				p.burnout_ticks, p.stun_ticks, p.last_stun_end_reason])
+	return "\n".join(lines)
+
 func _ready() -> void:
 	cfg = SimConfig.new()
 	if not cfg.valid:
@@ -42,8 +63,9 @@ func _physics_process(_delta: float) -> void:
 	# 右チームは完全CPU。操作キャラ枠の入力もCPUが生成する(サーブ止まり防止)
 	var cpu_r: int = SimCpu.decide(state, 2 + state.controlled_r, cfg)
 	Simulation.tick(state, [input, cpu_r], cfg)
-	label.text = "SIM DEBUG VIEW (開発用計器)\n%d - %d  phase=%d touches=%d\ntick=%d\n矢印:移動 Z:ジャンプ X:アクション C:交代" % [
-		state.score_l, state.score_r, state.phase, state.touches, state.tick]
+	label.text = "SIM DEBUG VIEW (開発用計器)\n%d - %d  phase=%d touches=%d\ntick=%d\n%s\n矢印:移動 Z:ジャンプ X:アクション C:交代" % [
+		state.score_l, state.score_r, state.phase, state.touches, state.tick,
+		combat_debug_text(state)]
 	queue_redraw()
 
 func _draw() -> void:

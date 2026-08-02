@@ -41,14 +41,20 @@ static func resolve_block_contact(p, cfg) -> void:
 	if p.current_block_mode == SimStateScript.BLOCK_NORMAL:
 		spend_mandatory(p, cfg.block_contact_drive_cost, cfg)
 
-static func apply_health_damage(p, amount: int, cfg) -> int:
-	if amount <= 0 or p.stun_ticks > 0:
+static func apply_health_damage(p, amount: int, cfg,
+		multiplier_pct: int = 100) -> int:
+	if p.stun_ticks > 0:
+		return 0
+	p.last_health_multiplier_pct = maxi(multiplier_pct, 0)
+	if amount <= 0:
+		p.last_health_damage = 0
 		return 0
 	var before: int = p.health
 	var minimum: int = 1 if p.stunned_this_rally != 0 else 0
 	p.health = maxi(p.health - amount, minimum)
 	var applied: int = before - p.health
-	if p.health <= 0 and p.burn == 0:
+	p.last_health_damage = applied
+	if p.health <= 0:
 		start_health_stun(p, cfg)
 	return applied
 
@@ -58,6 +64,7 @@ static func start_health_stun(p, cfg) -> void:
 	p.health = 0
 	p.stunned_this_rally = 1
 	p.stun_ticks = cfg.stun_ticks
+	p.last_stun_end_reason = SimStateScript.STUN_END_NONE
 	p.flinch = 0
 	p.vx = 0
 	p.push = 0
@@ -66,9 +73,10 @@ static func start_health_stun(p, cfg) -> void:
 	p.dive_age_ticks = 0
 	p.dive_resource_mode = SimStateScript.DIVE_NONE
 
-static func recover_health_stun(p) -> void:
+static func recover_health_stun(p, reason: int) -> void:
 	p.stun_ticks = 0
 	p.health = p.max_health
+	p.last_stun_end_reason = reason
 
 static func start_burnout(p, cfg) -> void:
 	if p.burnout_ticks > 0:
@@ -96,6 +104,8 @@ static func reserve_stance(p, action_id: int, tick: int, cfg) -> bool:
 	p.stance_committed_attack_id = 0
 	p.stance_pre_read_candidate = 0
 	p.stance_cost_resolved = 0
+	p.last_stance_result = SimStateScript.STANCE_RESULT_NONE
+	p.last_stance_cost_resolution = SimStateScript.STANCE_COST_NONE
 	return true
 
 static func release_stance_reservation(p) -> void:
@@ -104,6 +114,7 @@ static func release_stance_reservation(p) -> void:
 	p.drive_reserved = maxi(p.drive_reserved - p.stance_reserved_drive, 0)
 	p.stance_reserved_drive = 0
 	p.stance_cost_resolved = 1
+	p.last_stance_cost_resolution = SimStateScript.STANCE_COST_RELEASED
 
 static func commit_stance_reservation(p, cfg) -> void:
 	if p.stance_cost_resolved != 0:
@@ -112,6 +123,7 @@ static func commit_stance_reservation(p, cfg) -> void:
 	p.drive_reserved = maxi(p.drive_reserved - cost, 0)
 	p.stance_reserved_drive = 0
 	p.stance_cost_resolved = 1
+	p.last_stance_cost_resolution = SimStateScript.STANCE_COST_SPENT
 	if p.burnout_ticks > 0:
 		return
 	spend_mandatory(p, cost, cfg)
@@ -126,6 +138,8 @@ static func finish_stance(p, cfg, release_cost: bool) -> void:
 	p.stance_exit_recovery_ticks = cfg.receive_stance_exit_recovery_ticks
 	p.stance_committed_attack_id = 0
 	p.stance_pre_read_candidate = 0
+	if p.last_stance_result == SimStateScript.STANCE_RESULT_NONE:
+		p.last_stance_result = SimStateScript.STANCE_RESULT_FAILED
 
 static func resolve_stance_contact(p, attack_id: int,
 		attack_commit_tick: int, cfg) -> int:
@@ -136,7 +150,9 @@ static func resolve_stance_contact(p, attack_id: int,
 		and p.stance_pre_read_candidate != 0 \
 		and p.stance_started_tick <= attack_commit_tick
 	finish_stance(p, cfg, pre_read)
-	return 1 if pre_read else 2
+	p.last_stance_result = SimStateScript.STANCE_RESULT_PRE_READ \
+		if pre_read else SimStateScript.STANCE_RESULT_REACTION
+	return p.last_stance_result
 
 static func stop_attack_recovery(p) -> void:
 	p.attack_recovery_delay_ticks = 0
