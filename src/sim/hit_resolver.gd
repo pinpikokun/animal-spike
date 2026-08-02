@@ -899,6 +899,9 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 	if s.phase != SimStateScript.PHASE_RALLY \
 			or s.serve_flight == 1 or s.serve_ball == 1:
 		return
+	# 亜空間保持中は物理だけでなく、ブロック開始消費を含む全接触を止める。
+	if s.ball_held_by >= 0:
+		return
 	if s.last_touch_team < 0:
 		return
 	# ブロックの開始消費と種別は接触より前に確定する。入力を離すまで同じ行動なので、
@@ -1009,4 +1012,5 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		p.hit_kind = SimStateScript.HIT_KIND_BLOCK
 		p.hit_cooldown = cfg.hit_cooldown_ticks
 		s.hit_freeze = maxi(s.hit_freeze, 2)
+		SpecialMoves.try_enhance_block(s, i, input, cfg)
 		return

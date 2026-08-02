@@ -309,23 +309,23 @@ git commit -m "feat: 必殺攻撃と感電泡状態を実装"
 - Produces: `SpecialMoves.step_action(s, actor:int, input:int, cfg) -> bool`
 - Produces: `SpecialMoves.try_enhance_block(s, actor:int, input:int, cfg) -> bool`
 
-- [ ] **Step 1: 吸引の開始・継続・中断を赤くする**
+- [x] **Step 1: 吸引の開始・継続・中断を赤くする**
 
 DUOの空中Back+D、35支払い、球をDUO方向へ引くこと、終了・着地・被弾・得点で解除すること、球への作用でありDUO自身を移動させないことを検査する。
 
-- [ ] **Step 2: 強化ブロックの成功後状態を赤くする**
+- [x] **Step 2: 強化ブロックの成功後状態を赤くする**
 
 ALIENのForward+ACTION+Dが通常ブロック接触に成功した場合だけ35を払い、通常ブロックの反射・ダメージ結果を先に確定してから最大43tick保持する。保持中は方向入力で選手と球を同時移動し、新しいボタンエッジか時間切れで保持前の確定速度をそのまま再開する。
 
-- [ ] **Step 3: 失敗境界を赤くする**
+- [x] **Step 3: 失敗境界を赤くする**
 
 空振り、通常ブロック不成立、34、バーンアウト、サーブ、被状態、D保持の再エッジなしでは強化しない。保持中の床予測・接触・通常積分を止める。
 
-- [ ] **Step 4: 正規入口で赤を確認し、両特殊動作を実装する**
+- [x] **Step 4: 正規入口で赤を確認し、両特殊動作を実装する**
 
 特殊動作は `special_action` と `special_action_ticks` で排他的に管理する。ALIENの保持者は `ball_held_by` を正本とし、解除APIで必ず`-1`へ戻す。
 
-- [ ] **Step 5: 全件緑、Claudeレビュー、コミット**
+- [x] **Step 5: 全件緑、Claudeレビュー、コミット**
 
 ```powershell
 .\run_tests.ps1

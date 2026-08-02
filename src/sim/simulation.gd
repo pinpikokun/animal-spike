@@ -15,6 +15,7 @@ const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 const SpecialBall := preload("res://src/sim/special_ball.gd")
+const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -241,7 +242,13 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	var dive_edges: Array[bool] = action_edges.duplicate()
 	while dive_edges.size() < state.players.size():
 		dive_edges.append(false)
-	if status_lock_mask == 0:
+	# 現行ID 9以降だけが自己特殊行動を持つ。標準4キャラの熱い経路は、
+	# 4人分のIDをまとめた一回のビット判定で特殊行動処理を短絡する。
+	var action_roster: bool = ((state.players[0].char_id \
+		| state.players[1].char_id | state.players[2].char_id \
+		| state.players[3].char_id) & 8) != 0
+	if status_lock_mask == 0 and not action_roster:
+		# 既存キャラだけの通常試合は、追加判定を選手ループへ持ち込まない。
 		for i in state.players.size():
 			var p = state.players[i]
 			if i >= dive_edges.size() or not _can_start_dive_receive(p):
@@ -252,18 +259,71 @@ static func _step_players_and_hits(state, inputs: Array[int],
 				p, effective_inputs[i], cfg, team_of(i))
 			if was_hip_drop and p.on_ground == 1 and p.hip == 0:
 				hip_landed = true
+	elif status_lock_mask == 0:
+		for i in state.players.size():
+			var p = state.players[i]
+			var special_actor: bool = p.char_id >= Chars.CHAR_DUO
+			if special_actor:
+				# 前tickのラッチを読むため、実レベルの保存は行動処理の後。
+				if p.char_id == Chars.CHAR_DUO:
+					SpecialMoves.try_start_action(
+						state, i, effective_inputs[i], cfg)
+				if p.special_action != 0:
+					effective_inputs[i] = SpecialMoves.filter_action_input(
+						p, effective_inputs[i])
+			if i >= dive_edges.size() or not _can_start_dive_receive(p):
+				if i < dive_edges.size():
+					dive_edges[i] = false
+			var was_hip_drop: bool = p.hip == -1
+			PlayerMovement._step_player_unlocked(
+				p, effective_inputs[i], cfg, team_of(i))
+			if special_actor:
+				var action_input: int = inputs[i] if i < inputs.size() else 0
+				if (p.special_action != 0 or state.ball_held_by == i) \
+						and SpecialMoves.step_action(
+							state, i, action_input, cfg):
+					effective_inputs[i] = IN_ACTION
+				if p.char_id == Chars.CHAR_DUO or p.char_id == Chars.CHAR_SEC1:
+					p.ability_latch = 1 \
+						if (action_input & IN_ABILITY1) != 0 else 0
+			if was_hip_drop and p.on_ground == 1 and p.hip == 0:
+				hip_landed = true
 	else:
 		for i in state.players.size():
 			var p = state.players[i]
+			var special_actor: bool = action_roster \
+				and p.char_id >= Chars.CHAR_DUO
+			if special_actor and (status_lock_mask & (1 << i)) == 0:
+				if p.char_id == Chars.CHAR_DUO:
+					SpecialMoves.try_start_action(
+						state, i, effective_inputs[i], cfg)
+				if p.special_action != 0:
+					effective_inputs[i] = SpecialMoves.filter_action_input(
+						p, effective_inputs[i])
 			if i >= dive_edges.size() or not _can_start_dive_receive(p):
 				if i < dive_edges.size():
 					dive_edges[i] = false
 			var was_hip_drop: bool = p.hip == -1
 			if (status_lock_mask & (1 << i)) != 0 and PlayerStatus.step(
 					p, cfg, team_of(i), state.tick, i, state.rng):
+				if special_actor:
+					var action_input: int = inputs[i] if i < inputs.size() else 0
+					SpecialMoves.step_action(state, i, action_input, cfg)
+					if p.char_id == Chars.CHAR_DUO or p.char_id == Chars.CHAR_SEC1:
+						p.ability_latch = 1 \
+							if (action_input & IN_ABILITY1) != 0 else 0
 				continue
 			PlayerMovement._step_player_unlocked(
 				p, effective_inputs[i], cfg, team_of(i))
+			if special_actor:
+				var action_input: int = inputs[i] if i < inputs.size() else 0
+				if (p.special_action != 0 or state.ball_held_by == i) \
+						and SpecialMoves.step_action(
+							state, i, action_input, cfg):
+					effective_inputs[i] = IN_ACTION
+				if p.char_id == Chars.CHAR_DUO or p.char_id == Chars.CHAR_SEC1:
+					p.ability_latch = 1 \
+						if (action_input & IN_ABILITY1) != 0 else 0
 			if was_hip_drop and p.on_ground == 1 and p.hip == 0:
 				hip_landed = true
 	if hip_landed:

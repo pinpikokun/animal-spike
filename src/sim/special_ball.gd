@@ -2,6 +2,7 @@
 extends RefCounted
 
 const Chars := preload("res://src/sim/chars.gd")
+const SimStateScript := preload("res://src/sim/sim_state.gd")
 
 static func set_special(s, special_id: int, owner_idx: int,
 		origin_vx: int = 0) -> void:
@@ -20,6 +21,23 @@ static func clear_special(s) -> void:
 	s.ball_special_origin_vx = 0
 	s.ball_held_by = -1
 
+static func hold(s, actor: int) -> void:
+	s.ball_held_by = actor
+
+static func release_hold(s) -> void:
+	s.ball_held_by = -1
+
+static func pin_held(s, cfg) -> void:
+	var actor: int = s.ball_held_by
+	if actor < 0 or actor >= s.players.size():
+		s.ball_held_by = -1
+		return
+	var p = s.players[actor]
+	var direction: int = SimStateScript._dir_of_team(
+		SimStateScript.team_of(actor))
+	s.ball_x = p.x + direction * original_x_distance(5, cfg)
+	s.ball_y = p.y - original_y_distance(8, cfg)
+
 static func is_visible(s) -> bool:
 	return s.ball_special_id != Chars.SUPER_DISAPPEARING_BALL \
 		and s.ball_special_id != Chars.SUPER_TRANSFER_BALL
@@ -33,6 +51,7 @@ static func is_contactable(s) -> bool:
 
 static func step(s, cfg) -> bool:
 	if s.ball_held_by >= 0:
+		pin_held(s, cfg)
 		return true
 	match s.ball_special_id:
 		Chars.SUPER_GHOST_BALL:
@@ -62,6 +81,15 @@ static func is_above_original_y(s, original_y: int, cfg) -> bool:
 	var ball_height: int = cfg.floor_y - s.ball_y
 	var current_net_height: int = cfg.floor_y - cfg.net_top_y
 	return ball_height * 33 > (291 - original_y) * current_net_height
+
+static func original_x_distance(original_x: int, cfg) -> int:
+	return original_x * (cfg.court_width / 2) / 72
+
+static func original_y_distance(original_y: int, cfg) -> int:
+	return original_y * (cfg.floor_y - cfg.net_top_y) / 33
+
+static func original_vx(original_velocity: int, cfg) -> int:
+	return _original_vx(original_velocity, cfg)
 
 static func _is_below_original_y(s, original_y: int, cfg) -> bool:
 	var ball_height: int = cfg.floor_y - s.ball_y
