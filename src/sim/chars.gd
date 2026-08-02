@@ -29,6 +29,18 @@ const CA_DASH := 8   # ダブルタップダッシュ
 # 必殺技ID。DEFSのsupers辞書に登録されたキャラだけが使用できる。
 const SUPER_GHOST_BALL := 1
 const SUPER_FLAME_ATTACK := 2
+const SUPER_DISAPPEARING_BALL := 3
+const SUPER_FEINT_ATTACK := 4
+const SUPER_GUST_BALL := 5
+const SUPER_GUST_ATTACK := 6
+const SUPER_SNAKE_BALL := 7
+const SUPER_BUMBLE_BALL := 8
+const SUPER_THUNDER_BALL := 9
+const SUPER_SUCTION := 10
+const SUPER_BUBBLE_PACK := 11
+const SUPER_TRANSFER_BALL := 12
+const SUPER_SUBSPACE_BLOCK := 13
+const SUPER_REFRAIN_ATTACK := 14
 
 enum DefenseClass {
 	DEFENSE_NONE,
@@ -42,6 +54,23 @@ enum SuperCondition {
 	CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
 }
 
+enum SpecialContact {
+	SPECIAL_CONTACT_GROUND_HIT,
+	SPECIAL_CONTACT_AIR_HIT,
+	SPECIAL_CONTACT_AIR_ACTION,
+	SPECIAL_CONTACT_BLOCK,
+	SPECIAL_CONTACT_AUTO_AIR_ATTACK,
+}
+
+enum SpecialDirection {
+	SPECIAL_DIR_NEUTRAL,
+	SPECIAL_DIR_UP,
+	SPECIAL_DIR_DOWN,
+	SPECIAL_DIR_FORWARD,
+	SPECIAL_DIR_BACK,
+	SPECIAL_DIR_AUTO,
+}
+
 const DEFENSE_NONE := DefenseClass.DEFENSE_NONE
 const DEFENSE_UNBLOCKABLE := DefenseClass.DEFENSE_UNBLOCKABLE
 const DEFENSE_KNOCKBACK := DefenseClass.DEFENSE_KNOCKBACK
@@ -49,22 +78,130 @@ const DEFENSE_DELAYED := DefenseClass.DEFENSE_DELAYED
 const CONDITION_GROUND_UP_ABILITY := SuperCondition.CONDITION_GROUND_UP_ABILITY
 const CONDITION_AIR_DOWN_ABILITY_ABOVE_NET := \
 	SuperCondition.CONDITION_AIR_DOWN_ABILITY_ABOVE_NET
+const SPECIAL_CONTACT_GROUND_HIT := SpecialContact.SPECIAL_CONTACT_GROUND_HIT
+const SPECIAL_CONTACT_AIR_HIT := SpecialContact.SPECIAL_CONTACT_AIR_HIT
+const SPECIAL_CONTACT_AIR_ACTION := SpecialContact.SPECIAL_CONTACT_AIR_ACTION
+const SPECIAL_CONTACT_BLOCK := SpecialContact.SPECIAL_CONTACT_BLOCK
+const SPECIAL_CONTACT_AUTO_AIR_ATTACK := SpecialContact.SPECIAL_CONTACT_AUTO_AIR_ATTACK
+const SPECIAL_DIR_NEUTRAL := SpecialDirection.SPECIAL_DIR_NEUTRAL
+const SPECIAL_DIR_UP := SpecialDirection.SPECIAL_DIR_UP
+const SPECIAL_DIR_DOWN := SpecialDirection.SPECIAL_DIR_DOWN
+const SPECIAL_DIR_FORWARD := SpecialDirection.SPECIAL_DIR_FORWARD
+const SPECIAL_DIR_BACK := SpecialDirection.SPECIAL_DIR_BACK
+const SPECIAL_DIR_AUTO := SpecialDirection.SPECIAL_DIR_AUTO
+
+const ACT_GROUND_UP := {
+	"contact": SPECIAL_CONTACT_GROUND_HIT, "direction": SPECIAL_DIR_UP,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_GROUND_NEUTRAL := {
+	"contact": SPECIAL_CONTACT_GROUND_HIT, "direction": SPECIAL_DIR_NEUTRAL,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AIR_DOWN_152 := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
+	"requires_ability": 1, "original_height_y": 152, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AIR_DOWN_160 := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
+	"requires_ability": 1, "original_height_y": 160, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AIR_DOWN_ANY := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AIR_DOWN_192 := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_DOWN,
+	"requires_ability": 1, "original_height_y": 192, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AIR_FORWARD_FRIENDLY := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_FORWARD,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 1,
+	"requires_apex": 0,
+}
+const ACT_AIR_NEUTRAL_APEX := {
+	"contact": SPECIAL_CONTACT_AIR_HIT, "direction": SPECIAL_DIR_NEUTRAL,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 1,
+}
+const ACT_AIR_BACK_ACTION := {
+	"contact": SPECIAL_CONTACT_AIR_ACTION, "direction": SPECIAL_DIR_BACK,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_BLOCK_FORWARD := {
+	"contact": SPECIAL_CONTACT_BLOCK, "direction": SPECIAL_DIR_FORWARD,
+	"requires_ability": 1, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
+const ACT_AUTO_AIR_ATTACK := {
+	"contact": SPECIAL_CONTACT_AUTO_AIR_ATTACK, "direction": SPECIAL_DIR_AUTO,
+	"requires_ability": 0, "original_height_y": -1, "friendly_ball": 0,
+	"requires_apex": 0,
+}
 
 const GHOST_BALL_DEF := {
 	"power": 0,
 	"condition": CONDITION_GROUND_UP_ABILITY,
+	"activations": [ACT_GROUND_UP],
 	"defense_class": DEFENSE_DELAYED,
 	"visual": "ghost",
 }
 const FLAME_ATTACK_DEF := {
 	"power": 40,
 	"condition": CONDITION_AIR_DOWN_ABILITY_ABOVE_NET,
+	"activations": [ACT_AIR_DOWN_152],
 	"defense_class": DEFENSE_UNBLOCKABLE,
 	"visual": "flame",
 }
+const DISAPPEARING_BALL_DEF := {"power": 0,
+	"activations": [ACT_GROUND_UP, ACT_AIR_DOWN_160],
+	"defense_class": DEFENSE_NONE, "visual": "disappearing"}
+const FEINT_ATTACK_DEF := {"power": 22, "activations": [ACT_GROUND_NEUTRAL],
+	"defense_class": DEFENSE_NONE, "visual": "feint"}
+const GUST_BALL_DEF := {"power": 0,
+	"activations": [ACT_GROUND_UP, ACT_AIR_FORWARD_FRIENDLY],
+	"defense_class": DEFENSE_NONE, "visual": "gust"}
+const GUST_ATTACK_DEF := {"power": 22, "activations": [ACT_AUTO_AIR_ATTACK],
+	"defense_class": DEFENSE_KNOCKBACK, "visual": "gust_attack"}
+const SNAKE_BALL_DEF := {"power": 0, "activations": [ACT_GROUND_UP],
+	"defense_class": DEFENSE_NONE, "visual": "snake"}
+const BUMBLE_BALL_DEF := {"power": 22,
+	"activations": [ACT_GROUND_NEUTRAL, ACT_AIR_FORWARD_FRIENDLY],
+	"defense_class": DEFENSE_KNOCKBACK, "visual": "bumble"}
+const THUNDER_BALL_DEF := {"power": 22, "activations": [ACT_AIR_NEUTRAL_APEX],
+	"defense_class": DEFENSE_UNBLOCKABLE, "visual": "thunder"}
+const SUCTION_DEF := {"power": 0, "activations": [ACT_AIR_BACK_ACTION],
+	"defense_class": DEFENSE_NONE, "visual": "suction"}
+const BUBBLE_PACK_DEF := {"power": 11, "activations": [ACT_AIR_DOWN_160],
+	"defense_class": DEFENSE_NONE, "visual": "bubble"}
+const TRANSFER_BALL_DEF := {"power": 0, "activations": [ACT_AIR_DOWN_ANY],
+	"defense_class": DEFENSE_NONE, "visual": "transfer"}
+const SUBSPACE_BLOCK_DEF := {"power": 0, "activations": [ACT_BLOCK_FORWARD],
+	"defense_class": DEFENSE_NONE, "visual": "subspace"}
+const REFRAIN_ATTACK_DEF := {"power": 11, "activations": [ACT_AIR_DOWN_192],
+	"defense_class": DEFENSE_DELAYED, "visual": "refrain"}
 const SUPER_CATALOG := {
 	SUPER_GHOST_BALL: GHOST_BALL_DEF,
 	SUPER_FLAME_ATTACK: FLAME_ATTACK_DEF,
+	SUPER_DISAPPEARING_BALL: DISAPPEARING_BALL_DEF,
+	SUPER_FEINT_ATTACK: FEINT_ATTACK_DEF,
+	SUPER_GUST_BALL: GUST_BALL_DEF,
+	SUPER_GUST_ATTACK: GUST_ATTACK_DEF,
+	SUPER_SNAKE_BALL: SNAKE_BALL_DEF,
+	SUPER_BUMBLE_BALL: BUMBLE_BALL_DEF,
+	SUPER_THUNDER_BALL: THUNDER_BALL_DEF,
+	SUPER_SUCTION: SUCTION_DEF,
+	SUPER_BUBBLE_PACK: BUBBLE_PACK_DEF,
+	SUPER_TRANSFER_BALL: TRANSFER_BALL_DEF,
+	SUPER_SUBSPACE_BLOCK: SUBSPACE_BLOCK_DEF,
+	SUPER_REFRAIN_ATTACK: REFRAIN_ATTACK_DEF,
 }
 
 # 固有技とテスト専用上書き。選択キャラの基礎能力・重量・付与能力はProfileが正本。
@@ -78,13 +215,22 @@ const DEFS := {
 			SUPER_GHOST_BALL: GHOST_BALL_DEF,
 			SUPER_FLAME_ATTACK: FLAME_ATTACK_DEF,
 		}},
-	CHAR_HITO: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_PIYO: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_UME: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_CARBY: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_DUO: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_SEC1: {"abilities": 0, "stats": {}, "supers": {}},
-	CHAR_SEC2: {"abilities": 0, "stats": {}, "supers": {}},
+	CHAR_HITO: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_DISAPPEARING_BALL: DISAPPEARING_BALL_DEF,
+		SUPER_FEINT_ATTACK: FEINT_ATTACK_DEF}},
+	CHAR_PIYO: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_GUST_BALL: GUST_BALL_DEF, SUPER_GUST_ATTACK: GUST_ATTACK_DEF}},
+	CHAR_UME: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_SNAKE_BALL: SNAKE_BALL_DEF, SUPER_BUMBLE_BALL: BUMBLE_BALL_DEF}},
+	CHAR_CARBY: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_GHOST_BALL: GHOST_BALL_DEF, SUPER_THUNDER_BALL: THUNDER_BALL_DEF}},
+	CHAR_DUO: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_SUCTION: SUCTION_DEF, SUPER_BUBBLE_PACK: BUBBLE_PACK_DEF}},
+	CHAR_SEC1: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_TRANSFER_BALL: TRANSFER_BALL_DEF,
+		SUPER_SUBSPACE_BLOCK: SUBSPACE_BLOCK_DEF}},
+	CHAR_SEC2: {"abilities": 0, "stats": {}, "supers": {
+		SUPER_REFRAIN_ATTACK: REFRAIN_ATTACK_DEF}},
 	CHAR_DEBUG: {"abilities": CA_HAT | CA_HIP | CA_CLING | CA_DASH,
 		"stats": {"speed": 130, "jump": 120, "atk": 140}, "supers": {}},
 }

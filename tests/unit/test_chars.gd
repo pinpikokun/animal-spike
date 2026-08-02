@@ -13,20 +13,18 @@ func test_panda_has_no_abilities() -> void:
 	check(not Chars.has_ability(Chars.CHAR_PANDA, Chars.CA_HIP), "パンダヒップなし")
 	check(not Chars.has_ability(Chars.CHAR_PANDA, Chars.CA_CLING), "パンダ壁貼りなし")
 
-func test_only_tome_has_pilot_supers() -> void:
-	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_GHOST_BALL), "トメ=ゴーストボール")
-	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_FLAME_ATTACK), "トメ=殺人燃えるアタック")
-	for cid in Chars.DEFS:
-		if cid == Chars.CHAR_TOME:
-			continue
-		check(not Chars.has_super(cid, Chars.SUPER_GHOST_BALL), "トメ以外はゴーストなし")
-		check(not Chars.has_super(cid, Chars.SUPER_FLAME_ATTACK), "トメ以外は燃えるアタックなし")
+func test_tome_and_carby_share_only_ghost_ball() -> void:
+	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_GHOST_BALL), "TOMEはゴースト")
+	check(Chars.has_super(Chars.CHAR_CARBY, Chars.SUPER_GHOST_BALL), "CARBYもゴースト")
+	check(Chars.has_super(Chars.CHAR_TOME, Chars.SUPER_FLAME_ATTACK), "TOMEは炎")
+	check(not Chars.has_super(Chars.CHAR_CARBY, Chars.SUPER_FLAME_ATTACK),
+		"CARBYは炎を持たない")
 
 func test_super_catalog_has_complete_non_resource_fields() -> void:
-	check_eq(Chars.SUPER_CATALOG.size(), 2, "パイロット必殺技2種を登録")
+	check_eq(Chars.SUPER_CATALOG.size(), 14, "原作必殺技の効果14種を登録")
 	for super_id in Chars.SUPER_CATALOG:
 		var entry: Dictionary = Chars.super_def(super_id)
-		for field in ["power", "condition", "defense_class"]:
+		for field in ["power", "activations", "defense_class"]:
 			check(entry.has(field), "必殺技%dに%sを完備" % [super_id, field])
 	check_eq(Chars.super_def(Chars.SUPER_FLAME_ATTACK).power, 40,
 		"殺人燃えるアタックは固定威力40")

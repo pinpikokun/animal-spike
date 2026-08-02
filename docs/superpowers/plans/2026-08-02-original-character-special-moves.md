@@ -56,7 +56,7 @@
 - Produces: `Chars.super_def(id) -> Dictionary`, `Chars.has_super(char_id, id) -> bool`
 - Produces: `cfg.special_drive_cost`, `cfg.special_damage_default`, `cfg.shock_ticks`, `cfg.bubble_ticks`, `cfg.original_tick_rate_milli`
 
-- [ ] **Step 1: 正式仕様の行数とSHA-256を照合する**
+- [x] **Step 1: 正式仕様の行数とSHA-256を照合する**
 
 ```powershell
 $p='docs/superpowers/specs/2026-08-02-original-character-special-moves-design.md'
@@ -66,7 +66,7 @@ $p='docs/superpowers/specs/2026-08-02-original-character-special-moves-design.md
 
 Expected: `446` と承認済みSHA-256が一致する。
 
-- [ ] **Step 2: 全8キャラ・全効果・数値の赤いテストを書く**
+- [x] **Step 2: 全8キャラ・全効果・数値の赤いテストを書く**
 
 `test_original_special_catalog.gd` に、TOMEからUMAまでの所有技、条件、威力、防御分類を表駆動で列挙する。共有ゴースト、PIYO自動派生、複数入力を持つHITO・PIYO・UMEも漏れなく検査する。
 
@@ -87,13 +87,13 @@ func test_original_roster_owns_approved_specials() -> void:
             check(Chars.has_super(char_id, special_id), "承認済み所有技")
 ```
 
-- [ ] **Step 3: `run_tests.ps1` で未定義ID・設定だけが赤いことを確認する**
+- [x] **Step 3: `run_tests.ps1` で未定義ID・設定だけが赤いことを確認する**
 
-- [ ] **Step 4: カタログと設定を最小実装する**
+- [x] **Step 4: カタログと設定を最小実装する**
 
 カタログの各項目へ `power`、`contacts`、`directions`、`original_height_y`、`defense_class` を持たせる。発動側が名前から推測しない構造にする。コスト35はカタログへ複製せず設定の共通値を参照する。
 
-- [ ] **Step 5: 全件緑、Claudeレビュー、コミット**
+- [x] **Step 5: 全件緑、Claudeレビュー、コミット**
 
 ```powershell
 .\run_tests.ps1

@@ -67,6 +67,7 @@ var attack_recovery_window_ticks: int
 var just_attack_drive_cost: int
 var just_attack_recovery_delay_ticks: int
 var special_drive_cost_default: int
+var special_damage_default: int
 var special_recovery_delay_ticks: int
 var passive_return_drive_cost: int
 var receive_stance_reserve_cost: int
@@ -82,6 +83,9 @@ var burnout_exit_drive: int
 var hip_quake_stun_ticks: int
 var stun_ticks: int        # 体力が尽きた時のスタン時間
 var burn_stun_ticks: int   # 燃えるアタック被弾後の行動不能時間
+var shock_ticks: int       # サンダーボール感電時間
+var bubble_ticks: int      # バブルパック拘束時間
+var original_tick_rate_milli: int  # 原作tickレートの1000倍
 var burn_launch_height_px: int  # 燃えるアタック被弾時の打ち上げ頂点(px)
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
 var power_health_damage_by_rank: Array[int]
@@ -215,6 +219,7 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	just_attack_drive_cost = _int_of(raw, "just_attack_drive_cost")
 	just_attack_recovery_delay_ticks = _int_of(raw, "just_attack_recovery_delay_ticks")
 	special_drive_cost_default = _int_of(raw, "special_drive_cost_default")
+	special_damage_default = _int_of(raw, "special_damage_default")
 	special_recovery_delay_ticks = _int_of(raw, "special_recovery_delay_ticks")
 	passive_return_drive_cost = _int_of(raw, "passive_return_drive_cost")
 	receive_stance_reserve_cost = _int_of(raw, "receive_stance_reserve_cost")
@@ -259,6 +264,13 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	burn_stun_ticks = _int_of(raw, "burn_stun_ticks")
 	if burn_stun_ticks <= 0:
 		_fail("burn_stun_ticksは正であること")
+		return
+	shock_ticks = _int_of(raw, "shock_ticks")
+	bubble_ticks = _int_of(raw, "bubble_ticks")
+	original_tick_rate_milli = _int_of(raw, "original_tick_rate_milli")
+	if special_damage_default <= 0 or shock_ticks <= 0 or bubble_ticks <= 0 \
+			or original_tick_rate_milli <= 0:
+		_fail("必殺技の威力・状態時間・原作tickレートは正であること")
 		return
 	burn_launch_height_px = _int_of(raw, "burn_launch_height_px")
 	if burn_launch_height_px <= 0:
