@@ -28,6 +28,11 @@ func test_combat_ids_and_resource_state_roundtrip() -> void:
 	p.stance_pre_read_candidate = 1
 	p.stance_cost_resolved = 1
 	p.stance_exit_recovery_ticks = 9
+	p.dive_resource_mode = SimState.DIVE_WEAK
+	p.dive_recovery_ticks = 6
+	p.current_block_mode = SimState.BLOCK_NORMAL
+	p.current_block_action_id = a.alloc_action_id()
+	p.block_contact_resolved = 1
 
 	a.possession_id = a.alloc_possession_id()
 	a.possession_team = 1
@@ -39,6 +44,7 @@ func test_combat_ids_and_resource_state_roundtrip() -> void:
 	a.ball_attack_commit_tick = 456
 	a.ball_normal_gain_granted = 1
 	a.ball_original_attack_pressure_consumed = 1
+	a.ball_soft_block_action_id = a.alloc_action_id()
 	a.ball_counts_for_pre_read_stance = 1
 
 	var b := SimState.new()

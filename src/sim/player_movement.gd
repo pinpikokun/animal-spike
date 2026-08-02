@@ -5,6 +5,7 @@ const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const SimStateScript := preload("res://src/sim/sim_state.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -119,6 +120,12 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		input = 0
 	else:
 		p.stun_action_held = action_down
+	if p.dive_recovery_ticks > 0:
+		p.dive_recovery_ticks -= 1
+		p.vx = 0
+		if p.dive_recovery_ticks == 0:
+			p.dive_resource_mode = SimStateScript.DIVE_NONE
+		return
 	var stance_lock: bool = p.stance_active != 0 \
 		or p.stance_exit_recovery_ticks > 0
 	if stance_lock:
@@ -135,19 +142,27 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
 	if p.dive != 0:
 		p.dive_age_ticks += 1
-		p.vx = p.dive * cfg.dive_receive_speed if p.dive_contact_ticks > 0 else 0
+		var dive_speed: int = cfg.dive_receive_speed
+		if p.dive_resource_mode == SimStateScript.DIVE_WEAK:
+			dive_speed = dive_speed * cfg.dive_burnout_distance_pct / 100
+		p.vx = p.dive * dive_speed if p.dive_contact_ticks > 0 else 0
 		p.vy += cfg.gravity
 		p.x = clampi(p.x + p.vx, min_x, max_x)
 		p.y += p.vy
 		if p.hit_cooldown > 0:
 			p.hit_cooldown -= 1
 		if p.y >= cfg.floor_y:
+			if p.dive_resource_mode == SimStateScript.DIVE_WEAK:
+				p.dive_recovery_ticks = p.dive_age_ticks \
+					* (cfg.dive_burnout_recovery_pct - 100) / 100
 			p.y = cfg.floor_y
 			p.vy = 0
 			p.on_ground = 1
 			p.dive = 0
 			p.dive_contact_ticks = 0
 			p.dive_age_ticks = 0
+			if p.dive_recovery_ticks == 0:
+				p.dive_resource_mode = SimStateScript.DIVE_NONE
 		return
 	var in_dir: int = 0
 	if input & IN_LEFT:

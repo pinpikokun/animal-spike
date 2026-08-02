@@ -169,7 +169,8 @@ func test_opponent_block_contact_grants_attacker_but_not_blocker() -> void:
 	HitResolver._ball_vs_block(s, cfg,
 		[0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0])
 	check_eq(attacker.drive_gauge, 55, "相手ブロック接触でも攻撃者へ15付与")
-	check_eq(blocker.drive_gauge, 40, "ブロック返球そのものには15を付けない")
+	check_eq(blocker.drive_gauge, 30,
+		"ブロッカーは回復15を得ず、開始5と接触5だけを支払う")
 	check_eq(blocker.attack_recovery_window_ticks, 0,
 		"ブロック開始でブロッカーの回復窓を破棄")
 

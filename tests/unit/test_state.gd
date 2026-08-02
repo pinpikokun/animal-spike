@@ -36,9 +36,10 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != g.state_hash(), "ACTIONラッチ差分でも変わる")
 
 func test_serialize_length() -> void:
-	# 基本状態と次ID(9) + プレイヤー4体x51 + 全体48 + エンティティ8スロットx8欄
-	# 9 + 4x51 + 48 + 8x8 = 325
-	check_eq(SimState.new().to_int_array().size(), 325,
+	# 基本状態と次ID(9) + プレイヤー4体x56 + 全体49 + エンティティ8スロットx8欄
+	# Task 7で飛びつき2欄、ブロック3欄、ソフトブロックID1欄を追加した実測値。
+	# 9 + 4x56 + 49 + 8x8 = 346
+	check_eq(SimState.new().to_int_array().size(), 346,
 		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:

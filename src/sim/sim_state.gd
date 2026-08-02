@@ -19,6 +19,14 @@ const HIT_KIND_FORWARD := 2
 const HIT_KIND_BLOCK := 3
 const HIT_KIND_ATTACK := 4
 
+const DIVE_NONE := 0
+const DIVE_NORMAL := 1
+const DIVE_WEAK := 2
+
+const BLOCK_NONE := 0
+const BLOCK_NORMAL := 1
+const BLOCK_BURNOUT := 2
+
 static func team_of(i: int) -> int:
 	return i / 2
 
@@ -43,6 +51,11 @@ class Player:
 	var dive: int = 0  # 横っ飛び方向(-1/0/1)。開始から着地まで保持する
 	var dive_contact_ticks: int = 0  # 横っ飛びレシーブの接触受付残りtick
 	var dive_age_ticks: int = 0  # 横っ飛び開始からの経過tick。表示層が読む
+	var dive_resource_mode: int = DIVE_NONE
+	var dive_recovery_ticks: int = 0
+	var current_block_mode: int = BLOCK_NONE
+	var current_block_action_id: int = 0
+	var block_contact_resolved: int = 0
 	var action_latch: int = 0  # ACTION押下エッジを決定論的に作る前tick入力
 	var hit_kind: int = HIT_KIND_RECEIVE  # 直近の打撃種別。表示層が読む
 	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
@@ -110,6 +123,7 @@ var ball_attacker_id: int = -1
 var ball_attack_commit_tick: int = -1
 var ball_normal_gain_granted: int = 0
 var ball_original_attack_pressure_consumed: int = 0
+var ball_soft_block_action_id: int = 0
 var ball_counts_for_pre_read_stance: int = 0
 var ball_x: int = 0
 var ball_y: int = 0
@@ -219,6 +233,11 @@ func to_int_array() -> Array[int]:
 		out.append(p.dive)
 		out.append(p.dive_contact_ticks)
 		out.append(p.dive_age_ticks)
+		out.append(p.dive_resource_mode)
+		out.append(p.dive_recovery_ticks)
+		out.append(p.current_block_mode)
+		out.append(p.current_block_action_id)
+		out.append(p.block_contact_resolved)
 		out.append(p.action_latch)
 		out.append(p.hit_kind)
 		out.append(p.brake)
@@ -266,6 +285,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_attack_commit_tick)
 	out.append(ball_normal_gain_granted)
 	out.append(ball_original_attack_pressure_consumed)
+	out.append(ball_soft_block_action_id)
 	out.append(ball_counts_for_pre_read_stance)
 	out.append(ball_x)
 	out.append(ball_y)
@@ -342,6 +362,11 @@ func load_int_array(arr: Array) -> void:
 		p.dive = arr[k]; k += 1
 		p.dive_contact_ticks = arr[k]; k += 1
 		p.dive_age_ticks = arr[k]; k += 1
+		p.dive_resource_mode = arr[k]; k += 1
+		p.dive_recovery_ticks = arr[k]; k += 1
+		p.current_block_mode = arr[k]; k += 1
+		p.current_block_action_id = arr[k]; k += 1
+		p.block_contact_resolved = arr[k]; k += 1
 		p.action_latch = arr[k]; k += 1
 		p.hit_kind = arr[k]; k += 1
 		p.brake = arr[k]; k += 1
@@ -389,6 +414,7 @@ func load_int_array(arr: Array) -> void:
 	ball_attack_commit_tick = arr[k]; k += 1
 	ball_normal_gain_granted = arr[k]; k += 1
 	ball_original_attack_pressure_consumed = arr[k]; k += 1
+	ball_soft_block_action_id = arr[k]; k += 1
 	ball_counts_for_pre_read_stance = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1

@@ -27,6 +27,7 @@ class _BallProbe:
 	var ball_attack_commit_tick: int = -1
 	var ball_normal_gain_granted: int = 0
 	var ball_original_attack_pressure_consumed: int = 0
+	var ball_soft_block_action_id: int = 0
 
 static func wall_reflect_vx(vx: int, cfg) -> int:
 	return -vx * cfg.wall_bounce_num / cfg.ball_bounce_den
@@ -54,6 +55,7 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 	probe.ball_normal_gain_granted = s.ball_normal_gain_granted
 	probe.ball_original_attack_pressure_consumed = \
 		s.ball_original_attack_pressure_consumed
+	probe.ball_soft_block_action_id = s.ball_soft_block_action_id
 	var floor_limit: int = cfg.floor_y - cfg.ball_radius
 	for _tick in max_ticks:
 		_step_ball(probe, cfg)
@@ -87,6 +89,7 @@ static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
 	probe.ball_normal_gain_granted = s.ball_normal_gain_granted
 	probe.ball_original_attack_pressure_consumed = \
 		s.ball_original_attack_pressure_consumed
+	probe.ball_soft_block_action_id = s.ball_soft_block_action_id
 	var floor_limit: int = cfg.floor_y - cfg.ball_radius
 	for _tick in max_ticks:
 		_step_ball(probe, cfg)
@@ -106,6 +109,7 @@ static func _clear_attack_effect(s) -> void:
 	s.ball_attack_commit_tick = -1
 	s.ball_normal_gain_granted = 0
 	s.ball_original_attack_pressure_consumed = 0
+	s.ball_soft_block_action_id = 0
 
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 	var prev_x: int = s.ball_x

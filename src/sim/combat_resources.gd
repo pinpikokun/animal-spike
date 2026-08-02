@@ -1,6 +1,8 @@
 # 戦闘リソースの整数状態遷移。シミュレーション層以外の状態を読まない。
 extends RefCounted
 
+const SimStateScript := preload("res://src/sim/sim_state.gd")
+
 static func available_drive(p) -> int:
 	if p.burnout_ticks > 0:
 		return 0
@@ -11,6 +13,33 @@ static func can_pay(p, amount: int) -> bool:
 
 static func special_drive_cost(cfg) -> int:
 	return cfg.special_drive_cost_default
+
+static func start_dive(p, cfg) -> int:
+	if p.burnout_ticks > 0 or available_drive(p) == 0:
+		if p.burnout_ticks == 0:
+			start_burnout(p, cfg)
+		return SimStateScript.DIVE_WEAK
+	if can_pay(p, cfg.dive_receive_drive_cost):
+		spend_committed(p, cfg.dive_receive_drive_cost, cfg)
+		return SimStateScript.DIVE_NORMAL
+	spend_mandatory(p, available_drive(p), cfg)
+	return SimStateScript.DIVE_WEAK
+
+static func start_block(p, cfg) -> int:
+	stop_attack_recovery(p)
+	if p.burnout_ticks > 0 or available_drive(p) == 0:
+		if p.burnout_ticks == 0:
+			start_burnout(p, cfg)
+		return SimStateScript.BLOCK_BURNOUT
+	if can_pay(p, cfg.block_start_drive_cost):
+		spend_committed(p, cfg.block_start_drive_cost, cfg)
+		return SimStateScript.BLOCK_NORMAL
+	spend_mandatory(p, available_drive(p), cfg)
+	return SimStateScript.BLOCK_BURNOUT
+
+static func resolve_block_contact(p, cfg) -> void:
+	if p.current_block_mode == SimStateScript.BLOCK_NORMAL:
+		spend_mandatory(p, cfg.block_contact_drive_cost, cfg)
 
 static func start_burnout(p, cfg) -> void:
 	if p.burnout_ticks > 0:

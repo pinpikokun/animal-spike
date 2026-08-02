@@ -95,6 +95,7 @@ func _dive_start_world(player_index: int, predicted_x: int, last_touch_team: int
 	var team: int = SimState.team_of(player_index)
 	var p = s.players[player_index]
 	p.char_id = 99
+	p.drive_gauge = cfg.drive_gauge_max
 	p.x = predicted_x - cfg.player_reach - 1 if team == 0 \
 		else predicted_x + cfg.player_reach + 1
 	p.y = cfg.floor_y
@@ -123,6 +124,7 @@ func _active_dive_contact_world(contact_ticks: int = 14) -> Array:
 	p.dive = 1
 	p.dive_contact_ticks = contact_ticks
 	p.dive_age_ticks = 1
+	p.dive_resource_mode = SimState.DIVE_NORMAL
 	p.vx = cfg.dive_receive_speed
 	s.ball_x = p.x
 	s.ball_y = p.y
@@ -372,7 +374,7 @@ func test_power_damage_keeps_dive_without_butt_drop() -> void:
 	s.ball_power = 1
 	s.ball_guard_damage = 25
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
-	check_eq(p.guard, 75, "飛びつきはパワー球のガード損害を全量受ける")
+	check_eq(p.guard, 88, "通常飛びつきはパワー球の損害を整数半減する")
 	check_eq(p.flinch, 0, "跳躍後に接地用のしりもちを重ねない")
 	check_eq(p.dive, 1, "横っ飛び表示は着地まで維持する")
 	check_eq(p.dive_contact_ticks, 0, "成功時に接触受付を終了する")
@@ -385,6 +387,7 @@ func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	var cfg = w[1]
 	var p = s.players[0]
 	p.burnout_ticks = cfg.burnout_recovery_ticks
+	p.dive_resource_mode = SimState.DIVE_WEAK
 	p.guard = 100
 	s.ball_power = 1
 	s.ball_flame = 1
@@ -395,3 +398,68 @@ func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	check_eq(p.guard, 60, "防御不能40へバーンアウト倍率なしの40ダメージ")
 	check(p.burn > 0, "防御不能球の炎上を無効化しない")
 	check_eq(p.dive, 0, "炎上状態を横っ飛びより優先")
+
+func test_dive_drive_boundaries_fix_mode_at_start() -> void:
+	for row in [
+		[16, SimState.DIVE_NORMAL, 1],
+		[15, SimState.DIVE_NORMAL, 0],
+		[14, SimState.DIVE_WEAK, 0],
+		[1, SimState.DIVE_WEAK, 0],
+		[0, SimState.DIVE_WEAK, 0],
+	]:
+		var w = _dive_start_world(0, FP.from_int(150))
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.drive_gauge = row[0]
+		_step_player_action(s, cfg, 0)
+		check_eq(p.dive_resource_mode, row[1], "開始残量%dの飛びつき種別" % row[0])
+		check_eq(p.drive_gauge, row[2], "開始残量%dの消費結果" % row[0])
+		if row[0] == 15 or (row[0] > 0 and row[0] < 15):
+			check(p.burnout_ticks > 0, "残量%dは0到達後にバーンアウト" % row[0])
+
+func test_burnout_dive_keeps_timer_and_uses_eighty_percent_speed() -> void:
+	var w = _dive_start_world(0, FP.from_int(150))
+	var s = w[0]
+	var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 0
+	p.burnout_ticks = 321
+	_step_player_action(s, cfg, 0)
+	check_eq(p.burnout_ticks, 320, "開始tickの通常進行以外でバーンアウトをリセットしない")
+	check_eq(p.vx, cfg.dive_receive_speed * cfg.dive_burnout_distance_pct / 100,
+		"弱体版は移動速度を80%に固定")
+
+func test_normal_and_weak_dive_apply_half_and_full_damage() -> void:
+	for row in [
+		[SimState.DIVE_NORMAL, 88],
+		[SimState.DIVE_WEAK, 75],
+	]:
+		var w = _active_dive_contact_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.dive_resource_mode = row[0]
+		p.guard = 100
+		s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+		s.ball_guard_damage = 25
+		HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
+		check_eq(p.guard, row[1], "飛びつき種別%dの体力倍率" % row[0])
+
+func test_weak_dive_adds_thirty_percent_landing_recovery() -> void:
+	var cfg = SimConfig.new()
+	var s = SimState.new()
+	s.phase = SimState.PHASE_GAME_OVER
+	var p = s.players[0]
+	p.x = FP.from_int(100)
+	p.y = cfg.floor_y - FP.from_int(1)
+	p.vy = FP.from_int(2)
+	p.on_ground = 0
+	p.dive = 1
+	p.dive_age_ticks = 20
+	p.dive_resource_mode = SimState.DIVE_WEAK
+	Simulation.step(s, [0, 0, 0, 0], cfg)
+	check_eq(p.dive_recovery_ticks, 6, "飛行20tickの30%を着地後へ加える")
+	Simulation.step(s, [Simulation.IN_LEFT | Simulation.IN_JUMP, 0, 0, 0], cfg)
+	check_eq(p.x, FP.from_int(100), "弱体版の追加硬直中は移動しない")
+	check_eq(p.on_ground, 1, "弱体版の追加硬直中はジャンプしない")

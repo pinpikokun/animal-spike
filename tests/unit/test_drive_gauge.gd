@@ -100,7 +100,7 @@ func test_toss_and_attack_return_cost_no_drive() -> void:
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"アタック返しは攻撃属性を持たない")
 
-func test_block_is_free_and_clears_attack_kind() -> void:
+func test_block_spends_start_and_contact_costs_and_clears_attack_kind() -> void:
 	var w := _world()
 	var s = w[0]
 	var cfg = w[1]
@@ -115,7 +115,7 @@ func test_block_is_free_and_clears_attack_kind() -> void:
 	s.ball_vx = FP.from_int(8)
 	HitResolver._ball_vs_block(s, cfg,
 		[0, 0, Simulation.IN_ACTION | Simulation.IN_LEFT, 0])
-	check_eq(p.drive_gauge, 100, "ブロックの消費は後続工程まで発生しない")
+	check_eq(p.drive_gauge, 90, "ブロックは開始5と接触5を消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"ブロック反射球は攻撃属性を持たない")
 

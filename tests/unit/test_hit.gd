@@ -429,7 +429,7 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	Simulation.step(s, [0, 0, 0, 0], cfg)
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks - 1, "炎上残り時間は毎tick減衰")
 
-func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
+func test_normal_flame_block_prevents_health_damage_but_keeps_burn_effect() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
@@ -446,8 +446,8 @@ func test_flame_block_deals_catalog_fixed_guard_damage() -> void:
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
 	Simulation.step(s, [_block_input(0), 0, 0, 0], cfg)
-	check_eq(p.guard, 60,
-		"燃える球のブロックはカタログ固定40ダメージ")
+	check_eq(p.guard, 100,
+		"通常ブロックは燃える球でも体力ダメージ0")
 	check_eq(p.burn, cfg.burn_stun_ticks, "炎球ブロックでも90tick行動不能")
 	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
 

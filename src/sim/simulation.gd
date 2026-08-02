@@ -286,7 +286,9 @@ static func _can_start_dive_receive(p) -> bool:
 	return p.on_ground == 1 and p.dive == 0 and p.hit_cooldown == 0 \
 		and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
 		and p.throw == 0 and p.flinch == 0 and p.hip == 0 \
-		and p.stance_active == 0 and p.stance_exit_recovery_ticks == 0
+		and p.stance_active == 0 and p.stance_exit_recovery_ticks == 0 \
+		and p.dive_recovery_ticks == 0 \
+		and p.current_block_mode == SimStateScript.BLOCK_NONE
 
 static func _try_start_dive_receives(state, _inputs: Array[int],
 		action_edges: Array[bool], cfg) -> void:
@@ -317,11 +319,15 @@ static func _try_start_dive_receives(state, _inputs: Array[int],
 		if distance <= receive_reach \
 				or distance > receive_reach + cfg.dive_receive_extra_reach:
 			continue
+		p.dive_resource_mode = CombatResources.start_dive(p, cfg)
 		p.dive = signi(predicted_x - p.x)
 		CombatResources.stop_attack_recovery(p)
 		p.dive_contact_ticks = cfg.dive_receive_contact_ticks
 		p.dive_age_ticks = 0
-		p.vx = p.dive * cfg.dive_receive_speed
+		var dive_speed: int = cfg.dive_receive_speed
+		if p.dive_resource_mode == SimStateScript.DIVE_WEAK:
+			dive_speed = dive_speed * cfg.dive_burnout_distance_pct / 100
+		p.vx = p.dive * dive_speed
 		p.vy = -cfg.dive_receive_hop
 		p.receive_stance = 0
 		p.on_ground = 0
@@ -523,6 +529,11 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.dive = 0
 		p.dive_contact_ticks = 0
 		p.dive_age_ticks = 0
+		p.dive_resource_mode = SimStateScript.DIVE_NONE
+		p.dive_recovery_ticks = 0
+		p.current_block_mode = SimStateScript.BLOCK_NONE
+		p.current_block_action_id = 0
+		p.block_contact_resolved = 0
 		p.brake = 0
 		p.run = 0
 		p.throw = 0
