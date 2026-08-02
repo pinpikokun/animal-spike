@@ -651,7 +651,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			else:
 				desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 					toss_target_x(team, ground_toss_hdir, cfg), cfg)
-			p.hit_kind = SimStateScript.HIT_KIND_TOSS
+			p.hit_kind = SimStateScript.HIT_KIND_FORWARD if returns_to_opponent \
+				else SimStateScript.HIT_KIND_TOSS
 		else:
 			# 地上レシーブは接触位置を主成分とし、散りと小さな左右操舵を加える。
 			desired_vy = -cfg.dive_receive_up if force_dive_receive \
@@ -693,6 +694,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		else:
 			s.ball_vy = desired_vy * aim_pct / 100
 	elif intent_kind == INTENT_AIR_SPIKE:
+		p.hit_kind = SimStateScript.HIT_KIND_ATTACK
 		# 空中+下: アタック(叩き下ろす)。ジャストミート(ボールがスイートスポット=
 		# リーチのspike_sweet_pct%以内)ならメテオ級: 速度ボーナス+パワーボール化。
 		# 原作観察点14「タイミングで玉の威力やスタン値が上がる」の芯。
@@ -746,6 +748,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		var touches_after: int = s.touches + 1 if s.last_touch_team == team else 1
 		var returns_to_opponent: bool = serve_strike \
 			or touches_after >= cfg.max_touches or hdir == dir
+		p.hit_kind = SimStateScript.HIT_KIND_FORWARD if returns_to_opponent \
+			else SimStateScript.HIT_KIND_TOSS
 		if returns_to_opponent:
 			var air_return_incoming_vx: int = 0 if serve_strike else s.ball_vx
 			s.ball_vx = opponent_return_vx(

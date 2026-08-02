@@ -17,6 +17,7 @@ const HIT_KIND_RECEIVE := 0
 const HIT_KIND_TOSS := 1
 const HIT_KIND_FORWARD := 2
 const HIT_KIND_BLOCK := 3
+const HIT_KIND_ATTACK := 4
 
 static func team_of(i: int) -> int:
 	return i / 2

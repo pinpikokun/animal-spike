@@ -158,7 +158,10 @@ func test_successful_block_records_block_hit_kind() -> void:
 
 
 func test_next_air_hit_clears_previous_block_hit_kind() -> void:
-	for input in [SimInput.IN_ACTION, SimInput.IN_ACTION | SimInput.IN_UP]:
+	for row in [
+		[SimInput.IN_ACTION, SimState.HIT_KIND_TOSS],
+		[SimInput.IN_ACTION | SimInput.IN_UP, SimState.HIT_KIND_ATTACK],
+	]:
 		var w := _rally_world()
 		var s = w[0]
 		var cfg = w[1]
@@ -169,9 +172,37 @@ func test_next_air_hit_clears_previous_block_hit_kind() -> void:
 		p.hit_cooldown = 0
 		s.ball_x = p.x
 		s.ball_y = p.y
-		HitResolver._apply_hit(s, 0, cfg, input, 0)
-		check_eq(p.hit_kind, SimState.HIT_KIND_RECEIVE,
-			"次の空中打撃は古いブロック表示を再利用しない input=%d" % input)
+		HitResolver._apply_hit(s, 0, cfg, row[0], 0)
+		check_eq(p.hit_kind, row[1],
+			"次の空中打撃は成立した動作種別へ更新 input=%d" % row[0])
+
+
+func test_every_successful_contact_records_its_action_kind() -> void:
+	for row in [
+		[1, SimInput.IN_ACTION, 0, 0, SimState.HIT_KIND_TOSS, "地上味方トス"],
+		[1, SimInput.IN_ACTION | SimInput.IN_RIGHT, 1, 0,
+			SimState.HIT_KIND_FORWARD, "地上敵陣返球"],
+		[1, SimInput.IN_ACTION | SimInput.IN_DOWN, 1, 0,
+			SimState.HIT_KIND_RECEIVE, "地上レシーブ"],
+		[0, SimInput.IN_ACTION, 0, 0, SimState.HIT_KIND_TOSS, "空中味方トス"],
+		[0, SimInput.IN_ACTION | SimInput.IN_RIGHT, 1, 0,
+			SimState.HIT_KIND_FORWARD, "空中敵陣返球"],
+		[0, SimInput.IN_ACTION | SimInput.IN_UP, 1, 0,
+			SimState.HIT_KIND_ATTACK, "空中アタック"],
+	]:
+		var w := _rally_world()
+		var s = w[0]
+		var cfg = w[1]
+		var p = s.players[0]
+		p.on_ground = row[0]
+		if p.on_ground == 0:
+			p.y = cfg.floor_y - FP.from_int(100)
+		s.last_touch_team = row[2]
+		s.touches = row[3]
+		s.ball_x = p.x
+		s.ball_y = p.y
+		HitResolver._apply_hit(s, 0, cfg, row[1], 0)
+		check_eq(p.hit_kind, row[4], "%sの動作種別" % row[5])
 
 
 func test_cpu_emits_new_toss_receive_and_block_inputs() -> void:

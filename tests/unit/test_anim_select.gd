@@ -52,6 +52,7 @@ func test_hit_kind_constants_are_explicit() -> void:
 	check_eq(constants.get("HIT_KIND_TOSS", -1), 1, "トス種別を定数化")
 	check_eq(constants.get("HIT_KIND_FORWARD", -1), 2, "前トス種別を定数化")
 	check_eq(constants.get("HIT_KIND_BLOCK", -1), 3, "ブロック種別を定数化")
+	check_eq(constants.get("HIT_KIND_ATTACK", -1), 4, "アタック種別を定数化")
 
 func test_block_hit_uses_same_animation_on_ground_and_in_air() -> void:
 	for on_ground in [0, 1]:
