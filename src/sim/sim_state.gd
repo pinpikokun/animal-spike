@@ -44,9 +44,7 @@ class Player:
 	var vy: int = 0
 	var on_ground: int = 1
 	var hit_cooldown: int = 0
-	var stun: int = 0  # 耐久力が尽きた硬直(移動・ヒット不可)の残りtick
-	var stun_action_held: int = 0
-	var stun_mash_event: int = 0
+	var stun_ticks: int = 0  # 体力が尽きた硬直(移動・ヒット不可)の残りtick
 	var burn: int = 0  # 燃えるアタック被弾後の行動不能・炎上表示残りtick
 	var dive: int = 0  # 横っ飛び方向(-1/0/1)。開始から着地まで保持する
 	var dive_contact_ticks: int = 0  # 横っ飛びレシーブの接触受付残りtick
@@ -73,10 +71,9 @@ class Player:
 	# ノックバック/反動の残り(符号=押される方向, 絶対値=残りtick)。入力と独立に
 	# 体が滑り、毎tick弱まる。ジャスト反動・ブロック押し込みが立てる。表示層も読む
 	var push: int = 0
-	# 耐久力(ガード): アタックをしのぐたびに減り、尽きるとスタン(満タンへ復帰)。
-	# guard_maxはGUARDランクの絶対値。回復は行わず、尽きると気絶して満タンへ戻る。
-	var guard: int = 100
-	var guard_max: int = 100
+	# 体力: アタックをしのぐたびに減り、尽きるとスタンする。
+	var health: int = 100
+	var max_health: int = 100
 	var drive_gauge: int = 0
 	var drive_reserved: int = 0
 	var attack_recovery_delay_ticks: int = 0
@@ -130,12 +127,12 @@ var ball_y: int = 0
 var ball_vx: int = 0
 var ball_vy: int = 0
 var ball_spin: int = 0  # 累積回転量(横移動由来)。表示層が回転フレームの導出に使う
-var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(耐久力を削る+熱色表示)
+var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボール(体力を削る+熱色表示)
 var ball_attack_kind: int = BALL_ATTACK_NONE  # ドライブ削り用の飛来アタック種別
-var ball_guard_damage: int = 0
+var ball_health_damage: int = 0
 var ball_defense_class: int = 0
 var ball_ghost: int = 0  # 1=相手コートへ渡るまで表示層で点滅するゴーストボール
-var ball_flame: int = 0  # 1=ガードダメージ強化と赤色表示を持つ燃えるアタック球
+var ball_flame: int = 0  # 1=体力ダメージと赤色表示を持つ燃えるアタック球
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と打撃発生の観測に使う
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
@@ -226,9 +223,7 @@ func to_int_array() -> Array[int]:
 		out.append(p.vy)
 		out.append(p.on_ground)
 		out.append(p.hit_cooldown)
-		out.append(p.stun)
-		out.append(p.stun_action_held)
-		out.append(p.stun_mash_event)
+		out.append(p.stun_ticks)
 		out.append(p.burn)
 		out.append(p.dive)
 		out.append(p.dive_contact_ticks)
@@ -252,8 +247,8 @@ func to_int_array() -> Array[int]:
 		out.append(p.tap_tick)
 		out.append(p.dash)
 		out.append(p.push)
-		out.append(p.guard)
-		out.append(p.guard_max)
+		out.append(p.health)
+		out.append(p.max_health)
 		out.append(p.drive_gauge)
 		out.append(p.drive_reserved)
 		out.append(p.attack_recovery_delay_ticks)
@@ -294,7 +289,7 @@ func to_int_array() -> Array[int]:
 	out.append(ball_spin)
 	out.append(ball_power)
 	out.append(ball_attack_kind)
-	out.append(ball_guard_damage)
+	out.append(ball_health_damage)
 	out.append(ball_defense_class)
 	out.append(ball_ghost)
 	out.append(ball_flame)
@@ -355,9 +350,7 @@ func load_int_array(arr: Array) -> void:
 		p.vy = arr[k]; k += 1
 		p.on_ground = arr[k]; k += 1
 		p.hit_cooldown = arr[k]; k += 1
-		p.stun = arr[k]; k += 1
-		p.stun_action_held = arr[k]; k += 1
-		p.stun_mash_event = arr[k]; k += 1
+		p.stun_ticks = arr[k]; k += 1
 		p.burn = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
 		p.dive_contact_ticks = arr[k]; k += 1
@@ -381,8 +374,8 @@ func load_int_array(arr: Array) -> void:
 		p.tap_tick = arr[k]; k += 1
 		p.dash = arr[k]; k += 1
 		p.push = arr[k]; k += 1
-		p.guard = arr[k]; k += 1
-		p.guard_max = arr[k]; k += 1
+		p.health = arr[k]; k += 1
+		p.max_health = arr[k]; k += 1
 		p.drive_gauge = arr[k]; k += 1
 		p.drive_reserved = arr[k]; k += 1
 		p.attack_recovery_delay_ticks = arr[k]; k += 1
@@ -423,7 +416,7 @@ func load_int_array(arr: Array) -> void:
 	ball_spin = arr[k]; k += 1
 	ball_power = arr[k]; k += 1
 	ball_attack_kind = arr[k]; k += 1
-	ball_guard_damage = arr[k]; k += 1
+	ball_health_damage = arr[k]; k += 1
 	ball_defense_class = arr[k]; k += 1
 	ball_ghost = arr[k]; k += 1
 	ball_flame = arr[k]; k += 1

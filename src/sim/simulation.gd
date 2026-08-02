@@ -284,7 +284,7 @@ static func _advance_stance_exit_recovery(state, before: Array[int]) -> void:
 
 static func _can_start_dive_receive(p) -> bool:
 	return p.on_ground == 1 and p.dive == 0 and p.hit_cooldown == 0 \
-		and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
+		and p.stun_ticks == 0 and p.burn == 0 and p.quake_stun == 0 \
 		and p.throw == 0 and p.flinch == 0 and p.hip == 0 \
 		and p.stance_active == 0 and p.stance_exit_recovery_ticks == 0 \
 		and p.dive_recovery_ticks == 0 \
@@ -348,7 +348,7 @@ static func _update_receive_stances(state, inputs: Array[int], cfg,
 		var chord: bool = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
 		var action_edge: bool = action_edges[i] if i < action_edges.size() \
 			else chord and p.action_latch == 0
-		var unable: bool = p.on_ground == 0 or p.stun > 0 or p.burn > 0 \
+		var unable: bool = p.on_ground == 0 or p.stun_ticks > 0 or p.burn > 0 \
 			or p.quake_stun > 0 or p.throw > 0 or p.flinch > 0 \
 			or p.hip != 0 or p.dive != 0
 		if p.stance_active == 0 and p.stance_exit_recovery_ticks > 0 \
@@ -414,7 +414,7 @@ static func _update_hat(state, inputs: Array[int], cfg) -> void:
 		var p = state.players[i]
 		if p.throw == 0 and p.has_hat == 1 and (inp & IN_ABILITY1) \
 				and Chars.has_ability(p.char_id, Chars.CA_HAT) \
-				and p.stun == 0 and p.burn == 0 \
+				and p.stun_ticks == 0 and p.burn == 0 \
 				and p.flinch == 0 and p.burnout_ticks == 0 \
 				and p.hip == 0 and p.quake_stun == 0 \
 				and ent_find(state, KIND_CAP) < 0:
@@ -523,8 +523,9 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	# スタンはラリー終了で解除(新ラリーを硬直で始めさせない)。演出残時間も同様
 	for i in s.players.size():
 		var p = s.players[i]
-		p.stun = 0
-		p.stun_action_held = 0
+		if p.stun_ticks > 0:
+			CombatResources.recover_health_stun(p)
+		p.stunned_this_rally = 0
 		p.burn = 0
 		p.dive = 0
 		p.dive_contact_ticks = 0
@@ -587,10 +588,8 @@ static func reset_match(s, cfg, serving_team: int,
 		p.on_ground = 1
 		p.hit_cooldown = 0
 		p.has_hat = 1 if Chars.has_ability(p.char_id, Chars.CA_HAT) else 0
-		# GUARDランクをrules.jsonの絶対値表へ直接写像する。
-		p.guard_max = cfg.guard_max_for_rank(
-			Chars.rank(p.char_id, Chars.Profile.ABILITY_GUARD))
-		p.guard = p.guard_max
+		p.max_health = 100
+		p.health = 100
 		p.drive_gauge = cfg.drive_gauge_max
 		p.drive_reserved = 0
 		CombatResources.stop_attack_recovery(p)
@@ -606,11 +605,10 @@ static func reset_match(s, cfg, serving_team: int,
 		p.just_receive_flash = 0
 		p.just_receive_event = 0
 		p.burnout_ticks = 0
+		p.stunned_this_rally = 0
 		p.quake_stun = 0
-		p.stun_action_held = 0
-		p.stun_mash_event = 0
 	s.hip_quake_event = 0
-	s.ball_guard_damage = 0
+	s.ball_health_damage = 0
 	s.ball_defense_class = Chars.DEFENSE_NONE
 	s.human_team_mask = 0
 	# reset_rallyが開始ラリーを1つ進めるため、試合直後を0にする起点は-1。
@@ -679,6 +677,8 @@ static func _award_point(s, team: int, cfg) -> void:
 	_finish_stances_for_rally_end(s, cfg)
 	PossessionTracker.reset_for_rally(s)
 	for p in s.players:
+		if p.stun_ticks > 0:
+			CombatResources.recover_health_stun(p)
 		CombatResources.stop_attack_recovery(p)
 	if team == 0:
 		s.score_l += 1

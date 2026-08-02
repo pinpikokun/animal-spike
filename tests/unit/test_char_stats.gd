@@ -34,14 +34,14 @@ func test_jump_level_scales_height() -> void:
 		> PlayerMovement._jump_height_px(Chars.Profile.RANK_E),
 		"ジャンプランクが高いほど最高高度が高い")
 
-func test_guard_max_stat_applies_on_reset() -> void:
+func test_character_rank_does_not_change_max_health() -> void:
 	var w = _rally(); var cfg = w[1]
 	var s = St.new()
-	s.players[2].char_id = Chars.CHAR_DEBUG  # stats指定なし枠はguard_max=100%
+	s.players[2].char_id = Chars.CHAR_DEBUG
 	Sim.reset_match(s, cfg, 0, Chars.ROSTER, 0, 0)
 	# reset_matchがROSTERでchar_idを上書きするため、既定ロスターは全員100
 	for p in s.players:
-		check_eq(p.guard_max, 100, "既定ロスターは耐久100")
+		check_eq(p.max_health, 100, "既定ロスターは最大体力100")
 
 func test_all_hundred_matches_legacy_values() -> void:
 	# 全キャラ100(既定)なら従来の速度値と完全一致する(挙動不変の直接検証。

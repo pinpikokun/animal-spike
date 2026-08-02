@@ -216,7 +216,7 @@ func test_dive_action_edge_is_consumed_during_freeze_and_incapacitation() -> voi
 	check_eq(slowed[0].players[0].dive, 0,
 		"スロー停止中の押下を再開後へ持ち越さない")
 	var stunned = _dive_start_world(0, FP.from_int(150))
-	stunned[0].players[0].stun = 1
+	stunned[0].players[0].stun_ticks = 1
 	_step_player_action(stunned[0], stunned[1], 0)
 	_step_player_action(stunned[0], stunned[1], 0)
 	check_eq(stunned[0].players[0].dive, 0,
@@ -372,9 +372,9 @@ func test_power_damage_keeps_dive_without_butt_drop() -> void:
 	var p = s.players[0]
 	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
 	s.ball_power = 1
-	s.ball_guard_damage = 25
+	s.ball_health_damage = 25
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
-	check_eq(p.guard, 88, "通常飛びつきはパワー球の損害を整数半減する")
+	check_eq(p.health, 88, "通常飛びつきはパワー球の損害を整数半減する")
 	check_eq(p.flinch, 0, "跳躍後に接地用のしりもちを重ねない")
 	check_eq(p.dive, 1, "横っ飛び表示は着地まで維持する")
 	check_eq(p.dive_contact_ticks, 0, "成功時に接触受付を終了する")
@@ -388,14 +388,14 @@ func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	var p = s.players[0]
 	p.burnout_ticks = cfg.burnout_recovery_ticks
 	p.dive_resource_mode = SimState.DIVE_WEAK
-	p.guard = 100
+	p.health = 100
 	s.ball_power = 1
 	s.ball_flame = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "バーンアウト中も横っ飛び接触できる")
-	check_eq(p.guard, 60, "防御不能40へバーンアウト倍率なしの40ダメージ")
+	check_eq(p.health, 60, "防御不能40へバーンアウト倍率なしの40ダメージ")
 	check(p.burn > 0, "防御不能球の炎上を無効化しない")
 	check_eq(p.dive, 0, "炎上状態を横っ飛びより優先")
 
@@ -440,11 +440,11 @@ func test_normal_and_weak_dive_apply_half_and_full_damage() -> void:
 		var cfg = w[1]
 		var p = s.players[0]
 		p.dive_resource_mode = row[0]
-		p.guard = 100
+		p.health = 100
 		s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
-		s.ball_guard_damage = 25
+		s.ball_health_damage = 25
 		HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
-		check_eq(p.guard, row[1], "飛びつき種別%dの体力倍率" % row[0])
+		check_eq(p.health, row[1], "飛びつき種別%dの体力倍率" % row[0])
 
 func test_weak_dive_adds_thirty_percent_landing_recovery() -> void:
 	var cfg = SimConfig.new()

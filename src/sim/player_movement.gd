@@ -44,7 +44,6 @@ static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
 	return FP.from_int(height_px * 2) / den
 
 static func _step_player(p, input: int, cfg, team: int) -> void:
-	var action_down: int = 1 if (input & IN_ACTION) != 0 else 0
 	if p.burn > 0:
 		p.burn -= 1
 		# 炎上中は入力を完全に無視し、被弾時の慣性・摩擦・重力だけで動く。
@@ -69,10 +68,8 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 				p.on_ground = 0
 		if p.hit_cooldown > 0:
 			p.hit_cooldown -= 1
-		if p.burn == 0 and p.guard <= 0:
-			p.stun = cfg.stun_ticks
-			p.guard = p.guard_max
-			p.stun_action_held = 0
+		if p.burn == 0 and p.health <= 0:
+			CombatResources.start_health_stun(p, cfg)
 		return
 	if p.quake_stun > 0:
 		p.quake_stun -= 1
@@ -111,15 +108,11 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 			p.hit_cooldown -= 1
 		return
 	# スタン中は入力無効(移動もジャンプも不可)。物理(重力・着地)は生きる
-	if p.stun > 0:
-		p.stun -= 1
-		if action_down == 1 and p.stun_action_held == 0:
-			p.stun = maxi(p.stun - cfg.stun_mash_bonus, 0)
-			p.stun_mash_event += 1
-		p.stun_action_held = action_down
+	if p.stun_ticks > 0:
+		p.stun_ticks -= 1
+		if p.stun_ticks == 0:
+			CombatResources.recover_health_stun(p)
 		input = 0
-	else:
-		p.stun_action_held = action_down
 	if p.dive_recovery_ticks > 0:
 		p.dive_recovery_ticks -= 1
 		p.vx = 0

@@ -44,7 +44,6 @@ var _prev_vx: Array[int] = [0, 0, 0, 0]
 var _prev_cd: Array[int] = [0, 0, 0, 0]
 var _prev_flinch: Array[int] = [0, 0, 0, 0]  # しりもち検知用(0→>0で砂煙)
 var _prev_stun: Array[int] = [0, 0, 0, 0]
-var _prev_stun_mash_event: Array[int] = [0, 0, 0, 0]
 var _prev_just_receive_event: Array[int] = [0, 0, 0, 0]
 var _prev_hip_quake_event: int = 0
 var _prev_power := 0
@@ -254,10 +253,6 @@ func _detect_fx() -> void:
 	_prune_fx(f)
 	for i in state.players.size():
 		var p = state.players[i]
-		if p.stun_mash_event > _prev_stun_mash_event[i]:
-			_shake_amp = maxf(_shake_amp, 2.2)
-			_flash[i] = maxi(_flash[i], 3)
-		_prev_stun_mash_event[i] = p.stun_mash_event
 		var foot := ViewTransform.pos_of(p) + _depth_offset(i)
 		var pvel := Vector2(ViewTransform.to_px(p.vx), ViewTransform.to_px(p.vy))
 		if _prev_ground[i] == 1 and p.on_ground == 0:
@@ -311,14 +306,14 @@ func _detect_fx() -> void:
 				_spawn_fx("attack", bpos, away, bvel * 0.25)
 				_play_sfx("hit")
 		# 被弾フラッシュ: よろけ/気絶の開始フレームで白く点滅させる
-		if _prev_stun[i] == 0 and p.stun > 0:
-			_flash[i] = 14 if p.stun > cfg.stagger_ticks else 8
-			# ガード破壊(気絶)は画面も揺らす。よろけ(stagger)は軽く
-			_shake_amp = maxf(_shake_amp, 3.0 if p.stun > cfg.stagger_ticks else 1.4)
+		if _prev_stun[i] == 0 and p.stun_ticks > 0:
+			_flash[i] = 14 if p.stun_ticks > cfg.stagger_ticks else 8
+			# 体力スタンは画面も揺らす。よろけ(stagger)は軽くする。
+			_shake_amp = maxf(_shake_amp, 3.0 if p.stun_ticks > cfg.stagger_ticks else 1.4)
 		_prev_ground[i] = p.on_ground
 		_prev_vx[i] = p.vx
 		_prev_cd[i] = p.hit_cooldown
-		_prev_stun[i] = p.stun
+		_prev_stun[i] = p.stun_ticks
 	# ボールが壁で跳ねた瞬間: vxの符号反転を壁際で検知→壁から離れる向きに火花
 	var w := ViewTransform.to_px(cfg.court_width)
 	var bx := bpos.x
@@ -362,7 +357,7 @@ func _sync_sprites() -> void:
 		var bvy := absf(ViewTransform.to_px(state.ball_vy))
 		if bvx < 1.0 and bvy < 1.0:
 			_victory_on = true
-	# 画面揺れ: インパルス減衰式。大きな衝撃(ジャスト/速い球の着弾/ガード破壊)で
+	# 画面揺れ: インパルス減衰式。大きな衝撃(ジャスト/速い球の着弾/体力スタン)で
 	# ドンと入り数フレームで収束する。impulseは_detect_fxが衝撃の瞬間に積む。
 	# 表示層のみ(floatも描画フレーム由来の乱れも許される・ロールバック無関係)
 	_shake_amp *= 0.78
@@ -526,7 +521,7 @@ func _sync_sprites() -> void:
 				Chars.CHAR_PIYO, Chars.CHAR_UME, Chars.CHAR_CARBY, Chars.CHAR_DUO,
 				Chars.CHAR_SEC1, Chars.CHAR_SEC2]):
 			spr.modulate = Color(1.0, 0.55, 0.2)
-		elif p.stun > 0:
+		elif p.stun_ticks > 0:
 			spr.modulate = Color(1.0, 0.75, 0.75)
 		else:
 			spr.modulate = Color.WHITE
@@ -970,7 +965,7 @@ func _draw_stun_spirals(c: CanvasItem) -> void:
 	# 角度はtick由来=ロールバック再描画でも一貫(ビュー状態レス)
 	for i in state.players.size():
 		var p = state.players[i]
-		if p.stun <= 0:
+		if p.stun_ticks <= 0:
 			continue
 		var pos := ViewTransform.pos_of(p) + _depth_offset(i)
 		var center := pos + Vector2(0.0, -30.0)

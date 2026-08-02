@@ -5,6 +5,7 @@ const SimConfig := preload("res://src/sim/sim_config.gd")
 const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const HitResolver := preload("res://src/sim/hit_resolver.gd")
 
 func _rally_world() -> Array:
 	var cfg = SimConfig.new()
@@ -70,7 +71,7 @@ func test_power_ball_touch_loses_control() -> void:
 	s.ball_vy = FP.from_int(300) / cfg.tick_rate
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check(s.ball_vx < -vin_x / 2, "下レシーブでも大きく左へ弾かれる(制御喪失)")
-	check(p.flinch > 0 or p.stun > 0, "被弾リアクションも発生")
+	check(p.flinch > 0 or p.stun_ticks > 0, "被弾リアクションも発生")
 
 func test_just_receive_keeps_control() -> void:
 	# ジャストで受ければパワーボールでも完全制御(狙い100%+慣性10%)
@@ -93,25 +94,26 @@ func test_just_receive_keeps_control() -> void:
 	check(absi(s.ball_vx) < vin_x / 2, "ジャスト受けは流されずほぼ狙い通り")
 	check_eq(p.flinch, 0, "ジャスト受けは被弾しない")
 
-func test_guard_break_flies_to_wall() -> void:
-	# ガードブレイク(気絶)の一撃は自陣の壁際まで吹っ飛ぶフィニッシュ
+func test_health_stun_does_not_blow_player_toward_wall() -> void:
+	# 体力スタンはその場で転倒し、壁方向へ吹き飛ばさない。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.guard = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	p.health = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_health_damage = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_x = p.x + FP.from_int(30)  # スイート外
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(600) / cfg.tick_rate
 	s.ball_vy = FP.from_int(300) / cfg.tick_rate
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
-	check(p.stun > 0, "気絶の前提確認")
-	for i in 120:
-		Simulation.step(s, [0, 0, 0, 0], cfg)
-	check(p.x < FP.from_int(30), "自陣の壁際(左端30px以内)まで吹っ飛ぶ")
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION,
+		cfg.player_reach * cfg.player_reach)
+	check(p.stun_ticks > 0, "気絶の前提確認")
+	check_eq(p.vx, 0, "体力スタンは後方初速なし")
+	check_eq(p.push, 0, "体力スタンは壁方向押し出しなし")
 
 func test_power_ball_block_pushes_blocker() -> void:
 	# パワーボールをブロックすると小さく押し込まれる。通常球は無反動

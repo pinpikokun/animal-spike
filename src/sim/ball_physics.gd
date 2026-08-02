@@ -14,7 +14,7 @@ class _BallProbe:
 	var ball_spin: int = 0
 	var ball_power: int = 0
 	var ball_attack_kind: int = 0
-	var ball_guard_damage: int = 0
+	var ball_health_damage: int = 0
 	var ball_defense_class: int = 0
 	var ball_ghost: int = 0
 	var ball_flame: int = 0
@@ -41,7 +41,7 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 	probe.ball_spin = s.ball_spin
 	probe.ball_power = s.ball_power
 	probe.ball_attack_kind = s.ball_attack_kind
-	probe.ball_guard_damage = s.ball_guard_damage
+	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
 	probe.ball_ghost = s.ball_ghost
 	probe.ball_flame = s.ball_flame
@@ -75,7 +75,7 @@ static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
 	probe.ball_spin = s.ball_spin
 	probe.ball_power = s.ball_power
 	probe.ball_attack_kind = s.ball_attack_kind
-	probe.ball_guard_damage = s.ball_guard_damage
+	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
 	probe.ball_ghost = s.ball_ghost
 	probe.ball_flame = s.ball_flame
@@ -102,7 +102,7 @@ static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
 
 static func _clear_attack_effect(s) -> void:
 	s.ball_attack_kind = SimStateScript.BALL_ATTACK_NONE
-	s.ball_guard_damage = 0
+	s.ball_health_damage = 0
 	s.ball_attack_id = 0
 	s.ball_last_contact_id = 0
 	s.ball_attacker_id = -1
@@ -244,5 +244,5 @@ static func _clear_ghost_on_opponent_entry(s, is_left: bool) -> void:
 	var entered_team: int = 0 if is_left else 1
 	if s.ball_ghost == 1 and s.last_touch_team >= 0 and entered_team != s.last_touch_team:
 		s.ball_ghost = 0
-		s.ball_guard_damage = 0
+		s.ball_health_damage = 0
 		s.ball_defense_class = 0

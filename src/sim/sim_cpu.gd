@@ -238,7 +238,7 @@ static func _mate_is_acting(mate) -> bool:
 	# 原作0x82E9のP_state!=0に相当。本作には統合stateがないため、
 	# 地上の通常制御以外(空中・打球硬直・構え・行動不能動作)を動作中とする。
 	return mate.on_ground == 0 or mate.hit_cooldown > 0 \
-		or mate.receive_stance != 0 or mate.stun > 0 or mate.burn > 0 \
+		or mate.receive_stance != 0 or mate.stun_ticks > 0 or mate.burn > 0 \
 		or mate.throw > 0 or mate.flinch > 0 or mate.hip != 0 \
 		or mate.cling != 0 or mate.quake_stun > 0
 
@@ -279,7 +279,7 @@ static func _should_yield_hit_to_cpu_mate(
 		return false
 	var p = s.players[idx]
 	var mate = s.players[team * 2 + mate_slot]
-	if mate.stun > 0 or mate.hit_cooldown > 0:
+	if mate.stun_ticks > 0 or mate.hit_cooldown > 0:
 		return false
 	if absi(p.x - mate.x) > cfg.cpu_mate_spacing / 2:
 		return false
@@ -640,7 +640,7 @@ static func _pick_air_shot(
 		for i in 2:
 			var opp = s.players[(1 - team) * 2 + i]
 			var distance: int = absi(candidate[1] - opp.x) \
-				+ opp.stun * cfg.move_speed
+				+ opp.stun_ticks * cfg.move_speed
 			score = mini(score, distance)
 		if score > best_score:
 			best_score = score
@@ -704,7 +704,7 @@ static func decide(s, idx: int, cfg) -> int:
 	if not frozen:
 		# 帽子投げ: 敵球がネット際(帽子の滞在位置)へ落ちてくる軌道なら、
 		# 溜め+飛行の後に滞在窓へボールが入るタイミングで投げる(妨害ギミックの活用)
-		if (ab & AB_HAT) and p.stun == 0:
+		if (ab & AB_HAT) and p.stun_ticks == 0:
 			var hat_in: int = _decide_hat(s, p, cfg, team)
 			if hat_in != 0:
 				return hat_in
@@ -907,7 +907,7 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 		and s.ball_attack_kind == SimStateScript.BALL_ATTACK_NONE \
 		and mate_is_human
 	if (ab & AB_ATTACK) and _attack_ok(s, idx, prof) \
-			and p.on_ground == 1 and p.stun == 0 and not miss_roll \
+			and p.on_ground == 1 and p.stun_ticks == 0 and not miss_roll \
 			and s.serve_flight == 0 \
 			and s.last_touch_team == team and s.touches < cfg.max_touches \
 			and attacker_priority and not own_toss_for_human_mate \
@@ -975,7 +975,7 @@ static func _ready_position(s, idx: int, p, cfg, team: int, ab: int, deadzone: i
 # 0を返したら通常の持ち場戻りにフォールバック
 static func _decide_block(
 		s, idx: int, p, cfg, team: int, ab: int, deadzone: int) -> int:
-	if not (ab & AB_BLOCK) or p.stun > 0:
+	if not (ab & AB_BLOCK) or p.stun_ticks > 0:
 		return 0
 	var reach: int = cfg.player_reach
 	for j in 2:

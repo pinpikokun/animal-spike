@@ -28,27 +28,27 @@ func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	s.last_touch_team = 1 - SimState.team_of(i)
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_power = 1
-	s.ball_guard_damage = 40 if flame else \
-		cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_health_damage = 40 if flame else \
+		cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE if flame else Chars.DEFENSE_NONE
 	s.ball_flame = 1 if flame else 0
 	HitResolver._apply_hit(s, i, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 
-func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_healing() -> void:
+func test_just_receive_during_timing_window_nullifies_drive_and_health_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.guard = 40
+	p.health = 40
 	_press_receive(s, cfg)
 	p.drive_gauge = 65
 	# 位置の芯判定は撤去。リーチ端相当でもタイミング窓だけで成立する。
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_health_damage = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 40, "ジャストレシーブはガード削りを無効化し回復もしない")
+	check_eq(p.health, 40, "ジャストレシーブは体力損害を無効化し回復もしない")
 	check_eq(p.drive_gauge, 60, "反応ジャストは予約5を確定消費")
 	check_eq(p.just_receive_flash, 30, "JUST表示と本体発光を約30tick維持")
 	check_eq(p.just_receive_event, 1, "専用SE用イベント番号")
@@ -73,11 +73,11 @@ func test_moving_receive_does_not_trigger_just_receive() -> void:
 func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.guard = 100
+	p.health = 100
 	_press_receive(s, cfg)
 	p.drive_gauge = 65
 	_incoming_just(s, cfg, 0, true)
-	check_eq(p.guard, 60, "防御不能系はカタログ固定40を通す")
+	check_eq(p.health, 60, "防御不能系はカタログ固定40を通す")
 	check_eq(p.drive_gauge, 60, "防御不能技でも反応構えの予約5は確定")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
 
@@ -109,15 +109,15 @@ func test_releasing_and_pressing_again_opens_new_window() -> void:
 	check_eq(s.players[0].receive_stance, cfg.just_receive_window_ticks,
 		"離して押し直すと新しい窓を開く")
 
-func test_just_toss_does_not_heal_guard() -> void:
+func test_just_toss_does_not_heal_health() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
-	p.guard = 40
+	p.health = 40
 	s.last_touch_team = 1
 	s.ball_power = 1
 	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
-	check_eq(p.guard, 40,
-		"回復全廃によりジャストトスでもガードは増えない")
+	check_eq(p.health, 40,
+		"回復全廃によりジャストトスでも体力は増えない")
 
 func test_burnout_seals_just_attack_and_just_receive() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
@@ -171,22 +171,22 @@ func test_burnout_does_not_multiply_normal_or_flame_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.burnout_ticks = cfg.burnout_recovery_ticks
-	p.guard = 100
+	p.health = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_health_damage = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 75, "POWER C絶対値25を倍率なしで適用")
-	p.guard = 100
+	check_eq(p.health, 75, "POWER C絶対値25を倍率なしで適用")
+	p.health = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
 	s.ball_flame = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 60, "必殺技40も倍率なしで適用")
+	check_eq(p.health, 60, "必殺技40も倍率なしで適用")
 
 func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

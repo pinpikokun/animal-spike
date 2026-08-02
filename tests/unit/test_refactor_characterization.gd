@@ -36,11 +36,11 @@ func _hit_snapshot(on_ground: int, input: int, d2: int, vx: int, vy: int, power:
 	s.ball_vx = vx
 	s.ball_vy = vy
 	s.ball_power = power
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(
+	s.ball_health_damage = cfg.power_health_damage_for_rank(
 		Chars.Profile.RANK_C) if power == 1 else 0
 	s.last_touch_team = 1 if power == 1 else -1
 	HitResolver._apply_hit(s, 0, cfg, input | Simulation.IN_ACTION, d2)
-	return [p.hit_kind, p.dive, s.ball_vx, s.ball_vy, s.ball_power, p.guard, p.flinch]
+	return [p.hit_kind, p.dive, s.ball_vx, s.ball_vy, s.ball_power, p.health, p.flinch]
 
 func test_intent_classification_table() -> void:
 	# 操作原作回帰後の論理ベースライン:
@@ -172,8 +172,8 @@ func _chain_hashes() -> Array[int]:
 	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, near_d2)
 	out.append(s.state_hash())
 
-	# パワーボールを芯外しレシーブし、ガード破壊まで踏む。
-	s.players[2].guard = 1
+	# パワーボールを芯外しレシーブし、体力スタンまで踏む。
+	s.players[2].health = 1
 	s.ball_power = 1
 	s.last_touch_team = 0
 	HitResolver._apply_hit(s, 2, cfg, Simulation.IN_ACTION | Simulation.IN_DOWN, miss_d2)
@@ -197,7 +197,7 @@ func _chain_hashes() -> Array[int]:
 	# 帽子投げの溜めから発射まで進める。
 	s.players[0].char_id = Chars.CHAR_MARIO
 	s.players[0].has_hat = 1
-	s.players[0].guard = s.players[0].guard_max
+	s.players[0].health = s.players[0].max_health
 	s.players[0].throw = 0
 	s.ball_x = cfg.net_x
 	s.ball_y = FP.from_int(20)
@@ -216,7 +216,7 @@ func test_hit_chain_physics_state_transition_golden() -> void:
 	# すべてのハッシュがずれる。挙動の異常ではない。実測値。
 	#
 	# 2026-07-25 (第2回) 気絶時間を 180tick(3秒) から 240tick(4秒) へ変更したため
-	# 2番目以降が変化した。この連鎖は2手目でガード破壊→気絶に入るので、
+	# 2番目以降が変化した。この連鎖は2手目で体力0→気絶に入るので、
 	# 気絶カウンタの初期値がそのまま state_hash に乗る。1番目(ジャストアタック)は
 	# 気絶を通らないため変化していない。実測値。
 	#
@@ -265,11 +265,14 @@ func test_hit_chain_physics_state_transition_golden() -> void:
 		# 2026-08-02 #114 Task 7で飛びつき・ブロック種別とソフトブロックIDを
 		# 同期状態へ追加し、ブロック5+5を接続。機能検査622本が緑で、この検査と
 		# 同期ゴールデンだけが赤の状態から全7値を実測更新。SCRIPT ERRORは0件。
-		70839406171221516,
-		-6492246064927909195,
-		-8373233146309645034,
-		4984760665331964473,
-		-1114949072799854863,
-		-344601216573810241,
-		-683582103994442274,
+		# 2026-08-02 #114 Task 8で体力100、300tickスタンへ移行し、旧連打状態を
+		# 同期列から削除。新規境界7本を含む機能検査627本が緑で、この検査と
+		# 同期ゴールデンだけが赤の状態から全7値を実測更新。SCRIPT ERRORは0件。
+		6720296842566710796,
+		1691831719760850187,
+		6998290938519501576,
+		7384147872932573063,
+		2060388988286164111,
+		7718757874623170689,
+		7212984246513778680,
 	], "ジャスト→芯外し→気絶→ブロック→帽子の第2ゴールデン")

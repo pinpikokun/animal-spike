@@ -80,13 +80,11 @@ var block_contact_drive_cost: int
 var burnout_recovery_ticks: int
 var burnout_exit_drive: int
 var hip_quake_stun_ticks: int
-var stun_ticks: int        # 耐久力が尽きた時のスタン時間
+var stun_ticks: int        # 体力が尽きた時のスタン時間
 var burn_stun_ticks: int   # 燃えるアタック被弾後の行動不能時間
 var burn_launch_height_px: int  # 燃えるアタック被弾時の打ち上げ頂点(px)
-var stun_mash_bonus: int
 var stagger_ticks: int     # パワーボールを受けた時のよろけ(小スタン)時間
-var guard_max_by_rank: Array[int]
-var power_guard_damage_by_rank: Array[int]
+var power_health_damage_by_rank: Array[int]
 var serve_vx: int
 var serve_vy: int
 var serve_soft_vx: int
@@ -266,16 +264,11 @@ func _init(path: String = DEFAULT_PATH) -> void:
 	if burn_launch_height_px <= 0:
 		_fail("burn_launch_height_pxは正であること")
 		return
-	stun_mash_bonus = _int_of(raw, "stun_mash_bonus")
-	if stun_mash_bonus < 0:
-		_fail("stun_mash_bonusは0以上であること")
-		return
 	stagger_ticks = _int_of(raw, "stagger_ticks")
 	if stagger_ticks < 0 or stagger_ticks > stun_ticks:
 		_fail("stagger_ticksは0..stun_ticksであること")
 		return
-	guard_max_by_rank = _rank_table(raw, "guard_max_by_rank")
-	power_guard_damage_by_rank = _rank_table(raw, "power_guard_damage_by_rank")
+	power_health_damage_by_rank = _rank_table(raw, "power_health_damage_by_rank")
 	if not valid:
 		return
 	serve_vx = FP.from_int(_int_of(raw, "serve_vx_px_s")) / tick_rate
@@ -339,11 +332,8 @@ func _rank_table(raw: Dictionary, key: String) -> Array[int]:
 		out.append(int(f))  # float-ok: 検証済みの整数値をintへ確定
 	return out
 
-func guard_max_for_rank(rank: int) -> int:
-	return guard_max_by_rank[clampi(rank, 0, 4)]
-
-func power_guard_damage_for_rank(rank: int) -> int:
-	return power_guard_damage_by_rank[clampi(rank, 0, 4)]
+func power_health_damage_for_rank(rank: int) -> int:
+	return power_health_damage_by_rank[clampi(rank, 0, 4)]
 
 func _fail(msg: String) -> void:
 	valid = false

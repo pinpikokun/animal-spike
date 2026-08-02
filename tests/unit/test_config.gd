@@ -75,19 +75,18 @@ func test_drive_gauge_rules_loaded() -> void:
 	check_eq(cfg.burnout_recovery_ticks, 600, "バーンアウト復帰は600tick")
 	check_eq(cfg.hip_quake_stun_ticks, 6, "ヒップ着地地震の全員硬直は6tick")
 
-func test_absolute_damage_and_stun_mash_rules_loaded() -> void:
+func test_health_damage_and_stun_rules_loaded() -> void:
 	var cfg = SimConfig.new()
-	check_eq(cfg.guard_max_by_rank, [120, 110, 100, 90, 80],
-		"GUARD A-E絶対値")
-	check_eq(cfg.power_guard_damage_by_rank, [35, 30, 25, 20, 15],
-		"POWER A-Eジャスト削り絶対値")
-	check_eq(cfg.stun_ticks, 240, "気絶は4秒=240tick")
+	check_eq(cfg.power_health_damage_by_rank, [35, 30, 25, 20, 15],
+		"POWER A-E体力ダメージ絶対値")
+	check_eq(cfg.stun_ticks, 300, "気絶は5秒=300tick")
 	check_eq(cfg.burn_stun_ticks, 90, "炎上行動不能は1.5秒=90tick")
 	check_eq(cfg.burn_launch_height_px, 80, "炎上打ち上げ頂点は80px")
-	check_eq(cfg.stun_mash_bonus, 3, "気絶中の押下エッジは追加3tick短縮")
 	var file := FileAccess.open("res://data/rules.json", FileAccess.READ)
 	var raw: Dictionary = JSON.parse_string(file.get_as_text())
 	check(not raw.has("guard_dmg_power"), "旧固定削りキーは撤去")
+	check(not raw.has("max_health_by_rank"), "最大体力のキャラ差を残さない")
+	check(not raw.has("stun_mash_bonus"), "スタン連打短縮を残さない")
 
 func test_guard_heal_just_is_removed() -> void:
 	var cfg = SimConfig.new()

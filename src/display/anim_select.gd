@@ -7,7 +7,7 @@ const SimStateScript := preload("res://src/sim/sim_state.gd")
 # 優先順位: 被弾 > 横っ飛び > 固有動作 > ブロック > 空中打球 > 空中 > 接地実打
 #         > レシーブ構え > 移動 > 静止
 static func anim_for(p) -> String:
-	if p.stun > 0:
+	if p.stun_ticks > 0:
 		return "stun"
 	if p.flinch > 0:
 		return "hurt"

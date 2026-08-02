@@ -41,6 +41,35 @@ static func resolve_block_contact(p, cfg) -> void:
 	if p.current_block_mode == SimStateScript.BLOCK_NORMAL:
 		spend_mandatory(p, cfg.block_contact_drive_cost, cfg)
 
+static func apply_health_damage(p, amount: int, cfg) -> int:
+	if amount <= 0 or p.stun_ticks > 0:
+		return 0
+	var before: int = p.health
+	var minimum: int = 1 if p.stunned_this_rally != 0 else 0
+	p.health = maxi(p.health - amount, minimum)
+	var applied: int = before - p.health
+	if p.health <= 0 and p.burn == 0:
+		start_health_stun(p, cfg)
+	return applied
+
+static func start_health_stun(p, cfg) -> void:
+	if p.stun_ticks > 0 or p.stunned_this_rally != 0:
+		return
+	p.health = 0
+	p.stunned_this_rally = 1
+	p.stun_ticks = cfg.stun_ticks
+	p.flinch = 0
+	p.vx = 0
+	p.push = 0
+	p.dive = 0
+	p.dive_contact_ticks = 0
+	p.dive_age_ticks = 0
+	p.dive_resource_mode = SimStateScript.DIVE_NONE
+
+static func recover_health_stun(p) -> void:
+	p.stun_ticks = 0
+	p.health = p.max_health
+
 static func start_burnout(p, cfg) -> void:
 	if p.burnout_ticks > 0:
 		return

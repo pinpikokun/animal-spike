@@ -312,7 +312,7 @@ func test_tome_flame_attack_requires_high_air_down_ability() -> void:
 	check_eq(s.ball_power, 1, "高所の下+Dはパワーボール")
 	check_eq(s.ball_flame, 1, "高所の下+Dは燃えるアタック")
 
-	check_eq(s.ball_guard_damage, 40, "カタログ固定威力40を記録")
+	check_eq(s.ball_health_damage, 40, "カタログ固定威力40を記録")
 	check_eq(s.ball_defense_class, Chars.DEFENSE_UNBLOCKABLE,
 		"防御不能分類を飛来球へ記録")
 	check_eq(p.drive_gauge, cfg.drive_gauge_max - cfg.special_drive_cost_default,
@@ -349,7 +349,7 @@ func test_flame_super_at_zero_drive_falls_back_to_normal_spike() -> void:
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_ABILITY1 | Simulation.IN_DOWN, 0)
 	check_eq(s.ball_flame, 0, "ゲージ0では必殺技にならない")
-	check_eq(s.ball_guard_damage, 25, "ドライブ不足なら通常スパイクへフォールバック")
+	check_eq(s.ball_health_damage, 25, "ドライブ不足なら通常スパイクへフォールバック")
 
 func test_tome_flame_input_below_net_top_stays_normal_spike() -> void:
 	var w := _rally_world()
@@ -389,32 +389,32 @@ func test_tome_ability_input_out_of_range_does_nothing() -> void:
 	check_eq(s.touches, 0, "打球圏外のDは空振りしない")
 	check_eq(s.ball_ghost, 0, "打球圏外ではゴースト化しない")
 
-func test_flame_receive_deals_catalog_fixed_guard_damage() -> void:
+func test_flame_receive_deals_catalog_fixed_health_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_power = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 60,
+	check_eq(s.players[0].health, 60,
 		"燃える球のレシーブはカタログ固定40ダメージ")
 	check_eq(s.players[0].flinch, 0, "炎上専用の行動不能が通常しりもちを置き換える")
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "炎被弾で90tick行動不能")
 	check_eq(s.ball_flame, 0, "レシーブで炎球効果を消費")
 
-func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
+func test_just_receive_cannot_cancel_flame_health_damage() -> void:
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.players[0].receive_stance = 1
 	s.players[0].drive_gauge = cfg.drive_gauge_max
 	s.ball_power = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
 	s.ball_flame = 1
@@ -422,7 +422,7 @@ func test_just_receive_cannot_cancel_flame_guard_damage() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(2)
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 60,
+	check_eq(s.players[0].health, 60,
 		"防御不能系は芯でレシーブしても固定40ダメージ")
 	check_eq(s.players[0].burn, cfg.burn_stun_ticks, "芯受けでも90tick行動不能")
 	check_eq(s.ball_flame, 0, "芯レシーブでも炎球効果を消費")
@@ -439,14 +439,14 @@ func test_normal_flame_block_prevents_health_damage_but_keeps_burn_effect() -> v
 	p.on_ground = 0
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = p.x + FP.from_int(5)
 	s.ball_y = p.y - cfg.player_reach_up
 	s.ball_vx = -FP.from_int(8)
 	Simulation.step(s, [_block_input(0), 0, 0, 0], cfg)
-	check_eq(p.guard, 100,
+	check_eq(p.health, 100,
 		"通常ブロックは燃える球でも体力ダメージ0")
 	check_eq(p.burn, cfg.burn_stun_ticks, "炎球ブロックでも90tick行動不能")
 	check_eq(s.ball_flame, 0, "ブロック接触でも炎球効果を消費")
@@ -458,13 +458,13 @@ func test_flame_friendly_touch_damages_burns_and_consumes_flame() -> void:
 	var teammate = s.players[1]
 	s.last_touch_team = 0
 	s.ball_power = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = teammate.x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	Simulation.step(s, [0, Simulation.IN_ACTION, 0, 0], cfg)
-	check_eq(teammate.guard, 60, "味方の炎球でもカタログ固定40ダメージ")
+	check_eq(teammate.health, 60, "味方の炎球でもカタログ固定40ダメージ")
 	check_eq(teammate.burn, cfg.burn_stun_ticks, "味方の炎球でも90tick行動不能")
 	check_eq(s.ball_flame, 0, "味方接触で炎球効果を消費")
 
@@ -473,12 +473,12 @@ func test_air_attack_return_clears_flame_and_power() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.guard = 40
+	p.health = 40
 	p.on_ground = 0
 	p.y = cfg.floor_y - FP.from_int(60)
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_guard_damage = 40
+	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_flame = 1
 	s.ball_x = p.x + FP.from_int(2)
@@ -486,7 +486,7 @@ func test_air_attack_return_clears_flame_and_power() -> void:
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.ball_flame, 0, "アタックで燃える効果を解除")
 	check_eq(s.ball_power, 0, "アタック返しは通常球へ戻る")
-	check_eq(p.guard, 40, "アタック返しはガード無傷かつ回復もしない")
+	check_eq(p.health, 40, "アタック返しは体力無傷かつ回復もしない")
 	check_eq(p.burn, 0, "アタック返しした本人は燃えない")
 
 func test_flame_ball_wall_contact_consumes_flame_without_damage() -> void:
@@ -495,7 +495,7 @@ func test_flame_ball_wall_contact_consumes_flame_without_damage() -> void:
 	var cfg = w[1]
 	s.ball_flame = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
-	s.ball_guard_damage = 25
+	s.ball_health_damage = 25
 	s.ball_x = cfg.ball_radius + FP.from_int(1)
 	s.ball_y = cfg.net_top_y - FP.from_int(30)
 	s.ball_vx = -FP.from_int(5)
@@ -503,9 +503,9 @@ func test_flame_ball_wall_contact_consumes_flame_without_damage() -> void:
 	check_eq(s.ball_flame, 0, "壁接触で炎球効果を消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"壁接触でアタック種別を消去")
-	check_eq(s.ball_guard_damage, 0, "壁接触でアタックのガード削り値を消去")
+	check_eq(s.ball_health_damage, 0, "壁接触でアタックの体力損害値を消去")
 	for p in s.players:
-		check_eq(p.guard, 100, "壁接触ではガードダメージなし")
+		check_eq(p.health, 100, "壁接触では体力ダメージなし")
 
 func test_flame_ball_net_contact_consumes_flame() -> void:
 	var w := _rally_world()
@@ -513,7 +513,7 @@ func test_flame_ball_net_contact_consumes_flame() -> void:
 	var cfg = w[1]
 	s.ball_flame = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
-	s.ball_guard_damage = 25
+	s.ball_health_damage = 25
 	s.ball_x = cfg.net_x - cfg.net_half_w - cfg.ball_radius - FP.from_int(1)
 	s.ball_y = cfg.net_top_y + FP.from_int(20)
 	s.ball_vx = FP.from_int(4)
@@ -521,7 +521,7 @@ func test_flame_ball_net_contact_consumes_flame() -> void:
 	check_eq(s.ball_flame, 0, "ネット側面接触で炎球効果を消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"ネット側面接触でアタック種別を消去")
-	check_eq(s.ball_guard_damage, 0, "ネット側面接触でガード削り値を消去")
+	check_eq(s.ball_health_damage, 0, "ネット側面接触で体力損害値を消去")
 
 func test_flame_ball_net_top_contact_consumes_flame() -> void:
 	var w := _rally_world()
@@ -529,7 +529,7 @@ func test_flame_ball_net_top_contact_consumes_flame() -> void:
 	var cfg = w[1]
 	s.ball_flame = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
-	s.ball_guard_damage = 25
+	s.ball_health_damage = 25
 	s.ball_x = cfg.net_x
 	s.ball_y = cfg.net_top_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(4)
@@ -537,7 +537,7 @@ func test_flame_ball_net_top_contact_consumes_flame() -> void:
 	check_eq(s.ball_flame, 0, "ネット上端接触で炎球効果を消費")
 	check_eq(s.ball_attack_kind, SimState.BALL_ATTACK_NONE,
 		"ネット上端接触でアタック種別を消去")
-	check_eq(s.ball_guard_damage, 0, "ネット上端接触でガード削り値を消去")
+	check_eq(s.ball_health_damage, 0, "ネット上端接触で体力損害値を消去")
 
 func test_wall_softened_attack_neither_drains_drive_nor_triggers_just_receive() -> void:
 	var w := _rally_world()
@@ -548,7 +548,7 @@ func test_wall_softened_attack_neither_drains_drive_nor_triggers_just_receive() 
 	p.receive_stance = cfg.just_receive_window_ticks
 	s.last_touch_team = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
-	s.ball_guard_damage = 25
+	s.ball_health_damage = 25
 	s.ball_x = cfg.ball_radius + FP.from_int(1)
 	s.ball_y = cfg.net_top_y - FP.from_int(30)
 	s.ball_vx = -FP.from_int(5)
@@ -689,7 +689,7 @@ func test_neutral_ground_toss_targets_own_front() -> void:
 	var cfg = w[1]
 	s.ball_x = s.players[0].x + FP.from_int(5)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION, 0, 0, 0], cfg)
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION, 0)
 	check(s.ball_vx > 0, "ニュートラルトスは自陣前方へ進む")
 	check(s.ball_vy < 0, "ニュートラルトスは上向き")
 
@@ -1670,39 +1670,41 @@ func test_receiver_touch_clears_serve_ball_and_restores_blocking() -> void:
 	HitResolver._ball_vs_block(s, cfg, [block_input, 0, 0, 0])
 	check(s.ball_vx > 0, "受球後に返ってきた球はブロックできる")
 
-func test_receiving_power_ball_damages_guard() -> void:
-	# パワーボールを(スイート外で)受けるとヒットは成立し、耐久力が削れる
+func test_receiving_power_ball_damages_health() -> void:
+	# パワーボールを芯外しで受けるとヒットは成立し、体力が削れる。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_health_damage = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)  # スイート外
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(10)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "パワーボールでもレシーブ自体は成立する")
-	check_eq(s.players[0].guard, 75, "POWER Cの絶対値25だけ耐久力が削れる")
+	check_eq(s.players[0].health, 75, "POWER Cの絶対値25だけ体力が削れる")
 	# 芯を外してパワーボールを受けたら必ずよろけ(小スタン)
 	check(s.players[0].flinch > 0, "しりもちリアクションが入る")
 	check(s.players[0].vx < 0, "後ろ(左)へノックバック")
 	check_eq(s.ball_power, 0, "パワーはヒットで消費される")
 
-func test_guard_zero_causes_stun_and_refill() -> void:
-	# 耐久力が尽きるとスタンし、耐久力は満タンへ戻る(気絶サイクル)
+func test_health_zero_causes_stun_at_zero_health() -> void:
+	# 体力が尽きるとスタンし、解除までは体力0を維持する。
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[0].guard = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.players[0].health = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_power = 1
-	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
+	s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
+	s.ball_health_damage = cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(30)
 	s.ball_y = cfg.floor_y - FP.from_int(10)
-	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].stun, cfg.stun_ticks, "耐久力が尽きてスタン")
-	check_eq(s.players[0].guard, s.players[0].guard_max, "スタン後は満タンへ戻る")
+	HitResolver._apply_hit(s, 0, cfg, Simulation.IN_ACTION,
+		cfg.player_reach * cfg.player_reach)
+	check_eq(s.players[0].stun_ticks, cfg.stun_ticks, "体力が尽きてスタン")
+	check_eq(s.players[0].health, 0, "スタン解除までは体力0")
 
 func test_normal_spike_receive_no_damage() -> void:
 	# 通常スパイク(パワーなし)の受けはノーダメージ(削るのはパワーボールだけ)
@@ -1714,14 +1716,14 @@ func test_normal_spike_receive_no_damage() -> void:
 	s.ball_y = cfg.floor_y - FP.from_int(10)
 	s.ball_vx = -FP.from_int(9)  # スパイク級の入射でも
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 100, "通常スパイク受けはノーダメージ")
+	check_eq(s.players[0].health, 100, "通常スパイク受けはノーダメージ")
 
 func test_just_receive_of_power_ball_does_not_heal() -> void:
 	# 回復全廃(ラチェット原則)。2026-07-20設計会仕様
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[0].guard = 40
+	s.players[0].health = 40
 	s.players[0].receive_stance = 1
 	s.ball_power = 1
 	s.ball_attack_kind = SimState.BALL_ATTACK_JUST
@@ -1729,12 +1731,12 @@ func test_just_receive_of_power_ball_does_not_heal() -> void:
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s.players[0].guard, 40, "ジャスト受けでも回復しない")
-	check_eq(s.players[0].stun, 0, "ダメージは受けない")
+	check_eq(s.players[0].health, 40, "ジャスト受けでも回復しない")
+	check_eq(s.players[0].stun_ticks, 0, "ダメージは受けない")
 	# 上限は満タンまで
 	var w2 := _rally_world()
 	var s2 = w2[0]
-	s2.players[0].guard = 95
+	s2.players[0].health = 95
 	s2.players[0].receive_stance = 1
 	s2.ball_power = 1
 	s2.ball_attack_kind = SimState.BALL_ATTACK_JUST
@@ -1742,20 +1744,20 @@ func test_just_receive_of_power_ball_does_not_heal() -> void:
 	s2.ball_x = s2.players[0].x + FP.from_int(2)
 	s2.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s2, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
-	check_eq(s2.players[0].guard, 95, "芯受けでも耐久は増えない")
+	check_eq(s2.players[0].health, 95, "芯受けでも耐久は増えない")
 
 func test_plain_toss_does_not_heal() -> void:
 	# パワーボール以外はスイートで取っても回復しない(ご褒美はジャスト防御だけ)
 	var w := _rally_world()
 	var s = w[0]
 	var cfg = w[1]
-	s.players[0].guard = 40
+	s.players[0].health = 40
 	s.last_touch_team = 1
 	s.ball_x = s.players[0].x + FP.from_int(2)  # スイート内・パワーなし
 	s.ball_y = cfg.floor_y - FP.from_int(2)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_DOWN, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "ヒットは成立")
-	check_eq(s.players[0].guard, 40, "普通のボールは回復しない")
+	check_eq(s.players[0].health, 40, "普通のボールは回復しない")
 
 func test_stunned_player_cannot_hit_or_move() -> void:
 	# スタン中は移動もヒットもできない
@@ -1763,15 +1765,14 @@ func test_stunned_player_cannot_hit_or_move() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var p = s.players[0]
-	p.stun = 10
-	p.stun_action_held = 1  # 押下済みの保持入力。新規エッジではない
+	p.stun_ticks = 10
 	var x0: int = p.x
 	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_y = cfg.floor_y - FP.from_int(30)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(s.touches, 0, "スタン中はヒットしない")
 	check_eq(p.x, x0, "スタン中は動けない")
-	check_eq(p.stun, 9, "スタンはtickごとに回復へ向かう")
+	check_eq(p.stun_ticks, 9, "スタンはtickごとに回復へ向かう")
 
 func test_air_neutral_sends_soft_over() -> void:
 	# 空中ニュートラル+アクション: 緩やかに相手コート方向へ送る(下向きではない)
@@ -1895,7 +1896,7 @@ func test_near_toss_is_not_jumping_toss() -> void:
 	var cfg = w[1]
 	var p = s.players[0]
 	s.ball_x = p.x + FP.from_int(5)
-	s.ball_y = cfg.floor_y - FP.from_int(10)
+	s.ball_y = cfg.floor_y - FP.from_int(30)
 	Simulation.step(s, [Simulation.IN_ACTION | Simulation.IN_RIGHT, 0, 0, 0], cfg)
 	check_eq(p.dive, 0, "近距離トスは飛びつかない")
 	check(s.ball_vx > 0, "通常の前トスは敵陣方向へ進む")

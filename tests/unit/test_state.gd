@@ -38,8 +38,8 @@ func test_hash_changes_on_diff() -> void:
 func test_serialize_length() -> void:
 	# 基本状態と次ID(9) + プレイヤー4体x56 + 全体49 + エンティティ8スロットx8欄
 	# Task 7で飛びつき2欄、ブロック3欄、ソフトブロックID1欄を追加した実測値。
-	# 9 + 4x56 + 49 + 8x8 = 346
-	check_eq(SimState.new().to_int_array().size(), 346,
+	# 9 + 4x54 + 49 + 8x8 = 338
+	check_eq(SimState.new().to_int_array().size(), 338,
 		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -62,13 +62,11 @@ func test_load_int_array_roundtrip() -> void:
 	a.players[2].just_receive_event = 11
 	a.players[2].burnout_ticks = 456
 	a.players[2].quake_stun = 5
-	a.players[2].stun_action_held = 1
-	a.players[2].stun_mash_event = 4
 	a.players[2].dive_contact_ticks = 13
 	a.players[2].dive_age_ticks = 6
 	a.players[2].action_latch = 1
 	a.hip_quake_event = 9
-	a.ball_guard_damage = 35
+	a.ball_health_damage = 35
 	a.ball_defense_class = 2
 	a.human_team_mask = 3
 	a.rally_seq = 17
@@ -88,13 +86,11 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.players[2].just_receive_event, 11, "ジャストレシーブ演出イベントの復元")
 	check_eq(b.players[2].burnout_ticks, 456, "バーンアウト残りtickの復元")
 	check_eq(b.players[2].quake_stun, 5, "地震硬直残りtickの復元")
-	check_eq(b.players[2].stun_action_held, 1, "気絶連打入力ラッチの復元")
-	check_eq(b.players[2].stun_mash_event, 4, "気絶連打演出イベントの復元")
 	check_eq(b.players[2].dive_contact_ticks, 13, "横っ飛び受付残りの復元")
 	check_eq(b.players[2].dive_age_ticks, 6, "横っ飛び経過tickの復元")
 	check_eq(b.players[2].action_latch, 1, "ACTION入力ラッチの復元")
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
-	check_eq(b.ball_guard_damage, 35, "飛来球の絶対ガード削り値の復元")
+	check_eq(b.ball_health_damage, 35, "飛来球の絶対体力ダメージ値の復元")
 	check_eq(b.ball_defense_class, 2, "飛来球の防御分類の復元")
 	check_eq(b.human_team_mask, 3, "人間チームマスクの復元")
 	check_eq(b.rally_seq, 17, "ラリー通し番号の復元")

@@ -127,7 +127,7 @@ func draw_hud(c: Control) -> void:
 			var tex: Texture2D = _face_cache[cid]
 			var region: Rect2 = face["region"]
 			var face_mod := Color.WHITE
-			if p.stun > 0 and (_state.tick / 4) % 2 == 0:
+			if p.stun_ticks > 0 and (_state.tick / 4) % 2 == 0:
 				face_mod = Color(1.0, 0.5, 0.5)
 			var draw_size := Vector2(20.0, 20.0)  # 正方形の原作顔もHUD枠へ収める
 			var draw_pos := Vector2(x + 2.0, PANEL_Y + 2.0) \
@@ -142,20 +142,20 @@ func draw_hud(c: Control) -> void:
 			c.draw_line(missing.position, missing.end, Color(0.7, 0.7, 0.7), 2.0)
 			c.draw_line(Vector2(missing.end.x, missing.position.y),
 				Vector2(missing.position.x, missing.end.y), Color(0.7, 0.7, 0.7), 2.0)
-		# 耐久力バー: アタックを受けると減り、尽きるとスタン。ジャストトスで回復。
+		# 体力バー: アタックを受けると減り、尽きるとスタンする。
 		# 残量で緑→黄→赤と変わる(あと1発で倒れる緊張感の可視化)
 		var bar_x := x + 26.0
 		var bar_w := PANEL_W - 30.0
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.15, 0.15, 0.2, 0.9))
-		if p.guard_max > 0:
-			var frac := clampf(float(p.guard) / float(p.guard_max), 0.0, 1.0)
+		if p.max_health > 0:
+			var frac := clampf(float(p.health) / float(p.max_health), 0.0, 1.0)
 			var col := Color(0.30, 0.85, 0.35)
 			if frac <= 0.25:
 				col = Color(0.95, 0.25, 0.20)
 			elif frac <= 0.5:
 				col = Color(0.95, 0.80, 0.25)
-			# スタン中はゼロから回復済みだが、点滅で「今は行動不能」を示す
-			if p.stun > 0 and (_state.tick / 4) % 2 == 0:
+			# スタン中は体力0のまま、顔と枠の点滅で行動不能を示す。
+			if p.stun_ticks > 0 and (_state.tick / 4) % 2 == 0:
 				col = Color(0.6, 0.6, 0.6)
 			c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w * frac, 7.0), col)
 		c.draw_rect(Rect2(bar_x, PANEL_Y + 4.0, bar_w, 7.0), Color(0.45, 0.45, 0.55), false, 1.0)

@@ -814,7 +814,7 @@ func test_non_receiver_suppresses_hit_when_cpu_mate_is_too_close() -> void:
 
 func test_non_receiver_does_not_suppress_hit_when_cpu_mate_is_stunned() -> void:
 	var w := _near_cpu_mate_receive_world()
-	w[0].players[1].stun = 1
+	w[0].players[1].stun_ticks = 1
 	var input: int = SimCpu.decide(w[0], 0, w[1])
 	check(input & Simulation.IN_ACTION,
 		"相方CPUがスタン中なら非レシーバーも打撃を試みる")
@@ -1157,7 +1157,7 @@ func test_deep_block_keeps_ability_ground_and_hit_zone_gates() -> void:
 	var stunned := _deep_block_priority_world()
 	s = stunned[0]
 	cfg = stunned[1]
-	s.players[0].stun = 1
+	s.players[0].stun_ticks = 1
 	check_eq(SimCpu._decide_block(
 		s, 0, s.players[0], cfg, 0, SimCpu.AB_BLOCK, 0), 0,
 		"スタン中は深位置へ反応しない")

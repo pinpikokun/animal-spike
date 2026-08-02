@@ -125,9 +125,9 @@ func test_dive_takes_priority_over_non_hurt_actions() -> void:
 	p.hip = 1
 	p.cling = 1
 	check_eq(AnimSelect.anim_for(p), "dive", "飛び込みは固有動作と通常動作より優先")
-	p.stun = 1
+	p.stun_ticks = 1
 	check_eq(AnimSelect.anim_for(p), "stun", "スタンは飛び込みより優先")
-	p.stun = 0
+	p.stun_ticks = 0
 	p.flinch = 1
 	check_eq(AnimSelect.anim_for(p), "hurt", "よろけは飛び込みより優先")
 

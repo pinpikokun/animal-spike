@@ -30,7 +30,6 @@ const MANGLE_AIM_PCT := 30   # パワーボールを芯外しで触った時に�
 const PUSH_ATK_TICKS := 10   # ジャストアタックの反動(重さ100で約14px後退)
 const PUSH_BLK_TICKS := 9    # パワーボールをブロックした時の押し込み(約22px)
 const PUSH_MAX_TICKS := 16   # 軽量キャラでも吹っ飛びすぎない上限
-const PUSH_STUN_TICKS := 30  # 気絶(ガードブレイク)時の吹っ飛び=自陣の壁際まで届く大出力
 const FLINCH_TICKS := 24   # ジャストアタック被弾のしりもち(butt-drop)時間
 const KNOCKBACK_PX := 8    # しりもちで後ろへ滑る初速(px/tick)
 const KNOCK_AIR_UP_PX_S := 200  # 空中被弾の浮き上がり(吹っ飛ばされ感の打ち上げ)
@@ -347,7 +346,7 @@ static func _resolve_hit(s, inputs: Array[int], cfg) -> int:
 			continue
 		if not force_dive_receive and _is_active_block(s, i, input, cfg):
 			continue
-		if p.hit_cooldown > 0 or p.stun > 0 or p.burn > 0 or p.quake_stun > 0:
+		if p.hit_cooldown > 0 or p.stun_ticks > 0 or p.burn > 0 or p.quake_stun > 0:
 			continue
 		var dx: int = s.ball_x - p.x
 		var dy: int = s.ball_y - p.y
@@ -410,29 +409,22 @@ static func _defense_contact_kind(intent_kind: int, just_receive: bool,
 	return DEFENSE_CONTACT_NONE
 
 static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
-		base_guard_damage: int, cfg) -> void:
-	var guard_damage: int = base_guard_damage
+		base_health_damage: int, cfg) -> void:
+	var health_damage: int = base_health_damage
 	if contact_kind == DEFENSE_CONTACT_GROUND_RECEIVE:
-		guard_damage = base_guard_damage * 2 / 5
+		health_damage = base_health_damage * 2 / 5
 	elif contact_kind == DEFENSE_CONTACT_JUST_RECEIVE:
-		guard_damage = 0
+		health_damage = 0
 	elif contact_kind == DEFENSE_CONTACT_DIVE \
 			and p.dive_resource_mode == SimStateScript.DIVE_NORMAL:
-		guard_damage = base_guard_damage / 2
-	p.guard -= guard_damage
-	if p.guard <= 0:
-		p.stun = cfg.stun_ticks
-		p.guard = p.guard_max
-		p.flinch = 0
-		p.vx = 0
-		p.push = 0
+		health_damage = base_health_damage / 2
+	var was_stunned: bool = p.stun_ticks > 0
+	var applied: int = CombatResources.apply_health_damage(p, health_damage, cfg)
+	var started_stun: bool = not was_stunned and p.stun_ticks > 0
+	if started_stun:
 		s.hit_freeze = maxi(s.hit_freeze, 10)
-		if contact_kind == DEFENSE_CONTACT_DIVE:
-			p.dive = 0
-			p.dive_contact_ticks = 0
-			p.dive_age_ticks = 0
 		return
-	if guard_damage <= 0 or contact_kind != DEFENSE_CONTACT_GROUND_TOSS:
+	if applied <= 0 or contact_kind != DEFENSE_CONTACT_GROUND_TOSS:
 		return
 	var back: int = -1 if team == 0 else 1
 	p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 \
@@ -443,7 +435,7 @@ static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
 static func _ignite_player(p, team: int, cfg) -> void:
 	var back: int = -1 if team == 0 else 1
 	p.burn = cfg.burn_stun_ticks
-	p.stun = 0
+	p.stun_ticks = 0
 	p.flinch = 0
 	p.push = 0
 	# 原作の摩擦停止まで約15座標単位=本作換算約47pxに対し、標準重量で約48px。
@@ -517,7 +509,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var incoming_attack_kind: int = s.ball_attack_kind
 	var incoming_attack_id: int = s.ball_attack_id
 	var incoming_attacker_id: int = s.ball_attacker_id
-	var incoming_guard_damage: int = s.ball_guard_damage
+	var incoming_health_damage: int = s.ball_health_damage
 	var incoming_defense_class: int = s.ball_defense_class
 	var incoming_pressure_consumed: bool = \
 		s.ball_original_attack_pressure_consumed != 0 \
@@ -532,12 +524,12 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		and not incoming_pressure_consumed
 	var is_attack_return: bool = opposing_attack \
 		and intent_kind == INTENT_AIR_SPIKE
-	# 耐久力(ガード)システム: パワーボールを受けると耐久力が削れる。
-	# 静止した下レシーブ構えからのジャストレシーブだけが削りを無効化する。
-	# 回復はラチェット原則により全廃。通常スパイクはノーダメージ。
-	# 耐久力が尽きた瞬間にスタン(倒れて動けない)し、満タンへ戻る(気絶サイクル)。
+	# 体力システム: パワーボールを受けると体力が減る。
+	# 静止した下レシーブ構えからのジャストレシーブだけが損害を無効化する。
+	# 自然回復はなく、通常スパイクはノーダメージ。
+	# 体力が尽きた瞬間にスタンし、解除時に満タンへ戻る。
 	# 判定はball_powerを消費する前に読む
-	# スイート判定(芯)は全用途共通: 耐久力の回復/削り、スパイクのパワー化、
+	# スイート判定(芯)は全用途共通: 体力損害、スパイクのパワー化、
 	# そして「芯で捉えたボールは慣性に流されない」(慣性が30%→10%に落ちる)
 	# ジャスト窓の広さ%: 0でそのキャラはジャスト不可(数値で個性を表現)
 	var sweet_r: int = cfg.player_reach * cfg.spike_sweet_pct \
@@ -600,51 +592,50 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		if opposing_power and not sweet:
 			mangled = true
 		_apply_regular_attack_defense(s, p, team, defense_contact_kind,
-			incoming_guard_damage, cfg)
+			incoming_health_damage, cfg)
 	if (opposing_power or unblockable_touch) and not regular_attack_defense_handled:
 		if sweet:
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
-				p.guard -= incoming_guard_damage
 				if incoming_flame:
 					flame_received = true
-				if p.guard <= 0 and not flame_received:
-					p.stun = cfg.stun_ticks
-					p.guard = p.guard_max
+					_ignite_player(p, team, cfg)
+				var was_stunned: bool = p.stun_ticks > 0
+				CombatResources.apply_health_damage(
+					p, incoming_health_damage, cfg)
+				if not was_stunned and p.stun_ticks > 0:
 					s.hit_freeze = 10
-					var flame_back: int = -1 if team == 0 else 1
-					p.push = flame_back * PUSH_STUN_TICKS
+					p.vx = 0
+					p.push = 0
 		else:
 			mangled = true
 			# パワーボールを芯を外して受けたら必ずよろけ(小スタン)。
-			# 耐久力まで尽きたら本スタン(長い方が優先)
-			var guard_damage: int = incoming_guard_damage
+			# 体力まで尽きたら本スタンへ移る。
+			var health_damage: int = incoming_health_damage
 			if force_dive_receive \
 					and p.dive_resource_mode == SimStateScript.DIVE_NORMAL:
-				guard_damage /= 2
+				health_damage /= 2
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				if incoming_flame:
 					flame_received = true
-			p.guard -= guard_damage
-			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
-			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
-			var back: int = -1 if team == 0 else 1
-			# 重さ%で伸縮: 重量級はどっしり、軽量級は大きく飛ばされる
-			p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 / Chars.stat(p.char_id, "weight")
-			# 空中被弾は「打ち上げられて吹っ飛ぶ」: 軽い浮きを与え滞空を延ばす
-			# (滞空中はしりもち減衰が緩いので後方への飛距離も伸びる)
-			if p.on_ground == 0:
-				p.vy = mini(p.vy, -FP.from_int(KNOCK_AIR_UP_PX_S) / cfg.tick_rate)
-			if p.guard <= 0:
+					_ignite_player(p, team, cfg)
+			var was_stunned: bool = p.stun_ticks > 0
+			CombatResources.apply_health_damage(p, health_damage, cfg)
+			var started_stun: bool = not was_stunned and p.stun_ticks > 0
+			if started_stun:
+				s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
+				p.vx = 0
+				p.push = 0
+			else:
+				# 体力が残る芯外しだけ、後ろへノックバックしてしりもちする。
+				var back: int = -1 if team == 0 else 1
+				p.vx = back * FP.from_int(KNOCKBACK_PX) * 100 \
+					/ Chars.stat(p.char_id, "weight")
+				if p.on_ground == 0:
+					p.vy = mini(p.vy,
+						-FP.from_int(KNOCK_AIR_UP_PX_S) / cfg.tick_rate)
 				if not flame_received:
-					p.stun = cfg.stun_ticks
-					p.guard = p.guard_max
-					s.hit_freeze = 10  # 気絶=一番の見せ所。167ms止めて「効いた」を刻む
-					# 決着の一撃: 自陣の壁際まで吹っ飛ばされて気絶する(壁クランプで止まる)。
-					# 重さ%は掛けない=誰でも壁まで飛ぶフィニッシュ演出(浮きは共通処理が担う)
-					p.push = back * PUSH_STUN_TICKS
-			elif not flame_received:
-				p.flinch = FLINCH_TICKS  # しりもち(耐久が残ってても被弾リアクション)
-				s.hit_freeze = maxi(s.hit_freeze, 3)
+					p.flinch = FLINCH_TICKS
+					s.hit_freeze = maxi(s.hit_freeze, 3)
 	if flame_received:
 		# 通常被弾のしりもち計算より後で炎上専用ノックバックへ確定させる。
 		_ignite_player(p, team, cfg)
@@ -711,7 +702,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		if special == Chars.SUPER_GHOST_BALL:
 			s.ball_ghost = 1
 			var ghost_def: Dictionary = Chars.super_def(special)
-			s.ball_guard_damage = int(ghost_def.power)
+			s.ball_health_damage = int(ghost_def.power)
 			s.ball_defense_class = int(ghost_def.defense_class)
 		# 慣性反映: 入射ボールの勢いを殺しきれず一部が反発して狙いに乗る。
 		# 強い入射ほど狙いから逸れる(真上に受けても前へずれる、強打は高く跳ねる)。
@@ -778,10 +769,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 				if drive_just_attack else SimStateScript.BALL_ATTACK_NORMAL
 		if special != 0:
 			var special_def: Dictionary = Chars.super_def(special)
-			s.ball_guard_damage = int(special_def.power)
+			s.ball_health_damage = int(special_def.power)
 			s.ball_defense_class = int(special_def.defense_class)
 		else:
-			s.ball_guard_damage = cfg.power_guard_damage_for_rank(
+			s.ball_health_damage = cfg.power_health_damage_for_rank(
 				Chars.rank(p.char_id, Chars.Profile.ABILITY_POWER))
 			s.ball_defense_class = Chars.DEFENSE_NONE
 		if not is_attack_return:
@@ -796,7 +787,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 					s, cfg, team):
 				_grant_valid_normal_attack(s, attack_id, i, cfg)
 	else:
-		s.ball_guard_damage = 0
+		s.ball_health_damage = 0
 		s.ball_defense_class = Chars.DEFENSE_NONE
 		# 空中トスは1・2打目を後ろ=自陣奥、無入力=自陣前、前=敵陣へ打ち分ける。
 		# 3打目とサーブは方向入力によらず敵陣へ返す。
@@ -832,7 +823,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if force_dive_receive:
 		p.receive_stance = 0
 		p.dive_contact_ticks = 0
-		if p.flinch > 0 or p.stun > 0 or p.burn > 0:
+		if p.flinch > 0 or p.stun_ticks > 0 or p.burn > 0:
 			p.dive = 0
 			p.dive_age_ticks = 0
 			p.dive_resource_mode = SimStateScript.DIVE_NONE
@@ -868,7 +859,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var p = s.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
 		var active: bool = _is_active_block(s, i, input, cfg) \
-			and p.stun == 0 and p.burn == 0 and p.hit_cooldown == 0 \
+			and p.stun_ticks == 0 and p.burn == 0 and p.hit_cooldown == 0 \
 			and p.quake_stun == 0
 		if not active:
 			p.current_block_mode = SimStateScript.BLOCK_NONE
@@ -888,7 +879,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var input: int = inputs[i] if i < inputs.size() else 0
 		if not _is_active_block(s, i, input, cfg):
 			continue
-		if p.stun > 0 or p.burn > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
+		if p.stun_ticks > 0 or p.burn > 0 or p.hit_cooldown > 0 or p.quake_stun > 0:
 			continue
 		if absi(p.x - cfg.net_x) > zone:
 			continue
@@ -908,7 +899,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		if p.block_contact_resolved != 0:
 			continue
 		p.block_contact_resolved = 1
-		var incoming_guard_damage: int = s.ball_guard_damage
+		var incoming_health_damage: int = s.ball_health_damage
 		var incoming_defense_class: int = s.ball_defense_class
 		var incoming_attack_id: int = s.ball_attack_id
 		CombatResources.resolve_block_contact(p, cfg)
@@ -928,8 +919,17 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			s.ball_vx = mini(s.ball_vx, -cfg.net_repel)
 		# パワーボールを止めた時は腕越しに体が押し込まれる(小さな後退)。
 		# 通常球のブロックは無反動=ブロックの強さは保つ
+		var flame_blocked: bool = s.ball_power == 1 \
+			and incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE \
+			and s.ball_flame == 1
+		if flame_blocked:
+			_ignite_player(p, team, cfg)
+		var started_health_stun: bool = false
 		if p.current_block_mode == SimStateScript.BLOCK_BURNOUT:
-			p.guard -= incoming_guard_damage / 2
+			var was_stunned: bool = p.stun_ticks > 0
+			CombatResources.apply_health_damage(
+				p, incoming_health_damage / 2, cfg)
+			started_health_stun = not was_stunned and p.stun_ticks > 0
 		if s.ball_power == 1:
 			var back_dir: int = -1 if team == 0 else 1
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
@@ -938,11 +938,9 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 				if s.ball_flame == 1:
 					_ignite_player(p, team, cfg)
 				s.ball_flame = 0
-		if p.guard <= 0 and p.burn == 0:
-			p.stun = cfg.stun_ticks
-			p.guard = p.guard_max
-			var stun_back_dir: int = -1 if team == 0 else 1
-			p.push = stun_back_dir * PUSH_STUN_TICKS
+		if started_health_stun:
+			p.vx = 0
+			p.push = 0
 			s.hit_freeze = maxi(s.hit_freeze, 10)
 		PossessionTracker.on_team_contact(
 			s, i, PossessionTracker.ACTION_BLOCK)
