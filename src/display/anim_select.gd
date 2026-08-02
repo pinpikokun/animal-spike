@@ -35,7 +35,7 @@ static func anim_for(p) -> String:
 				return "toss_fwd"
 			_:
 				return "ground_swing"
-	if p.on_ground == 1 and p.receive_stance != 0:
+	if p.on_ground == 1 and p.stance_active != 0:
 		return "receive_stance"
 	if p.vx != 0:
 		return "run"

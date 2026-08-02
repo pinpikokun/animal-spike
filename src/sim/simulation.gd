@@ -228,19 +228,25 @@ static func _update_drive_recovery(state, cfg) -> void:
 static func _step_players_and_hits(state, inputs: Array[int],
 		cfg, action_edges: Array[bool] = []) -> Array[int]:
 	var hip_landed: bool = false
-	var effective_inputs: Array[int] = []
+	var stance_recovery_before: Array[int] = []
+	for p in state.players:
+		stance_recovery_before.append(p.stance_exit_recovery_ticks)
+	var effective_inputs: Array[int] = inputs.duplicate()
+	while effective_inputs.size() < state.players.size():
+		effective_inputs.append(0)
+	_update_receive_stances(state, effective_inputs, cfg, action_edges)
 	var dive_edges: Array[bool] = action_edges.duplicate()
 	while dive_edges.size() < state.players.size():
 		dive_edges.append(false)
 	for i in state.players.size():
-		var input: int = inputs[i] if i < inputs.size() else 0
+		var input: int = effective_inputs[i]
 		var p = state.players[i]
 		if i >= dive_edges.size() or not _can_start_dive_receive(p):
 			if i < dive_edges.size():
 				dive_edges[i] = false
 		# 炎上開始時点で入力を封じ、最終tickにburnが0へ減った後も同tick中は
 		# 打撃・構え・固有技へ生入力を漏らさない。
-		effective_inputs.append(0 if p.burn > 0 else input)
+		effective_inputs[i] = 0 if p.burn > 0 else input
 		var was_hip_drop: bool = p.hip == -1
 		PlayerMovement._step_player(p, effective_inputs[i], cfg, team_of(i))
 		if was_hip_drop and p.on_ground == 1 and p.hip == 0:
@@ -251,11 +257,11 @@ static func _step_players_and_hits(state, inputs: Array[int],
 			p.quake_stun = cfg.hip_quake_stun_ticks
 	var was_serve_strike: bool = state.phase == SimStateScript.PHASE_SERVE \
 		and state.serve_tossed == 1
-	_update_receive_stances(state, effective_inputs, cfg)
 	var hit_result: int = HitResolver._resolve_hit(state, effective_inputs, cfg)
 	_advance_dive_contact_windows(state)
 	if hit_result == HitResolver.NO_HIT:
 		_try_start_dive_receives(state, effective_inputs, dive_edges, cfg)
+	_advance_stance_exit_recovery(state, stance_recovery_before)
 	if was_serve_strike and hit_result != HitResolver.NO_HIT:
 		# serve_flightとは別に、受け手の初接触までサーブ由来球であることを保持する。
 		# 得点判定より先に立て、同tickにラリー終了した場合は_award_pointで解除する。
@@ -270,10 +276,17 @@ static func _step_players_and_hits(state, inputs: Array[int],
 	_update_hat(state, effective_inputs, cfg)
 	return effective_inputs
 
+static func _advance_stance_exit_recovery(state, before: Array[int]) -> void:
+	for i in state.players.size():
+		if i < before.size() and before[i] > 0 \
+				and state.players[i].stance_exit_recovery_ticks == before[i]:
+			state.players[i].stance_exit_recovery_ticks -= 1
+
 static func _can_start_dive_receive(p) -> bool:
 	return p.on_ground == 1 and p.dive == 0 and p.hit_cooldown == 0 \
 		and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
-		and p.throw == 0 and p.flinch == 0 and p.hip == 0
+		and p.throw == 0 and p.flinch == 0 and p.hip == 0 \
+		and p.stance_active == 0 and p.stance_exit_recovery_ticks == 0
 
 static func _try_start_dive_receives(state, _inputs: Array[int],
 		action_edges: Array[bool], cfg) -> void:
@@ -321,28 +334,68 @@ static func _advance_dive_contact_windows(state) -> void:
 		if p.dive_contact_ticks == 0:
 			p.vx = 0
 
-static func _update_receive_stances(state, inputs: Array[int], cfg) -> void:
+static func _update_receive_stances(state, inputs: Array[int], cfg,
+		action_edges: Array[bool] = []) -> void:
 	for i in state.players.size():
 		var p = state.players[i]
 		var input: int = inputs[i] if i < inputs.size() else 0
-		if p.burn > 0:
-			p.receive_stance = 0
-			continue
 		var chord: bool = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
-		if not chord or state.phase != SimStateScript.PHASE_RALLY:
+		var action_edge: bool = action_edges[i] if i < action_edges.size() \
+			else chord and p.action_latch == 0
+		var unable: bool = p.on_ground == 0 or p.stun > 0 or p.burn > 0 \
+			or p.quake_stun > 0 or p.throw > 0 or p.flinch > 0 \
+			or p.hip != 0 or p.dive != 0
+		if p.stance_active == 0 and p.stance_exit_recovery_ticks > 0 \
+				and i < inputs.size():
+			# 硬直中も地上トスと構えなしレシーブは許可し、
+			# ジャンプ、ブロック、必殺技と飛びつき開始だけを封じる。
+			inputs[i] &= ~(IN_JUMP | IN_UP | IN_ABILITY1)
+			input = inputs[i]
+			chord = (input & IN_ACTION) != 0 and (input & IN_DOWN) != 0
+		if p.stance_active != 0:
+			var alternate_action: bool = (input \
+				& (IN_JUMP | IN_UP | IN_ABILITY1)) != 0
+			if p.burnout_ticks > 0:
+				CombatResources.finish_stance(p, cfg, true)
+			elif state.phase != SimStateScript.PHASE_RALLY or unable \
+					or not chord or alternate_action:
+				CombatResources.finish_stance(p, cfg, false)
+			if p.stance_active == 0:
+				if i < inputs.size() and alternate_action:
+					inputs[i] = 0
+				continue
+			if p.receive_stance > 1:
+				p.receive_stance -= 1
+			elif p.receive_stance == 1:
+				p.receive_stance = -1
+			continue
+		if not chord or not action_edge \
+				or state.phase != SimStateScript.PHASE_RALLY or unable \
+				or p.stance_exit_recovery_ticks > 0:
 			p.receive_stance = 0
 			continue
-		if p.receive_stance == 0:
-			var valid_edge: bool = p.on_ground == 1 and p.vx == 0 \
-				and p.stun == 0 and p.burn == 0 and p.quake_stun == 0 \
-				and (input & (IN_LEFT | IN_RIGHT)) == 0
-			p.receive_stance = cfg.just_receive_window_ticks if valid_edge else -1
-			if valid_edge:
-				CombatResources.stop_attack_recovery(p)
-		elif p.receive_stance > 1:
-			p.receive_stance -= 1
-		elif p.receive_stance == 1:
-			p.receive_stance = -1
+		var valid_start: bool = p.vx == 0 \
+			and (input & (IN_LEFT | IN_RIGHT)) == 0
+		if valid_start \
+				and CombatResources.can_pay(p, cfg.receive_stance_reserve_cost) \
+				and CombatResources.reserve_stance(
+				p, state.alloc_action_id(), state.tick, cfg):
+			p.receive_stance = cfg.just_receive_window_ticks
+			CombatResources.stop_attack_recovery(p)
+		else:
+			p.receive_stance = 0
+
+static func _resolve_stance_contact(state, actor: int,
+		attack_id: int, cfg) -> int:
+	if actor < 0 or actor >= state.players.size():
+		return 0
+	return CombatResources.resolve_stance_contact(
+		state.players[actor], attack_id, state.ball_attack_commit_tick, cfg)
+
+static func _finish_stances_for_rally_end(state, cfg) -> void:
+	for p in state.players:
+		if p.stance_active != 0:
+			CombatResources.finish_stance(p, cfg, false)
 
 # 帽子投げ(お邪魔ギミック): Dキーで前方へ投げ、飛行→滞在→高速帰還→キャッチ。
 # 飛んでる間ボールと当たり判定を持ち、触れると弾く。一度に1個だけ
@@ -433,6 +486,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	# ラリーの再開。非サーバーはワープさせない(気持ちよさ優先、ユーザー決定)。
 	# 定位置への帰還はポーズ中のCPU歩行が担い、人間は自由に立ち回れる。
 	# サーバーだけは原作準拠で白線の後ろに着いてサーブする(位置固定)
+	_finish_stances_for_rally_end(s, cfg)
 	s.phase = SimStateScript.PHASE_SERVE
 	s.serving_team = serving_team
 	s.touches = 0
@@ -476,6 +530,14 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.hip = 0
 		p.cling = 0
 		p.receive_stance = 0
+		p.stance_active = 0
+		p.stance_action_id = 0
+		p.stance_reserved_drive = 0
+		p.stance_started_tick = -1
+		p.stance_committed_attack_id = 0
+		p.stance_pre_read_candidate = 0
+		p.stance_cost_resolved = 0
+		p.stance_exit_recovery_ticks = 0
 		CombatResources.stop_attack_recovery(p)
 		p.just_receive_flash = 0
 		p.quake_stun = 0
@@ -522,6 +584,14 @@ static func reset_match(s, cfg, serving_team: int,
 		p.drive_reserved = 0
 		CombatResources.stop_attack_recovery(p)
 		p.receive_stance = 0
+		p.stance_active = 0
+		p.stance_action_id = 0
+		p.stance_reserved_drive = 0
+		p.stance_started_tick = -1
+		p.stance_committed_attack_id = 0
+		p.stance_pre_read_candidate = 0
+		p.stance_cost_resolved = 0
+		p.stance_exit_recovery_ticks = 0
 		p.just_receive_flash = 0
 		p.just_receive_event = 0
 		p.burnout_ticks = 0
@@ -595,6 +665,7 @@ static func _check_floor_point(s, cfg) -> void:
 static func _award_point(s, team: int, cfg) -> void:
 	s.serve_ball = 0
 	BallPhysics._clear_attack_effect(s)
+	_finish_stances_for_rally_end(s, cfg)
 	PossessionTracker.reset_for_rally(s)
 	for p in s.players:
 		CombatResources.stop_attack_recovery(p)

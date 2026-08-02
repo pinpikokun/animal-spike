@@ -666,6 +666,7 @@ func test_just_receive_uses_680_speed_without_vertical_inertia_or_scatter() -> v
 		var cfg = w[1]
 		var p = s.players[0]
 		p.receive_stance = cfg.just_receive_window_ticks
+		p.stance_active = 1
 		s.last_touch_team = 1
 		s.ball_attack_kind = SimState.BALL_ATTACK_NORMAL
 		s.ball_x = p.x + FP.from_int(8)

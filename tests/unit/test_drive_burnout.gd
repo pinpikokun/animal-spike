@@ -49,7 +49,7 @@ func test_just_receive_during_timing_window_nullifies_drive_and_guard_without_he
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
 	check_eq(p.guard, 40, "ジャストレシーブはガード削りを無効化し回復もしない")
-	check_eq(p.drive_gauge, 65, "ジャストレシーブはドライブを変化させない")
+	check_eq(p.drive_gauge, 60, "反応ジャストは予約5を確定消費")
 	check_eq(p.just_receive_flash, 30, "JUST表示と本体発光を約30tick維持")
 	check_eq(p.just_receive_event, 1, "専用SE用イベント番号")
 	check_eq(s.hit_freeze, 10, "ジャストレシーブのヒットストップは10tick")
@@ -78,7 +78,7 @@ func test_flame_cannot_be_nullified_by_just_receive() -> void:
 	p.drive_gauge = 65
 	_incoming_just(s, cfg, 0, true)
 	check_eq(p.guard, 60, "防御不能系はカタログ固定40を通す")
-	check_eq(p.drive_gauge, 65, "防御不能技のレシーブでもドライブは減らない")
+	check_eq(p.drive_gauge, 60, "防御不能技でも反応構えの予約5は確定")
 	check_eq(p.just_receive_event, 0, "炎球ではジャストレシーブ演出なし")
 
 func test_held_receive_after_window_expires_is_normal_receive() -> void:
@@ -91,7 +91,7 @@ func test_held_receive_after_window_expires_is_normal_receive() -> void:
 		Simulation._update_receive_stances(s, held, cfg)
 	check(p.receive_stance < 0, "押しっぱなしでは窓切れ後に再発動しない")
 	_incoming_just(s, cfg)
-	check_eq(p.drive_gauge, 65, "窓切れ後の通常レシーブでもドライブは減らない")
+	check_eq(p.drive_gauge, 60, "窓切れ後も反応構えの予約5は確定")
 	check_eq(p.just_receive_event, 0, "窓切れ後はジャスト演出なし")
 
 func test_releasing_and_pressing_again_opens_new_window() -> void:
@@ -101,6 +101,10 @@ func test_releasing_and_pressing_again_opens_new_window() -> void:
 	for i in cfg.just_receive_window_ticks:
 		Simulation._update_receive_stances(s, held, cfg)
 	Simulation._update_receive_stances(s, [0, 0, 0, 0], cfg)
+	for i in cfg.receive_stance_exit_recovery_ticks:
+		var before: Array[int] = [s.players[0].stance_exit_recovery_ticks, 0, 0, 0]
+		PlayerMovement._step_player(s.players[0], 0, cfg, 0)
+		Simulation._advance_stance_exit_recovery(s, before)
 	Simulation._update_receive_stances(s, held, cfg)
 	check_eq(s.players[0].receive_stance, cfg.just_receive_window_ticks,
 		"離して押し直すと新しい窓を開く")

@@ -476,6 +476,14 @@ static func _begin_ball_attack(s, attacker: int) -> int:
 	s.ball_attack_commit_tick = s.tick
 	s.ball_normal_gain_granted = 0
 	s.ball_original_attack_pressure_consumed = 0
+	var attacker_team: int = team_of(attacker)
+	for i in s.players.size():
+		var defender = s.players[i]
+		if team_of(i) == attacker_team or defender.stance_active == 0:
+			continue
+		defender.stance_committed_attack_id = attack_id
+		defender.stance_pre_read_candidate = 1 \
+			if defender.stance_started_tick <= s.tick else 0
 	return attack_id
 
 static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
@@ -538,6 +546,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var just_receive: bool = opposing_attack \
 		and intent_kind == INTENT_GROUND_RECEIVE \
 		and not force_dive_receive \
+		and p.stance_active != 0 \
 		and p.receive_stance > 0 \
 		and p.vx == 0 and (input & (IN_LEFT | IN_RIGHT)) == 0 \
 		and p.burnout_ticks == 0 and not incoming_unblockable
@@ -632,6 +641,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if opposing_attack and incoming_attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
 		_grant_valid_normal_attack(
 			s, incoming_attack_id, incoming_attacker_id, cfg)
+	if intent_kind == INTENT_GROUND_RECEIVE and p.stance_active != 0:
+		CombatResources.resolve_stance_contact(
+			p, incoming_attack_id, s.ball_attack_commit_tick, cfg)
 	s.ball_power = 0
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE

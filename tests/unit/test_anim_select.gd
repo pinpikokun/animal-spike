@@ -31,16 +31,19 @@ func test_ground_still_is_idle() -> void:
 func test_ground_receive_stance_is_visible() -> void:
 	var p = _player(1, 0, 0)
 	p.receive_stance = 1
+	p.stance_active = 1
 	check_eq(AnimSelect.anim_for(p), "receive_stance", "接地+構え中はレシーブ構え")
 
 func test_air_receive_stance_is_not_visible() -> void:
 	var p = _player(0, 0, 0)
 	p.receive_stance = -1
+	p.stance_active = 1
 	check_eq(AnimSelect.anim_for(p), "jump", "空中の下+ボタンでは構え絵を出さない")
 
 func test_ground_hit_takes_priority_over_receive_stance() -> void:
 	var p = _player(1, 0, 5)
 	p.receive_stance = 1
+	p.stance_active = 1
 	check_eq(AnimSelect.anim_for(p), "ground_swing", "実打中は構えより地上スイング優先")
 
 func test_air_hit_is_attack() -> void:

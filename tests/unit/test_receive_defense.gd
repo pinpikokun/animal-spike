@@ -51,6 +51,7 @@ func _resolve_contact(attack_kind: int, contact: int, base_damage: int,
 		CONTACT_JUST:
 			input |= Simulation.IN_DOWN
 			p.receive_stance = 1
+			p.stance_active = 1
 		CONTACT_DIVE:
 			force_dive = true
 			input |= dive_input

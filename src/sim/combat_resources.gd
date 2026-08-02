@@ -26,6 +26,60 @@ static func tick_burnout(p, active: bool, cfg) -> void:
 	if p.burnout_ticks == 0:
 		p.drive_gauge = cfg.burnout_exit_drive
 
+static func reserve_stance(p, action_id: int, tick: int, cfg) -> bool:
+	if p.stance_active != 0 or p.stance_exit_recovery_ticks > 0 \
+			or not can_pay(p, cfg.receive_stance_reserve_cost):
+		return false
+	p.drive_reserved += cfg.receive_stance_reserve_cost
+	p.stance_active = 1
+	p.stance_action_id = action_id
+	p.stance_reserved_drive = cfg.receive_stance_reserve_cost
+	p.stance_started_tick = tick
+	p.stance_committed_attack_id = 0
+	p.stance_pre_read_candidate = 0
+	p.stance_cost_resolved = 0
+	return true
+
+static func release_stance_reservation(p) -> void:
+	if p.stance_cost_resolved != 0:
+		return
+	p.drive_reserved = maxi(p.drive_reserved - p.stance_reserved_drive, 0)
+	p.stance_reserved_drive = 0
+	p.stance_cost_resolved = 1
+
+static func commit_stance_reservation(p, cfg) -> void:
+	if p.stance_cost_resolved != 0:
+		return
+	var cost: int = p.stance_reserved_drive
+	p.drive_reserved = maxi(p.drive_reserved - cost, 0)
+	p.stance_reserved_drive = 0
+	p.stance_cost_resolved = 1
+	if p.burnout_ticks > 0:
+		return
+	spend_mandatory(p, cost, cfg)
+
+static func finish_stance(p, cfg, release_cost: bool) -> void:
+	if release_cost:
+		release_stance_reservation(p)
+	else:
+		commit_stance_reservation(p, cfg)
+	p.stance_active = 0
+	p.receive_stance = 0
+	p.stance_exit_recovery_ticks = cfg.receive_stance_exit_recovery_ticks
+	p.stance_committed_attack_id = 0
+	p.stance_pre_read_candidate = 0
+
+static func resolve_stance_contact(p, attack_id: int,
+		attack_commit_tick: int, cfg) -> int:
+	if p.stance_active == 0:
+		return 0
+	var pre_read: bool = attack_id > 0 \
+		and p.stance_committed_attack_id == attack_id \
+		and p.stance_pre_read_candidate != 0 \
+		and p.stance_started_tick <= attack_commit_tick
+	finish_stance(p, cfg, pre_read)
+	return 1 if pre_read else 2
+
 static func stop_attack_recovery(p) -> void:
 	p.attack_recovery_delay_ticks = 0
 	p.attack_recovery_window_ticks = 0

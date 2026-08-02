@@ -119,6 +119,14 @@ static func _step_player(p, input: int, cfg, team: int) -> void:
 		input = 0
 	else:
 		p.stun_action_held = action_down
+	var stance_lock: bool = p.stance_active != 0 \
+		or p.stance_exit_recovery_ticks > 0
+	if stance_lock:
+		input &= ~(IN_LEFT | IN_RIGHT | IN_JUMP | IN_ABILITY1)
+		p.vx = 0
+		p.brake = 0
+		p.run = 0
+		p.dash = 0
 	var min_x: int = 0
 	var max_x: int = cfg.court_width
 	if team == 0:
