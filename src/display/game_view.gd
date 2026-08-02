@@ -159,7 +159,7 @@ func _ready() -> void:
 		push_warning("ボール素材(%dpx)と表示直径(%dpx)が不一致。scripts/gen_ball.gdを再実行推奨" % [_ball_frame_w, int(ball_px)])
 	_ball_base_scale = ball_px / float(_ball_frame_w)
 	_ball.scale = Vector2.ONE * _ball_base_scale
-	# 原作BALL.DAT由来の炎球。simのball_flameとtickだけで表示コマを決める。
+	# 原作BALL.DAT由来の炎球。特殊球IDとtickだけで表示コマを決める。
 	_flame_ball = Sprite2D.new()
 	_flame_ball.texture = load("res://assets/reference/vb2211/ball_sheet.png")
 	_flame_ball.centered = true
@@ -560,12 +560,12 @@ func _sync_sprites() -> void:
 		_ball.rotation = 0.0
 		_ball.scale = Vector2.ONE * _ball_base_scale
 	# ゴーストは8tick周期で点滅。炎球は原作シートindex13/14を4tickごとに交互表示。
-	_flame_ball.visible = state.ball_flame == 1
+	_flame_ball.visible = state.ball_special_id == Chars.SUPER_FLAME_ATTACK
 	var flame_index: int = 13 if state.tick % 8 < 4 else 14
 	_flame_ball.region_rect = Rect2((flame_index % 12) * 32,
 		(flame_index / 12) * 32, 32, 32)
-	_ball.visible = state.ball_flame == 0 \
-		and (state.ball_ghost == 0 or state.tick % 8 < 4)
+	_ball.visible = state.ball_special_id != Chars.SUPER_FLAME_ATTACK \
+		and (state.ball_special_id != Chars.SUPER_GHOST_BALL or state.tick % 8 < 4)
 	_ball.modulate = Color(1.0, 0.55, 0.35) if state.ball_power == 1 else Color.WHITE
 	# 転がり回転: simが積むball_spin(横の勢いの累積)からフレームを導出する。
 	# 真上のトスはほぼ無回転、前へ強く飛ぶほど速く回る。右へ進めば時計回り。

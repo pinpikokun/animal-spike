@@ -328,7 +328,7 @@ func test_dive_contact_ignores_new_special_input() -> void:
 	s.ball_y = p.y
 	HitResolver._resolve_hit(s,
 		[Simulation.IN_DOWN | Simulation.IN_ABILITY1, 0, 0, 0], cfg)
-	check_eq(s.ball_flame, 0, "飛び込み中の追加入力で必殺技へ化けない")
+	check_eq(s.ball_special_id, 0, "飛び込み中の追加入力で必殺技へ化けない")
 	check_eq(p.drive_gauge, cfg.drive_gauge_max, "飛び込み接触は必殺技ゲージを使わない")
 
 func test_dive_started_this_tick_contacts_from_next_tick() -> void:
@@ -390,7 +390,7 @@ func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	p.dive_resource_mode = SimState.DIVE_WEAK
 	p.health = 100
 	s.ball_power = 1
-	s.ball_flame = 1
+	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)

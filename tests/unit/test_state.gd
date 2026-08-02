@@ -38,8 +38,8 @@ func test_hash_changes_on_diff() -> void:
 func test_serialize_length() -> void:
 	# 基本状態と次ID(9) + プレイヤー4体x56 + 全体49 + エンティティ8スロットx8欄
 	# Task 7で飛びつき2欄、ブロック3欄、ソフトブロックID1欄を追加した実測値。
-	# 9 + 4x59 + 49 + 8x8 = 358
-	check_eq(SimState.new().to_int_array().size(), 358,
+	# 9 + 4x64 + 53 + 8x8 = 382
+	check_eq(SimState.new().to_int_array().size(), 382,
 		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:
@@ -47,8 +47,12 @@ func test_load_int_array_roundtrip() -> void:
 	var a = SimState.new()
 	a.tick = 123
 	a.ball_x = 456789
-	a.ball_ghost = 1
-	a.ball_flame = 1
+	a.ball_special_id = 7
+	a.ball_special_phase = 2
+	a.ball_special_ticks = 33
+	a.ball_special_owner_idx = 2
+	a.ball_special_origin_vx = -45
+	a.ball_held_by = 2
 	a.serve_ball = 1
 	a.phase = SimState.PHASE_RALLY
 	a.score_l = 7
@@ -65,6 +69,11 @@ func test_load_int_array_roundtrip() -> void:
 	a.players[2].dive_contact_ticks = 13
 	a.players[2].dive_age_ticks = 6
 	a.players[2].action_latch = 1
+	a.players[2].ability_latch = 1
+	a.players[2].shock_ticks = 8
+	a.players[2].bubble_ticks = 9
+	a.players[2].special_action = 10
+	a.players[2].special_action_ticks = 11
 	a.hip_quake_event = 9
 	a.ball_health_damage = 35
 	a.ball_defense_class = 2
@@ -89,6 +98,11 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.players[2].dive_contact_ticks, 13, "横っ飛び受付残りの復元")
 	check_eq(b.players[2].dive_age_ticks, 6, "横っ飛び経過tickの復元")
 	check_eq(b.players[2].action_latch, 1, "ACTION入力ラッチの復元")
+	check_eq(b.players[2].ability_latch, 1, "D入力ラッチの復元")
+	check_eq(b.players[2].shock_ticks, 8, "感電時間の復元")
+	check_eq(b.players[2].bubble_ticks, 9, "泡時間の復元")
+	check_eq(b.players[2].special_action, 10, "特殊動作の復元")
+	check_eq(b.players[2].special_action_ticks, 11, "特殊動作時間の復元")
 	check_eq(b.hip_quake_event, 9, "着地地震イベントの復元")
 	check_eq(b.ball_health_damage, 35, "飛来球の絶対体力ダメージ値の復元")
 	check_eq(b.ball_defense_class, 2, "飛来球の防御分類の復元")
@@ -98,8 +112,12 @@ func test_load_int_array_roundtrip() -> void:
 	check_eq(b.cpu_hit_count, 23, "CPU位置取り用の打球回数の復元")
 	check_eq(b.cpu_back_role_mask, 6, "CPU前衛後衛役の復元")
 	check_eq(b.tick, 123, "tickの復元")
-	check_eq(b.ball_ghost, 1, "ゴースト状態の復元")
-	check_eq(b.ball_flame, 1, "炎状態の復元")
+	check_eq(b.ball_special_id, 7, "特殊球IDの復元")
+	check_eq(b.ball_special_phase, 2, "特殊球段階の復元")
+	check_eq(b.ball_special_ticks, 33, "特殊球時間の復元")
+	check_eq(b.ball_special_owner_idx, 2, "特殊球所有者の復元")
+	check_eq(b.ball_special_origin_vx, -45, "特殊球基準速度の復元")
+	check_eq(b.ball_held_by, 2, "特殊球保持者の復元")
 	check_eq(b.serve_ball, 1, "サーブ由来球状態の復元")
 
 func test_load_int_array_overwrites_everything() -> void:

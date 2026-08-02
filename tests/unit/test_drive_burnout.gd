@@ -31,7 +31,7 @@ func _incoming_just(s, cfg, i: int = 0, flame: bool = false) -> void:
 	s.ball_health_damage = 40 if flame else \
 		cfg.power_health_damage_for_rank(Chars.Profile.RANK_C)
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE if flame else Chars.DEFENSE_NONE
-	s.ball_flame = 1 if flame else 0
+	s.ball_special_id = Chars.SUPER_FLAME_ATTACK if flame else 0
 	HitResolver._apply_hit(s, i, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 
@@ -181,7 +181,7 @@ func test_burnout_does_not_multiply_normal_or_flame_damage() -> void:
 	p.health = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_flame = 1
+	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.ball_health_damage = 40
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._apply_hit(s, 0, cfg,

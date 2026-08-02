@@ -9,6 +9,7 @@ const Chars := preload("res://src/sim/chars.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
+const SpecialBall := preload("res://src/sim/special_ball.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -500,7 +501,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		if force_dive_receive else PossessionTracker.ACTION_PASSIVE
 	if special != 0:
 		resolved_action_kind = PossessionTracker.ACTION_SPECIAL
-	var incoming_flame: bool = s.ball_flame == 1
+	var incoming_flame: bool = s.ball_special_id == Chars.SUPER_FLAME_ATTACK
 	var intent: Array[int] = _classify_intent(
 		1 if force_dive_receive else p.on_ground,
 		input | IN_DOWN if force_dive_receive else input,
@@ -654,8 +655,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	s.ball_power = 0
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
-	if flame_received:
-		s.ball_flame = 0
+	SpecialBall.clear_special(s)
 	if special != 0:
 		CombatResources.spend_committed(
 			p, CombatResources.special_drive_cost(cfg), cfg)
@@ -704,7 +704,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			desired_vx = toss_aim_vx(s.ball_x, s.ball_y, desired_vy,
 				toss_target_x(team, ground_toss_hdir, cfg), cfg)
 		if special == Chars.SUPER_GHOST_BALL:
-			s.ball_ghost = 1
+			SpecialBall.set_special(s, special, i, s.ball_vx)
 			var ghost_def: Dictionary = Chars.super_def(special)
 			s.ball_health_damage = int(ghost_def.power)
 			s.ball_defense_class = int(ghost_def.defense_class)
@@ -763,10 +763,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		s.ball_vx = air_spike_velocity.x
 		s.ball_vy = air_spike_velocity.y
 		if special == Chars.SUPER_FLAME_ATTACK:
-			s.ball_flame = 1
+			SpecialBall.set_special(s, special, i, s.ball_vx)
 		elif incoming_flame:
 			# 燃える球をアタックで打ち返した時だけ、効果とパワーを通常球へ戻す。
-			s.ball_flame = 0
+			SpecialBall.clear_special(s)
 			s.ball_power = 0
 		if special == 0 and not is_attack_return:
 			s.ball_attack_kind = SimStateScript.BALL_ATTACK_JUST \
@@ -906,6 +906,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		var incoming_health_damage: int = s.ball_health_damage
 		var incoming_defense_class: int = s.ball_defense_class
 		var incoming_attack_id: int = s.ball_attack_id
+		var incoming_special_id: int = s.ball_special_id
 		CombatResources.resolve_block_contact(p, cfg)
 		if s.ball_attack_kind == SimStateScript.BALL_ATTACK_NORMAL:
 			_grant_valid_normal_attack(
@@ -925,7 +926,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 		# 通常球のブロックは無反動=ブロックの強さは保つ
 		var flame_blocked: bool = s.ball_power == 1 \
 			and incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE \
-			and s.ball_flame == 1
+			and incoming_special_id == Chars.SUPER_FLAME_ATTACK
 		if flame_blocked:
 			_ignite_player(p, team, cfg)
 		var started_health_stun: bool = false
@@ -939,9 +940,10 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
 			if incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE:
-				if s.ball_flame == 1:
+				if incoming_special_id == Chars.SUPER_FLAME_ATTACK:
 					_ignite_player(p, team, cfg)
-				s.ball_flame = 0
+		# ブロック成功は球種を問わない通常接触。炎だけでなく全特殊球を解除する。
+		SpecialBall.clear_special(s)
 		if started_health_stun:
 			p.vx = 0
 			p.push = 0

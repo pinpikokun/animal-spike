@@ -13,6 +13,7 @@ const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
+const SpecialBall := preload("res://src/sim/special_ball.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -511,8 +512,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.ball_power = 0
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
-	s.ball_ghost = 0
-	s.ball_flame = 0
+	SpecialBall.clear_special(s)
 	s.serve_aim = 25  # 既定は打ちやすい前方トスの角度
 	s.serve_pow = 100
 	s.serve_tossed = 0
@@ -533,6 +533,11 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 		p.last_health_multiplier_pct = 100
 		p.last_stun_end_reason = SimStateScript.STUN_END_NONE
 		p.burn = 0
+		p.shock_ticks = 0
+		p.bubble_ticks = 0
+		p.special_action = 0
+		p.special_action_ticks = 0
+		p.ability_latch = 0
 		p.dive = 0
 		p.dive_contact_ticks = 0
 		p.dive_age_ticks = 0
@@ -678,13 +683,14 @@ static func _check_floor_point(s, cfg) -> void:
 	s.ball_power = 0
 	BallPhysics._clear_attack_effect(s)
 	s.ball_defense_class = Chars.DEFENSE_NONE
-	s.ball_flame = 0
+	SpecialBall.clear_special(s)
 	var landed_left: bool = s.ball_x < cfg.net_x
 	_award_point(s, 1 if landed_left else 0, cfg)
 
 static func _award_point(s, team: int, cfg) -> void:
 	s.serve_ball = 0
 	BallPhysics._clear_attack_effect(s)
+	SpecialBall.clear_special(s)
 	_finish_stances_for_rally_end(s, cfg)
 	PossessionTracker.reset_for_rally(s)
 	for p in s.players:
@@ -692,6 +698,11 @@ static func _award_point(s, team: int, cfg) -> void:
 			CombatResources.recover_health_stun(
 				p, SimStateScript.STUN_END_RALLY)
 		CombatResources.stop_attack_recovery(p)
+		p.shock_ticks = 0
+		p.bubble_ticks = 0
+		p.special_action = 0
+		p.special_action_ticks = 0
+		p.ability_latch = 0
 	if team == 0:
 		s.score_l += 1
 	else:

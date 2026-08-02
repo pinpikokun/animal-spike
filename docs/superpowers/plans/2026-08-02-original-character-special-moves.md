@@ -123,11 +123,11 @@ git commit -m "feat: 原作キャラ必殺技カタログを追加"
 - Produces: `SpecialBall.original_ticks(n:int, cfg) -> int`, `is_above_original_y(s, y:int, cfg) -> bool`
 - Consumes: `BallPhysics._step_ball`, `predict_first_floor_x`, all rally/match reset paths
 
-- [ ] **Step 1: 新規状態の赤い往復・ハッシュ・リセット検査を書く**
+- [x] **Step 1: 新規状態の赤い往復・ハッシュ・リセット検査を書く**
 
 選手へ `shock_ticks`、`bubble_ticks`、`special_action`、`special_action_ticks`、`ability_latch`、球へ `ball_special_id`、`ball_special_phase`、`ball_special_ticks`、`ball_special_owner_idx`、`ball_special_origin_vx`、`ball_held_by` を設定し、往復と一フィールド差ハッシュを検査する。所有者と保持者の未設定値は`-1`。同じテストでラリー終了、試合初期化、キャラ選択初期化の各入口を通し、全新規状態が0または`-1`へ戻ることを先に赤くする。
 
-- [ ] **Step 2: 特殊球APIの赤い不変条件テストを書く**
+- [x] **Step 2: 特殊球APIの赤い不変条件テストを書く**
 
 ```gdscript
 func test_setting_one_special_replaces_all_previous_special_state() -> void:
@@ -141,17 +141,17 @@ func test_setting_one_special_replaces_all_previous_special_state() -> void:
 
 時間変換6→13、10→21、16→34、20→43と、高さ境界の直前・同値・直後を整数クロス積で固定する。
 
-- [ ] **Step 3: 正規入口で赤を確認する**
+- [x] **Step 3: 正規入口で赤を確認する**
 
-- [ ] **Step 4: `SimState` と `SpecialBall` を実装する**
+- [x] **Step 4: `SimState` と `SpecialBall` を実装する**
 
 旧 `ball_ghost`、`ball_flame` は新IDへ移し、互換用二重状態は残さない。`to_int_array` と `load_int_array` の宣言順を一致させる。新規選手状態を全リセット入口へ同時に接続し、後続Taskへ先送りしない。
 
-- [ ] **Step 5: BallPhysicsプローブと全リセットを同じAPIへ接続する**
+- [x] **Step 5: BallPhysicsプローブと全リセットを同じAPIへ接続する**
 
 `_BallProbe` に全特殊球状態を複写し、床予測も本番と同じ特殊軌道を進める。壁・ネット・床・得点・ラリー開始・試合開始は `clear_special` を通す。保持中は通常積分を行わない。Task 4までの橋渡しとして、ゴーストと炎は通常球積分をそのまま通す最小 `SpecialBall.step` を置き、現TOME試作の物理を欠落させない。`game_view.gd` も新IDから従来の点滅・炎セルを選ぶよう同時に移し、削除フィールドを参照させない。
 
-- [ ] **Step 6: 全件緑、Claudeレビュー、コミット**
+- [x] **Step 6: 全件緑、Claudeレビュー、コミット**
 
 ```powershell
 .\run_tests.ps1

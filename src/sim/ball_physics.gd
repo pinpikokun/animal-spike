@@ -4,6 +4,7 @@ extends RefCounted
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
+const SpecialBall := preload("res://src/sim/special_ball.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
 class _BallProbe:
@@ -16,8 +17,12 @@ class _BallProbe:
 	var ball_attack_kind: int = 0
 	var ball_health_damage: int = 0
 	var ball_defense_class: int = 0
-	var ball_ghost: int = 0
-	var ball_flame: int = 0
+	var ball_special_id: int = 0
+	var ball_special_phase: int = 0
+	var ball_special_ticks: int = 0
+	var ball_special_owner_idx: int = -1
+	var ball_special_origin_vx: int = 0
+	var ball_held_by: int = -1
 	var touches: int = 0
 	var serve_flight: int = 0
 	var last_touch_team: int = -1
@@ -43,8 +48,7 @@ static func predict_first_floor_x(s, cfg, max_ticks: int = 240) -> int:
 	probe.ball_attack_kind = s.ball_attack_kind
 	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
-	probe.ball_ghost = s.ball_ghost
-	probe.ball_flame = s.ball_flame
+	_copy_special_state(probe, s)
 	probe.touches = s.touches
 	probe.serve_flight = s.serve_flight
 	probe.last_touch_team = s.last_touch_team
@@ -77,8 +81,7 @@ static func normal_attack_reaches_opponent_playable(s, cfg, attacker_team: int,
 	probe.ball_attack_kind = s.ball_attack_kind
 	probe.ball_health_damage = s.ball_health_damage
 	probe.ball_defense_class = s.ball_defense_class
-	probe.ball_ghost = s.ball_ghost
-	probe.ball_flame = s.ball_flame
+	_copy_special_state(probe, s)
 	probe.touches = s.touches
 	probe.serve_flight = s.serve_flight
 	probe.last_touch_team = s.last_touch_team
@@ -111,7 +114,18 @@ static func _clear_attack_effect(s) -> void:
 	s.ball_original_attack_pressure_consumed = 0
 	s.ball_soft_block_action_id = 0
 
+static func _copy_special_state(target, source) -> void:
+	target.ball_special_id = source.ball_special_id
+	target.ball_special_phase = source.ball_special_phase
+	target.ball_special_ticks = source.ball_special_ticks
+	target.ball_special_owner_idx = source.ball_special_owner_idx
+	target.ball_special_origin_vx = source.ball_special_origin_vx
+	target.ball_held_by = source.ball_held_by
+
 static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
+	if (s.ball_special_id != 0 or s.ball_held_by >= 0) \
+			and SpecialBall.step(s, cfg):
+		return
 	var prev_x: int = s.ball_x
 	var prev_y: int = s.ball_y
 	s.ball_vy += cfg.gravity
@@ -134,7 +148,7 @@ static func _step_ball(s, cfg, inputs: Array[int] = []) -> void:
 		s.ball_vy = s.ball_vy * cfg.wall_bounce_num / cfg.ball_bounce_den
 		s.ball_power = 0
 	if hit_wall:
-		s.ball_flame = 0
+		SpecialBall.clear_special(s)
 		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
 			s.ball_defense_class = 0
@@ -194,7 +208,7 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 			hits_net_side = probe_y > cfg.net_top_y
 	if hits_net_side:
 		# ネット下部は壁。来た側へ押し返す
-		s.ball_flame = 0
+		SpecialBall.clear_special(s)
 		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
 			s.ball_defense_class = 0
@@ -215,7 +229,7 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 		# 原作式ネットイン: 上端(白帯)に当たると縦の勢いが半減して跳ね、
 		# ネットから離れる向きへ押し出される=ポトリと落ちる緊張感
 		s.ball_y = cfg.net_top_y - cfg.ball_radius
-		s.ball_flame = 0
+		SpecialBall.clear_special(s)
 		_clear_attack_effect(s)
 		if s.ball_defense_class != 0:
 			s.ball_defense_class = 0
@@ -238,11 +252,3 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 			for i in s.players.size():
 				if SimStateScript.team_of(i) == entered_team:
 					CombatResources.stop_attack_recovery(s.players[i])
-		_clear_ghost_on_opponent_entry(s, is_left)
-
-static func _clear_ghost_on_opponent_entry(s, is_left: bool) -> void:
-	var entered_team: int = 0 if is_left else 1
-	if s.ball_ghost == 1 and s.last_touch_team >= 0 and entered_team != s.last_touch_team:
-		s.ball_ghost = 0
-		s.ball_health_damage = 0
-		s.ball_defense_class = 0

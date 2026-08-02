@@ -380,12 +380,12 @@ func test_flame_ball_resets_when_it_lands_for_a_point() -> void:
 	var cfg = w[1]
 	s.phase = SimState.PHASE_RALLY
 	s.ball_power = 1
-	s.ball_flame = 1
+	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.ball_x = FP.from_int(100)
 	s.ball_y = cfg.floor_y - cfg.ball_radius - FP.from_int(1)
 	s.ball_vy = FP.from_int(10)
 	Simulation.step(s, [0, 0, 0, 0], cfg)
-	check_eq(s.ball_flame, 0, "着地得点で燃える状態を解除")
+	check_eq(s.ball_special_id, 0, "着地得点で燃える状態を解除")
 	check_eq(s.ball_power, 0, "着地得点でパワー状態も解除")
 
 func test_pause_then_new_serve_by_scorer() -> void:

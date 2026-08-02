@@ -18,7 +18,7 @@ func _world() -> Array:
 func _arm_flame(s, damage: int = 40) -> void:
 	s.last_touch_team = 1
 	s.ball_power = 1
-	s.ball_flame = 1
+	s.ball_special_id = Chars.SUPER_FLAME_ATTACK
 	s.ball_health_damage = damage
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	s.ball_attack_kind = SimState.BALL_ATTACK_NONE
@@ -53,7 +53,7 @@ func test_unblockable_class_not_visual_flame_blocks_just_receive() -> void:
 	p.receive_stance = 1
 	p.drive_gauge = 65
 	_arm_flame(s)
-	s.ball_flame = 0
+	s.ball_special_id = 0
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 	check_eq(p.health, 60, "炎表示なしでも防御不能分類なら固定40を受ける")
@@ -70,7 +70,7 @@ func test_flame_attack_return_cancels_without_damage() -> void:
 		Simulation.IN_ACTION | Simulation.IN_DOWN, 0)
 	check_eq(p.health, 40, "アタック返しは無傷")
 	check_eq(s.ball_defense_class, Chars.DEFENSE_NONE, "防御不能分類を消去")
-	check_eq(s.ball_flame, 0, "表示属性も消去")
+	check_eq(s.ball_special_id, 0, "表示属性も消去")
 
 func test_burnout_does_not_multiply_fixed_flame_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

@@ -59,6 +59,8 @@ class Player:
 	var hit_cooldown: int = 0
 	var stun_ticks: int = 0  # 体力が尽きた硬直(移動・ヒット不可)の残りtick
 	var burn: int = 0  # 燃えるアタック被弾後の行動不能・炎上表示残りtick
+	var shock_ticks: int = 0  # サンダーボール感電の残りtick
+	var bubble_ticks: int = 0  # バブルパック拘束の残りtick
 	var dive: int = 0  # 横っ飛び方向(-1/0/1)。開始から着地まで保持する
 	var dive_contact_ticks: int = 0  # 横っ飛びレシーブの接触受付残りtick
 	var dive_age_ticks: int = 0  # 横っ飛び開始からの経過tick。表示層が読む
@@ -68,6 +70,9 @@ class Player:
 	var current_block_action_id: int = 0
 	var block_contact_resolved: int = 0
 	var action_latch: int = 0  # ACTION押下エッジを決定論的に作る前tick入力
+	var ability_latch: int = 0  # D押下エッジを決定論的に作る前tick入力
+	var special_action: int = 0  # 吸い込み・亜空間保持など選手側の特殊動作ID
+	var special_action_ticks: int = 0
 	var hit_kind: int = HIT_KIND_RECEIVE  # 直近の打撃種別。表示層が読む
 	var brake: int = 0  # 急ブレーキ(スキッド)の残り(符号=滑る方向, 絶対値=残りtick)。表示層も読む
 	var run: int = 0  # 同方向の連続走行tick。一定以上でのみ反転スキッドが出る(細かい制御は滑らない)
@@ -150,8 +155,12 @@ var ball_power: int = 0  # 1=パーフェクトスパイク由来のパワーボ
 var ball_attack_kind: int = BALL_ATTACK_NONE  # ドライブ削り用の飛来アタック種別
 var ball_health_damage: int = 0
 var ball_defense_class: int = 0
-var ball_ghost: int = 0  # 1=相手コートへ渡るまで表示層で点滅するゴーストボール
-var ball_flame: int = 0  # 1=体力ダメージと赤色表示を持つ燃えるアタック球
+var ball_special_id: int = 0
+var ball_special_phase: int = 0
+var ball_special_ticks: int = 0
+var ball_special_owner_idx: int = -1
+var ball_special_origin_vx: int = 0
+var ball_held_by: int = -1
 var last_hit_tick: int = 0  # 最後にヒット/サーブが起きたtick。CPUの反応遅延と打撃発生の観測に使う
 var serve_aim: int = 25  # サーブトスの照準角(垂直から何度ネット側へ倒すか。0=真上..60)
 var serve_pow: int = 100  # サーブトスの高さ(%)。上下キーで60..130を選ぶ
@@ -244,6 +253,8 @@ func to_int_array() -> Array[int]:
 		out.append(p.hit_cooldown)
 		out.append(p.stun_ticks)
 		out.append(p.burn)
+		out.append(p.shock_ticks)
+		out.append(p.bubble_ticks)
 		out.append(p.dive)
 		out.append(p.dive_contact_ticks)
 		out.append(p.dive_age_ticks)
@@ -253,6 +264,9 @@ func to_int_array() -> Array[int]:
 		out.append(p.current_block_action_id)
 		out.append(p.block_contact_resolved)
 		out.append(p.action_latch)
+		out.append(p.ability_latch)
+		out.append(p.special_action)
+		out.append(p.special_action_ticks)
 		out.append(p.hit_kind)
 		out.append(p.brake)
 		out.append(p.run)
@@ -315,8 +329,12 @@ func to_int_array() -> Array[int]:
 	out.append(ball_attack_kind)
 	out.append(ball_health_damage)
 	out.append(ball_defense_class)
-	out.append(ball_ghost)
-	out.append(ball_flame)
+	out.append(ball_special_id)
+	out.append(ball_special_phase)
+	out.append(ball_special_ticks)
+	out.append(ball_special_owner_idx)
+	out.append(ball_special_origin_vx)
+	out.append(ball_held_by)
 	out.append(last_hit_tick)
 	out.append(serve_aim)
 	out.append(serve_pow)
@@ -376,6 +394,8 @@ func load_int_array(arr: Array) -> void:
 		p.hit_cooldown = arr[k]; k += 1
 		p.stun_ticks = arr[k]; k += 1
 		p.burn = arr[k]; k += 1
+		p.shock_ticks = arr[k]; k += 1
+		p.bubble_ticks = arr[k]; k += 1
 		p.dive = arr[k]; k += 1
 		p.dive_contact_ticks = arr[k]; k += 1
 		p.dive_age_ticks = arr[k]; k += 1
@@ -385,6 +405,9 @@ func load_int_array(arr: Array) -> void:
 		p.current_block_action_id = arr[k]; k += 1
 		p.block_contact_resolved = arr[k]; k += 1
 		p.action_latch = arr[k]; k += 1
+		p.ability_latch = arr[k]; k += 1
+		p.special_action = arr[k]; k += 1
+		p.special_action_ticks = arr[k]; k += 1
 		p.hit_kind = arr[k]; k += 1
 		p.brake = arr[k]; k += 1
 		p.run = arr[k]; k += 1
@@ -447,8 +470,12 @@ func load_int_array(arr: Array) -> void:
 	ball_attack_kind = arr[k]; k += 1
 	ball_health_damage = arr[k]; k += 1
 	ball_defense_class = arr[k]; k += 1
-	ball_ghost = arr[k]; k += 1
-	ball_flame = arr[k]; k += 1
+	ball_special_id = arr[k]; k += 1
+	ball_special_phase = arr[k]; k += 1
+	ball_special_ticks = arr[k]; k += 1
+	ball_special_owner_idx = arr[k]; k += 1
+	ball_special_origin_vx = arr[k]; k += 1
+	ball_held_by = arr[k]; k += 1
 	last_hit_tick = arr[k]; k += 1
 	serve_aim = arr[k]; k += 1
 	serve_pow = arr[k]; k += 1
