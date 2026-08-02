@@ -12,6 +12,7 @@ const BallPhysics := preload("res://src/sim/ball_physics.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -442,6 +443,7 @@ static func reset_rally(s, cfg, serving_team: int) -> void:
 	s.rng = SimRng.advance_role_roll(s.rng)
 	s.rally_role_roll_team1 = s.rng % 9
 	s.last_touch_idx = -1
+	PossessionTracker.reset_for_rally(s)
 	s.timer = cfg.serve_delay_ticks
 	s.ball_vx = 0
 	s.ball_vy = 0
@@ -593,6 +595,7 @@ static func _check_floor_point(s, cfg) -> void:
 static func _award_point(s, team: int, cfg) -> void:
 	s.serve_ball = 0
 	BallPhysics._clear_attack_effect(s)
+	PossessionTracker.reset_for_rally(s)
 	for p in s.players:
 		CombatResources.stop_attack_recovery(p)
 	if team == 0:

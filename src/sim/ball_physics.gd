@@ -3,6 +3,7 @@ extends RefCounted
 
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
+const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 const LOOSE_BOUNCE_PCT := 50   # ポーズ中の床バウンド反発%(勢い半分で早く落ち着く)
 
 class _BallProbe:
@@ -222,9 +223,13 @@ static func _ball_vs_net(s, cfg, prev_x: int, prev_y: int) -> void:
 	if was_left != is_left:
 		# ネットを越えた: 高さにかかわらず攻守交代。実衝突で跳ね返った球は
 		# ball_xが来た側へ戻されているため、この条件には入らない。
+		var entered_team: int = 0 if is_left else 1
+		if s.has_method("alloc_possession_id") \
+				and s.possession_id != 0 and entered_team != s.possession_team:
+			PossessionTracker.resolve_opponent_transfer(
+				s, s.possession_team, cfg)
 		s.touches = 0
 		s.serve_flight = 0
-		var entered_team: int = 0 if is_left else 1
 		if s.has_method("alloc_attack_id"):
 			for i in s.players.size():
 				if SimStateScript.team_of(i) == entered_team:

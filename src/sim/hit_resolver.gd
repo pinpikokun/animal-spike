@@ -8,6 +8,7 @@ const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
+const PossessionTracker := preload("res://src/sim/possession_tracker.gd")
 
 const IN_LEFT := SimInput.IN_LEFT
 const IN_RIGHT := SimInput.IN_RIGHT
@@ -487,6 +488,10 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	var serve_strike: bool = s.phase == SimStateScript.PHASE_SERVE and s.serve_tossed == 1
 	# 横っ飛びは開始済みの一行動。受付中の追加入力で必殺技へ化けさせない。
 	var special: int = 0 if force_dive_receive else _special_for_input(p, input, cfg)
+	var resolved_action_kind: int = PossessionTracker.ACTION_DIVE \
+		if force_dive_receive else PossessionTracker.ACTION_PASSIVE
+	if special != 0:
+		resolved_action_kind = PossessionTracker.ACTION_SPECIAL
 	var incoming_flame: bool = s.ball_flame == 1
 	var intent: Array[int] = _classify_intent(
 		1 if force_dive_receive else p.on_ground,
@@ -717,6 +722,9 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 				and not CombatResources.can_pay(p, cfg.just_attack_drive_cost):
 			sweet = false
 		var drive_just_attack: bool = sweet and special == 0 and not is_attack_return
+		if special == 0:
+			resolved_action_kind = PossessionTracker.ACTION_JUST_ATTACK \
+				if drive_just_attack else PossessionTracker.ACTION_NORMAL_ATTACK
 		if drive_just_attack:
 			CombatResources.spend_committed(p, cfg.just_attack_drive_cost, cfg)
 		if sweet:
@@ -784,6 +792,8 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 		s.ball_vy = avy
 	p.hit_cooldown = cfg.hit_cooldown_ticks
 	s.last_hit_tick = s.tick
+	if not serve_strike:
+		PossessionTracker.on_team_contact(s, i, resolved_action_kind)
 	if s.serve_ball == 1 and team != s.serving_team:
 		# サーブ由来球は受け手チームの最初の接触で通常ラリー球へ移る。
 		s.serve_ball = 0
@@ -882,6 +892,8 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 					p.guard = p.guard_max
 					p.push = back_dir * PUSH_STUN_TICKS
 					s.hit_freeze = maxi(s.hit_freeze, 10)
+		PossessionTracker.on_team_contact(
+			s, i, PossessionTracker.ACTION_BLOCK)
 		s.last_touch_team = team
 		s.last_touch_idx = i
 		s.aitick = SimRng.advance_hit(s.aitick, s.rng)
