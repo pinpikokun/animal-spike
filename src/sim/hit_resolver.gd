@@ -397,9 +397,6 @@ static func _is_active_block(s, i: int, input: int, cfg) -> bool:
 	var incoming_dir: int = -1 if team == 0 else 1
 	return s.ball_vx != 0 and signi(s.ball_vx) == incoming_dir
 
-static func _burnout_guard_damage(p, damage: int) -> int:
-	return damage * 3 / 2 if p.burnout_ticks > 0 else damage
-
 static func _defense_contact_kind(intent_kind: int, just_receive: bool,
 		force_dive_receive: bool) -> int:
 	if force_dive_receive:
@@ -418,7 +415,6 @@ static func _apply_regular_attack_defense(s, p, team: int, contact_kind: int,
 		guard_damage = base_guard_damage * 2 / 5
 	elif contact_kind == DEFENSE_CONTACT_JUST_RECEIVE:
 		guard_damage = 0
-	guard_damage = _burnout_guard_damage(p, guard_damage)
 	p.guard -= guard_damage
 	if p.guard <= 0:
 		p.stun = cfg.stun_ticks
@@ -585,7 +581,7 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 	if (opposing_power or unblockable_touch) and not regular_attack_defense_handled:
 		if sweet:
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
-				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
+				p.guard -= incoming_guard_damage
 				if incoming_flame:
 					flame_received = true
 				if p.guard <= 0 and not flame_received:
@@ -602,7 +598,6 @@ static func _apply_hit(s, i: int, cfg, input: int, d2: int = -1,
 			if incoming_unblockable and intent_kind != INTENT_AIR_SPIKE:
 				if incoming_flame:
 					flame_received = true
-			guard_damage = _burnout_guard_damage(p, guard_damage)
 			p.guard -= guard_damage
 			# ジャストアタック被弾: 後ろ(自陣側)へノックバックし、しりもち。
 			# 後ろ=相手と反対 = チーム0なら左(-1), チーム1なら右(+1)
@@ -878,7 +873,7 @@ static func _ball_vs_block(s, cfg, inputs: Array[int]) -> void:
 			p.push = back_dir * mini(PUSH_MAX_TICKS,
 				PUSH_BLK_TICKS * 100 / Chars.stat(p.char_id, "weight"))
 			if incoming_defense_class == Chars.DEFENSE_UNBLOCKABLE:
-				p.guard -= _burnout_guard_damage(p, incoming_guard_damage)
+				p.guard -= incoming_guard_damage
 				if s.ball_flame == 1:
 					_ignite_player(p, team, cfg)
 				s.ball_flame = 0

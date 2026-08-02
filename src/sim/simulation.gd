@@ -219,10 +219,7 @@ static func _update_drive_recovery(state, cfg) -> void:
 		return
 	for p in state.players:
 		if p.burnout_ticks > 0:
-			CombatResources.stop_attack_recovery(p)
-			p.burnout_ticks -= 1
-			if p.burnout_ticks == 0:
-				p.drive_gauge = cfg.drive_gauge_max
+			CombatResources.tick_burnout(p, true, cfg)
 			continue
 		p.drive_gauge = clampi(p.drive_gauge, 0, cfg.drive_gauge_max)
 		CombatResources.tick_attack_recovery(p, true, cfg)

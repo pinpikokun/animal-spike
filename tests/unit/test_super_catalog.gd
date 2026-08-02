@@ -71,7 +71,7 @@ func test_flame_attack_return_cancels_without_damage() -> void:
 	check_eq(s.ball_defense_class, Chars.DEFENSE_NONE, "防御不能分類を消去")
 	check_eq(s.ball_flame, 0, "表示属性も消去")
 
-func test_burnout_multiplies_fixed_flame_damage_to_sixty() -> void:
+func test_burnout_does_not_multiply_fixed_flame_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.guard = 100
@@ -80,7 +80,7 @@ func test_burnout_multiplies_fixed_flame_damage_to_sixty() -> void:
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN,
 		cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 40, "固定40へバーンアウト3/2を掛けて60")
+	check_eq(p.guard, 60, "固定40をバーンアウト倍率なしで適用")
 
 func test_flame_hit_starts_configured_burn_knockback() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]

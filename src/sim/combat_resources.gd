@@ -18,6 +18,14 @@ static func start_burnout(p, cfg) -> void:
 	stop_attack_recovery(p)
 	p.burnout_ticks = cfg.burnout_recovery_ticks
 
+static func tick_burnout(p, active: bool, cfg) -> void:
+	if p.burnout_ticks <= 0 or not active:
+		return
+	stop_attack_recovery(p)
+	p.burnout_ticks -= 1
+	if p.burnout_ticks == 0:
+		p.drive_gauge = cfg.burnout_exit_drive
+
 static func stop_attack_recovery(p) -> void:
 	p.attack_recovery_delay_ticks = 0
 	p.attack_recovery_window_ticks = 0

@@ -110,21 +110,27 @@ func test_power_rank_guard_damage_matrix() -> void:
 		check_eq(100 - just.guard, 0, "ジャスト0 rank=%d" % i)
 		check_eq(100 - dive.guard, bases[i], "飛びつき全量 rank=%d" % i)
 
-func test_burnout_guard_damage_matrix() -> void:
+func test_burnout_has_no_extra_guard_damage_matrix() -> void:
 	var bases := [35, 30, 25, 20, 15]
-	var full_damage := [52, 45, 37, 30, 22]
-	var receive_damage := [21, 18, 15, 12, 9]
+	var receive_damage := [14, 12, 10, 8, 6]
 	for i in bases.size():
-		var toss = _resolve_contact(SimState.BALL_ATTACK_NORMAL,
-			CONTACT_TOSS, bases[i], true)[2]
-		var receive = _resolve_contact(SimState.BALL_ATTACK_NORMAL,
-			CONTACT_RECEIVE, bases[i], true)[2]
-		var dive = _resolve_contact(SimState.BALL_ATTACK_NORMAL,
-			CONTACT_DIVE, bases[i], true)[2]
-		check_eq(100 - toss.guard, full_damage[i], "バーンアウト地上トス rank=%d" % i)
-		check_eq(100 - receive.guard, receive_damage[i],
-			"バーンアウト通常レシーブ rank=%d" % i)
-		check_eq(100 - dive.guard, full_damage[i], "バーンアウト飛びつき rank=%d" % i)
+		for attack_kind in [SimState.BALL_ATTACK_NORMAL, SimState.BALL_ATTACK_JUST]:
+			var toss = _resolve_contact(attack_kind,
+				CONTACT_TOSS, bases[i], true)[2]
+			var receive = _resolve_contact(attack_kind,
+				CONTACT_RECEIVE, bases[i], true)[2]
+			var just = _resolve_contact(attack_kind,
+				CONTACT_JUST, bases[i], true)[2]
+			var dive = _resolve_contact(attack_kind,
+				CONTACT_DIVE, bases[i], true)[2]
+			check_eq(100 - toss.guard, bases[i],
+				"バーンアウト地上トスは倍率なし rank=%d kind=%d" % [i, attack_kind])
+			check_eq(100 - receive.guard, receive_damage[i],
+				"バーンアウト通常レシーブは倍率なし rank=%d kind=%d" % [i, attack_kind])
+			check_eq(100 - just.guard, receive_damage[i],
+				"バーンアウト中はジャスト封印で通常レシーブ相当 rank=%d kind=%d" % [i, attack_kind])
+			check_eq(100 - dive.guard, bases[i],
+				"バーンアウト飛びつきは倍率なし rank=%d kind=%d" % [i, attack_kind])
 
 func test_dive_takes_full_guard_damage_without_butt_drop() -> void:
 	for attack_kind in [SimState.BALL_ATTACK_NORMAL, SimState.BALL_ATTACK_JUST]:

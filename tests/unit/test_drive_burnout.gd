@@ -7,6 +7,7 @@ const SimState := preload("res://src/sim/sim_state.gd")
 const Simulation := preload("res://src/sim/simulation.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
+const CombatResources := preload("res://src/sim/combat_resources.gd")
 
 func _world() -> Array:
 	var cfg = SimConfig.new()
@@ -162,7 +163,7 @@ func test_drive_reaching_zero_starts_burnout() -> void:
 	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks,
 		"ドライブがゼロになった瞬間にバーンアウト開始")
 
-func test_burnout_guard_damage_is_one_and_half_including_flame() -> void:
+func test_burnout_does_not_multiply_normal_or_flame_damage() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
 	var p = s.players[0]
 	p.burnout_ticks = cfg.burnout_recovery_ticks
@@ -172,7 +173,7 @@ func test_burnout_guard_damage_is_one_and_half_including_flame() -> void:
 	s.ball_guard_damage = cfg.power_guard_damage_for_rank(Chars.Profile.RANK_C)
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 63, "POWER C絶対値25へバーンアウト*3/2を適用")
+	check_eq(p.guard, 75, "POWER C絶対値25を倍率なしで適用")
 	p.guard = 100
 	s.last_touch_team = 1
 	s.ball_power = 1
@@ -181,7 +182,7 @@ func test_burnout_guard_damage_is_one_and_half_including_flame() -> void:
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._apply_hit(s, 0, cfg,
 		Simulation.IN_ACTION | Simulation.IN_DOWN, cfg.player_reach * cfg.player_reach)
-	check_eq(p.guard, 40, "必殺技40へバーンアウト*3/2を適用して60")
+	check_eq(p.guard, 60, "必殺技40も倍率なしで適用")
 
 func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 	var w := _world(); var s = w[0]; var cfg = w[1]
@@ -193,8 +194,35 @@ func test_burnout_recovers_after_600_rally_ticks_and_pauses_elsewhere() -> void:
 		Simulation._update_drive_recovery(s, cfg)
 	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks,
 		"インターバル中は復帰カウント停止")
+	s.phase = SimState.PHASE_SERVE
+	for i in 100:
+		Simulation._update_drive_recovery(s, cfg)
+	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks,
+		"サーブ待機中も復帰カウント停止")
+	Simulation.reset_rally(s, cfg, 1)
+	check_eq(p.burnout_ticks, cfg.burnout_recovery_ticks,
+		"ポイントをまたいで残り時間を維持")
 	s.phase = SimState.PHASE_RALLY
 	for i in cfg.burnout_recovery_ticks:
 		Simulation._update_drive_recovery(s, cfg)
 	check_eq(p.burnout_ticks, 0, "600ラリーtickでバーンアウト解除")
-	check_eq(p.drive_gauge, cfg.drive_gauge_max, "解除時に100へ全回復")
+	check_eq(p.drive_gauge, cfg.burnout_exit_drive, "解除時は30で復帰")
+
+func test_tick_burnout_pauses_and_clears_attack_recovery_on_exit() -> void:
+	var w := _world(); var s = w[0]; var cfg = w[1]
+	var p = s.players[0]
+	p.drive_gauge = 0
+	p.burnout_ticks = 1
+	p.attack_recovery_delay_ticks = 10
+	p.attack_recovery_window_ticks = 20
+	p.attack_recovery_fraction_ticks = 29
+	p.attack_recovery_granted = 3
+	CombatResources.tick_burnout(p, false, cfg)
+	check_eq(p.burnout_ticks, 1, "inactiveでは残り時間を維持")
+	CombatResources.tick_burnout(p, true, cfg)
+	check_eq(p.burnout_ticks, 0, "activeの最後の1tickで解除")
+	check_eq(p.drive_gauge, cfg.burnout_exit_drive, "解除時は30で復帰")
+	check_eq(p.attack_recovery_delay_ticks, 0, "旧攻撃回復の遅延を持ち込まない")
+	check_eq(p.attack_recovery_window_ticks, 0, "旧攻撃回復窓を再開しない")
+	check_eq(p.attack_recovery_fraction_ticks, 0, "旧攻撃回復の端数を持ち込まない")
+	check_eq(p.attack_recovery_granted, 0, "旧攻撃回復の付与量を持ち込まない")

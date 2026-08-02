@@ -392,6 +392,6 @@ func test_burnout_dive_still_contacts_and_takes_unblockable_damage() -> void:
 	s.ball_defense_class = Chars.DEFENSE_UNBLOCKABLE
 	HitResolver._resolve_hit(s, [0, 0, 0, 0], cfg)
 	check_eq(s.touches, 1, "バーンアウト中も横っ飛び接触できる")
-	check_eq(p.guard, 40, "防御不能40へバーンアウト1.5倍の60ダメージ")
+	check_eq(p.guard, 60, "防御不能40へバーンアウト倍率なしの40ダメージ")
 	check(p.burn > 0, "防御不能球の炎上を無効化しない")
 	check_eq(p.dive, 0, "炎上状態を横っ飛びより優先")
