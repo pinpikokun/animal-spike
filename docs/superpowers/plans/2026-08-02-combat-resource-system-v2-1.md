@@ -49,8 +49,8 @@
 
 **Interfaces:**
 - Produces: `SimState.alloc_possession_id() -> int`, `alloc_attack_id() -> int`, `alloc_contact_id() -> int`, `alloc_action_id() -> int`
-- Produces: 全プレイヤー資源状態と保持・攻撃状態を含む `serialize_ints() -> Array[int]`
-- Consumes: 既存 `hash64()`、`load_int_array(arr)`、4人固定プレイヤー配列
+- Produces: 全プレイヤー資源状態と保持・攻撃状態を含む既存 `to_int_array() -> Array[int]`
+- Consumes: 既存 `state_hash()`、`load_int_array(arr)`、4人固定プレイヤー配列
 
 - [ ] **Step 1: 承認済み設計書を照合する**
 
@@ -79,8 +79,8 @@ func test_combat_ids_and_resource_state_roundtrip() -> void:
     a.possession_id = a.alloc_possession_id()
     a.ball_attack_id = a.alloc_attack_id()
     var b := SimState.new()
-    b.load_int_array(a.serialize_ints())
-    check_eq(b.serialize_ints(), a.serialize_ints(), "戦闘資源状態を完全復元")
+    b.load_int_array(a.to_int_array())
+    check_eq(b.to_int_array(), a.to_int_array(), "戦闘資源状態を完全復元")
     check_eq(b.alloc_attack_id(), a.alloc_attack_id(), "復元後もID列が一致")
 ```
 
@@ -92,7 +92,7 @@ Expected: 新フィールドまたはID関数未定義だけで失敗し、`SCRI
 
 - [ ] **Step 4: `SimState` へ整数状態と採番関数を実装する**
 
-プレイヤーへ仕様書12章の全フィールドを追加する。状態本体へ保持情報、攻撃情報、4つの次IDを追加する。IDは0を未設定値として予約し、最初の採番を1にする。
+プレイヤーへ仕様書12章のうち既存状態と同義でない新規フィールドを追加する。`health`、`max_health`、`stun_ticks` は、現行の `guard`、`guard_max`、`stun` と同義なのでTask 1では二重化せず、Task 8の純粋改名で導入する。状態本体へ保持情報、攻撃情報、4つの次IDを追加する。IDは0を未設定値として予約し、最初の採番を1にする。
 
 ```gdscript
 func alloc_attack_id() -> int:
@@ -101,7 +101,7 @@ func alloc_attack_id() -> int:
     return value
 ```
 
-全フィールドを宣言順と同じ順序で `serialize_ints()` と `load_int_array()` へ追加する。
+全フィールドを宣言順と同じ順序で `to_int_array()` と `load_int_array()` へ追加する。
 
 - [ ] **Step 5: 状態列変化を独立監査する**
 
@@ -522,13 +522,13 @@ git commit -m "feat: 飛びつきとブロックの資源契約を統合"
 
 Run: `.\run_tests.ps1`
 
-- [ ] **Step 5: `guard` を `health` へ移行する**
+- [ ] **Step 5: 既存状態を体力名称へ純粋改名する**
 
-`Player.guard/guard_max` を `health/max_health`、`ball_guard_damage` を `ball_health_damage` へ一括移行する。攻撃側POWER別の既存基本値は維持し、受け手最大値だけ100へ統一する。表示ラベルとテスト名も体力へ揃える。
+`Player.guard/guard_max/stun` を `health/max_health/stun_ticks`、`ball_guard_damage` を `ball_health_damage` へ一括移行する。宣言順と直列化位置を維持し、この段階では値、状態遷移、直列化長、同期ゴールデンを変えない。表示ラベルとテスト名も体力へ揃える。
 
 - [ ] **Step 6: スタン状態機械を実装する**
 
-連打処理と `stun_action_held/stun_mash_event` を削除する。ラリー中だけ残りtickを進め、300到達またはラリー終了で100復帰。同一ラリー最低1クランプを体力損害の共通関数で保証する。
+純粋改名の検証後に、全キャラの最大体力を100へ統一する。連打処理と `stun_action_held/stun_mash_event` を削除する。ラリー中だけ残りtickを進め、300到達またはラリー終了で100復帰。同一ラリー最低1クランプを体力損害の共通関数で保証する。
 
 - [ ] **Step 7: 全件検証、Claudeレビュー、コミット**
 
