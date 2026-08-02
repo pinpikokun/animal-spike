@@ -74,11 +74,11 @@ Expected: `446` と承認済みSHA-256が一致する。
 func test_original_roster_owns_approved_specials() -> void:
     var expected := {
         Chars.CHAR_TOME: [Chars.SUPER_GHOST_BALL, Chars.SUPER_FLAME_ATTACK],
-        Chars.CHAR_HITO: [Chars.SUPER_DISAPPEARING_BALL, Chars.SUPER_FEINT_BALL],
+        Chars.CHAR_HITO: [Chars.SUPER_DISAPPEARING_BALL, Chars.SUPER_FEINT_ATTACK],
         Chars.CHAR_PIYO: [Chars.SUPER_GUST_BALL, Chars.SUPER_GUST_ATTACK],
         Chars.CHAR_UME: [Chars.SUPER_SNAKE_BALL, Chars.SUPER_BUMBLE_BALL],
-        Chars.CHAR_CARBY: [Chars.SUPER_GHOST_BALL, Chars.SUPER_THUNDER_ATTACK],
-        Chars.CHAR_DUO: [Chars.SUPER_SUCTION, Chars.SUPER_BUBBLE_ATTACK],
+        Chars.CHAR_CARBY: [Chars.SUPER_GHOST_BALL, Chars.SUPER_THUNDER_BALL],
+        Chars.CHAR_DUO: [Chars.SUPER_SUCTION, Chars.SUPER_BUBBLE_PACK],
         Chars.CHAR_SEC1: [Chars.SUPER_TRANSFER_BALL, Chars.SUPER_SUBSPACE_BLOCK],
         Chars.CHAR_SEC2: [Chars.SUPER_REFRAIN_ATTACK],
     }
@@ -388,19 +388,19 @@ git commit -m "feat: 原作必殺技のCPUと表示を接続"
 - Modify: `docs/superpowers/specs/2026-08-02-original-character-special-moves-design.md` only for implementation result appendix without changing contract
 - Modify: this plan checkbox state
 
-- [ ] **Step 1: 16発動経路の統合シナリオを追加する**
+- [x] **Step 1: 16発動経路の統合シナリオを追加する**
 
 8キャラの全入力経路を少なくとも一度通し、開始、35消費、特殊状態、接触結果、終了、ラリーリセットを検査する。共有技と複数入力は両経路を通す。
 
-- [ ] **Step 2: snapshot、hash、probe、再試合を検査する**
+- [x] **Step 2: snapshot、hash、probe、再試合を検査する**
 
 各特殊状態の途中snapshotから同じ入力列を再生し、毎tickハッシュ一致。床予測が本番と一致。得点後と再試合後に特殊球、保持、選手状態、Dラッチが残らない。
 
-- [ ] **Step 3: 固定配列と性能警報を実測する**
+- [x] **Step 3: 固定配列と性能警報を実測する**
 
 直列化長、同期ゴールデン、CPU決定論ゴールデン、性能中央値を比較し、意図した状態追加以外の差なら停止する。ゴールデン変更は旧値、新値、原因を記録する。
 
-- [ ] **Step 4: プレースホルダーと旧経路を検索する**
+- [x] **Step 4: プレースホルダーと旧経路を検索する**
 
 ```powershell
 rg -n "TODO|TBD|ball_ghost|ball_flame|pilot_super|temporary|後で実装" src tests docs/superpowers/specs/2026-08-02-original-character-special-moves-design.md
@@ -408,11 +408,11 @@ rg -n "TODO|TBD|ball_ghost|ball_flame|pilot_super|temporary|後で実装" src te
 
 Expected: 今回範囲の未実装表現と旧試作経路が0件。無関係の既存ヒットは理由を記録する。
 
-- [ ] **Step 5: Claude Codeへ最終差分レビューを依頼する**
+- [x] **Step 5: Claude Codeへ最終差分レビューを依頼する**
 
 仕様446行、全差分、テスト結果を渡し、入力、消費、原作状態遷移、決定論、リセット、CPU/人間共通性、表示漏れを確認する。指摘は証拠で採否を決め、必要なら赤テストから直す。
 
-- [ ] **Step 6: 正規全件検証を行う**
+- [x] **Step 6: 正規全件検証を行う**
 
 ```powershell
 .\run_tests.ps1
@@ -420,7 +420,7 @@ Expected: 今回範囲の未実装表現と旧試作経路が0件。無関係の
 
 Expected: 全件合格、`SCRIPT ERROR summary: 0 occurrence(s)`。件数、所要時間、未検証事項を記録する。
 
-- [ ] **Step 7: 設計書の実装結果を記録し最終コミットする**
+- [x] **Step 7: 設計書の実装結果を記録し最終コミットする**
 
 実装ファイル、全技の成立経路、テスト名、最終行数・SHA-256、変更全件を記録する。契約本文を変えない。
 
