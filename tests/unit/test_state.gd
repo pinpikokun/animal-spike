@@ -36,12 +36,10 @@ func test_hash_changes_on_diff() -> void:
 	check(a.state_hash() != g.state_hash(), "ACTIONラッチ差分でも変わる")
 
 func test_serialize_length() -> void:
-	# tick + rng + aitick + role roll 2チーム分(5) + プレイヤー4体x39(横っ飛び状態を含む)
-	# + 全体37(CPU打球回数/後衛役を含む) + エンティティ8スロットx8欄
-	# 5 + 4x39 + 37 + 8x8 = 262
-	# 先頭の5は tick + rng + aitick + rally_role_roll_team0 + rally_role_roll_team1
-	check_eq(SimState.new().to_int_array().size(), 262,
-		"直列化長(ドライブ残量/回復端数/飛来アタック属性を含む)")
+	# 基本状態と次ID(9) + プレイヤー4体x53 + 全体48 + エンティティ8スロットx8欄
+	# 9 + 4x53 + 48 + 8x8 = 333
+	check_eq(SimState.new().to_int_array().size(), 333,
+		"直列化長(戦闘リソース状態と決定論IDを含む)")
 
 func test_load_int_array_roundtrip() -> void:
 	# to_int_array→load_int_arrayの往復で全フィールドが復元される(ロールバックの土台)

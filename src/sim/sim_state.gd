@@ -65,12 +65,26 @@ class Player:
 	var guard: int = 100
 	var guard_max: int = 100
 	var drive_gauge: int = 0
+	var drive_reserved: int = 0
 	var drive_recovery_progress: int = 0
 	var drive_recovery_delay: int = 0
+	var attack_recovery_delay_ticks: int = 0
+	var attack_recovery_window_ticks: int = 0
+	var attack_recovery_fraction_ticks: int = 0
+	var attack_recovery_granted: int = 0
 	var receive_stance: int = 0
+	var stance_active: int = 0
+	var stance_action_id: int = 0
+	var stance_reserved_drive: int = 0
+	var stance_started_tick: int = -1
+	var stance_committed_attack_id: int = 0
+	var stance_pre_read_candidate: int = 0
+	var stance_cost_resolved: int = 0
+	var stance_exit_recovery_ticks: int = 0
 	var just_receive_flash: int = 0
 	var just_receive_event: int = 0
 	var burnout_ticks: int = 0
+	var stunned_this_rally: int = 0
 	var quake_stun: int = 0
 	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
 	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
@@ -81,7 +95,24 @@ var rng: int = 0
 var aitick: int = 0
 var rally_role_roll_team0: int = 0
 var rally_role_roll_team1: int = 0
+# ID列は試合中にリセットしない。ロールバック時だけsnapshotの保存値へ復元する。
+# ラリー終了時は参照側を未設定値へ戻し、次IDは単調増加を続ける。
+var next_possession_id: int = 1
+var next_attack_id: int = 1
+var next_contact_id: int = 1
+var next_action_id: int = 1
 var players: Array[Player] = []
+var possession_id: int = 0
+var possession_team: int = -1
+var aggressive_action_resolved: int = 0
+var passive_return_penalty_applied: int = 0
+var ball_attack_id: int = 0
+var ball_last_contact_id: int = 0
+var ball_attacker_id: int = -1
+var ball_attack_commit_tick: int = -1
+var ball_normal_gain_granted: int = 0
+var ball_original_attack_pressure_consumed: int = 0
+var ball_counts_for_pre_read_stance: int = 0
 var ball_x: int = 0
 var ball_y: int = 0
 var ball_vx: int = 0
@@ -150,9 +181,30 @@ func _init() -> void:
 	for i in ENT_SLOTS:
 		entities.append(Ent.new())
 
+func alloc_possession_id() -> int:
+	var value := next_possession_id
+	next_possession_id += 1
+	return value
+
+func alloc_attack_id() -> int:
+	var value := next_attack_id
+	next_attack_id += 1
+	return value
+
+func alloc_contact_id() -> int:
+	var value := next_contact_id
+	next_contact_id += 1
+	return value
+
+func alloc_action_id() -> int:
+	var value := next_action_id
+	next_action_id += 1
+	return value
+
 func to_int_array() -> Array[int]:
 	var out: Array[int] = [
 		tick, rng, aitick, rally_role_roll_team0, rally_role_roll_team1,
+		next_possession_id, next_attack_id, next_contact_id, next_action_id,
 	]
 	for p in players:
 		out.append(p.char_id)
@@ -186,14 +238,39 @@ func to_int_array() -> Array[int]:
 		out.append(p.guard)
 		out.append(p.guard_max)
 		out.append(p.drive_gauge)
+		out.append(p.drive_reserved)
 		out.append(p.drive_recovery_progress)
 		out.append(p.drive_recovery_delay)
+		out.append(p.attack_recovery_delay_ticks)
+		out.append(p.attack_recovery_window_ticks)
+		out.append(p.attack_recovery_fraction_ticks)
+		out.append(p.attack_recovery_granted)
 		out.append(p.receive_stance)
+		out.append(p.stance_active)
+		out.append(p.stance_action_id)
+		out.append(p.stance_reserved_drive)
+		out.append(p.stance_started_tick)
+		out.append(p.stance_committed_attack_id)
+		out.append(p.stance_pre_read_candidate)
+		out.append(p.stance_cost_resolved)
+		out.append(p.stance_exit_recovery_ticks)
 		out.append(p.just_receive_flash)
 		out.append(p.just_receive_event)
 		out.append(p.burnout_ticks)
+		out.append(p.stunned_this_rally)
 		out.append(p.quake_stun)
 		out.append(p.cpu)
+	out.append(possession_id)
+	out.append(possession_team)
+	out.append(aggressive_action_resolved)
+	out.append(passive_return_penalty_applied)
+	out.append(ball_attack_id)
+	out.append(ball_last_contact_id)
+	out.append(ball_attacker_id)
+	out.append(ball_attack_commit_tick)
+	out.append(ball_normal_gain_granted)
+	out.append(ball_original_attack_pressure_consumed)
+	out.append(ball_counts_for_pre_read_stance)
 	out.append(ball_x)
 	out.append(ball_y)
 	out.append(ball_vx)
@@ -250,6 +327,10 @@ func load_int_array(arr: Array) -> void:
 	aitick = arr[k]; k += 1
 	rally_role_roll_team0 = arr[k]; k += 1
 	rally_role_roll_team1 = arr[k]; k += 1
+	next_possession_id = arr[k]; k += 1
+	next_attack_id = arr[k]; k += 1
+	next_contact_id = arr[k]; k += 1
+	next_action_id = arr[k]; k += 1
 	for p in players:
 		p.char_id = arr[k]; k += 1
 		p.x = arr[k]; k += 1
@@ -282,14 +363,39 @@ func load_int_array(arr: Array) -> void:
 		p.guard = arr[k]; k += 1
 		p.guard_max = arr[k]; k += 1
 		p.drive_gauge = arr[k]; k += 1
+		p.drive_reserved = arr[k]; k += 1
 		p.drive_recovery_progress = arr[k]; k += 1
 		p.drive_recovery_delay = arr[k]; k += 1
+		p.attack_recovery_delay_ticks = arr[k]; k += 1
+		p.attack_recovery_window_ticks = arr[k]; k += 1
+		p.attack_recovery_fraction_ticks = arr[k]; k += 1
+		p.attack_recovery_granted = arr[k]; k += 1
 		p.receive_stance = arr[k]; k += 1
+		p.stance_active = arr[k]; k += 1
+		p.stance_action_id = arr[k]; k += 1
+		p.stance_reserved_drive = arr[k]; k += 1
+		p.stance_started_tick = arr[k]; k += 1
+		p.stance_committed_attack_id = arr[k]; k += 1
+		p.stance_pre_read_candidate = arr[k]; k += 1
+		p.stance_cost_resolved = arr[k]; k += 1
+		p.stance_exit_recovery_ticks = arr[k]; k += 1
 		p.just_receive_flash = arr[k]; k += 1
 		p.just_receive_event = arr[k]; k += 1
 		p.burnout_ticks = arr[k]; k += 1
+		p.stunned_this_rally = arr[k]; k += 1
 		p.quake_stun = arr[k]; k += 1
 		p.cpu = arr[k]; k += 1
+	possession_id = arr[k]; k += 1
+	possession_team = arr[k]; k += 1
+	aggressive_action_resolved = arr[k]; k += 1
+	passive_return_penalty_applied = arr[k]; k += 1
+	ball_attack_id = arr[k]; k += 1
+	ball_last_contact_id = arr[k]; k += 1
+	ball_attacker_id = arr[k]; k += 1
+	ball_attack_commit_tick = arr[k]; k += 1
+	ball_normal_gain_granted = arr[k]; k += 1
+	ball_original_attack_pressure_consumed = arr[k]; k += 1
+	ball_counts_for_pre_read_stance = arr[k]; k += 1
 	ball_x = arr[k]; k += 1
 	ball_y = arr[k]; k += 1
 	ball_vx = arr[k]; k += 1
