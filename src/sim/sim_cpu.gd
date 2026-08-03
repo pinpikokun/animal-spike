@@ -3,8 +3,8 @@
 # simulation.gdをpreloadしない(循環防止)。定数はsim_input.gdから取る
 #
 # v2: CpuProfile方式(調査doc: docs/superpowers/research/2026-07-13-cpu-difficulty-research.md)。
-# プレイヤーごとにstate.players[i].cpu(8bit x 7欄)で強さの次元を個別に持つ:
-#   能力フラグ(戦略層) + 反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ(反応・実行層)
+# プレイヤーごとにstate.players[i].cpuへ強さの次元と地上必殺方針をパックする。
+# ビット割当とプリセットの正本はcpu_profile.gd。
 # 憲法: 相手チームの入力・照準は読まない(観測可能な物理状態のみ)。物理性能は強化しない。
 # 乱数契約: 原作対応の許可判定は生のaitickを読む。
 # 本作独自抽選はaitick・actor・用途IDの読み取り専用派生値を使う。
@@ -12,6 +12,7 @@
 extends RefCounted
 
 const FP := preload("res://src/sim/fp.gd")
+const CpuProfile := preload("res://src/sim/cpu_profile.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const SimRng := preload("res://src/sim/sim_rng.gd")
@@ -22,14 +23,14 @@ const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
-# 能力フラグ(プロファイルの能力バイト)
-const AB_PREDICT := 1    # 落下点予測(弾道積分)。無いと現在のボールxを追う
-const AB_ROLES := 2      # 役割分担(落下点に近い方がレシーバー、相方は支援位置)
-const AB_ATTACK := 4     # 味方が上げた球へジャンプ会合してアタック
-const AB_SWEET := 8      # アタックはジャストミート(スイートスポット)を狙う
-const AB_SERVE_VAR := 16 # サーブの角度・威力を決定論的に散らす
-const AB_BLOCK := 32     # 相手のネット際アタックに対しネットへ詰めて跳ぶ(ブロック)
-const AB_HAT := 64       # 帽子投げ: 敵球がネット際へ落ちる軌道を読み、滞在窓に合わせて投げる
+# CPUプロファイルの互換API。値の正本はcpu_profile.gdに置く。
+const AB_PREDICT := CpuProfile.AB_PREDICT
+const AB_ROLES := CpuProfile.AB_ROLES
+const AB_ATTACK := CpuProfile.AB_ATTACK
+const AB_SWEET := CpuProfile.AB_SWEET
+const AB_SERVE_VAR := CpuProfile.AB_SERVE_VAR
+const AB_BLOCK := CpuProfile.AB_BLOCK
+const AB_HAT := CpuProfile.AB_HAT
 
 # 帽子ギミックの定数(simulation.gdの鏡)。simulation.gdはsim_cpuをpreloadするため
 # こちらから参照できない(循環)。ずれはtest_cpu_hat.gdの番人テストが検出する
@@ -44,14 +45,20 @@ const HAT_HAND_UP_PX := 6    # = CAP_HAND_UP_PX
 static func _hit_reach(char_id: int, base_reach: int, intent_kind: int) -> int:
 	return HitResolver.reach_for_intent(char_id, base_reach, intent_kind)
 
-# プロファイルの欄(8bitずつ)
-const P_AB := 0      # 能力フラグ
-const P_DELAY := 8   # 反応遅延tick(相手の打球からこのtick数は動き出さない)
-const P_AIM := 16    # 狙い誤差(リーチ比%、タッチ毎に1回抽選)
-const P_MISS := 24   # ミス率(0-255。惜しい失敗=半歩ずれる/跳ばない)
-const P_SWEET := 32  # ジャスト成功率(0-255)
-const P_DEPTH := 40  # 弾道予測の壁反射深度(0=放物線のみ..3=無制限)
-const P_TIQ := 48    # 配球知能(0=そのまま返す..3=相手から遠い着弾を選ぶ)
+const P_AB := CpuProfile.P_AB
+const P_DELAY := CpuProfile.P_DELAY
+const P_AIM := CpuProfile.P_AIM
+const P_MISS := CpuProfile.P_MISS
+const P_SWEET := CpuProfile.P_SWEET
+const P_DEPTH := CpuProfile.P_DEPTH
+const P_TIQ := CpuProfile.P_TIQ
+const P_GROUND_SPECIAL_POLICY_SHIFT := CpuProfile.P_GROUND_SPECIAL_POLICY_SHIFT
+const GROUND_SPECIAL_POLICY_MASK := CpuProfile.GROUND_SPECIAL_POLICY_MASK
+const GROUND_SPECIAL_PROFILE := CpuProfile.GROUND_SPECIAL_PROFILE
+const GROUND_SPECIAL_EASY := CpuProfile.GROUND_SPECIAL_EASY
+const GROUND_SPECIAL_NORMAL := CpuProfile.GROUND_SPECIAL_NORMAL
+const GROUND_SPECIAL_HARD := CpuProfile.GROUND_SPECIAL_HARD
+const GROUND_SPECIAL_SUPER := CpuProfile.GROUND_SPECIAL_SUPER
 
 # 乱数の用途ID。廃止済み番号は予約欠番として再利用しない。
 const SALT_AIM := 1
@@ -102,26 +109,25 @@ static func _jump_ball_ok(s, p) -> bool:
 # 未確認のため30コマ/秒と仮定して秒へ直し、切りのよい 0.30/0.20/0.10/0 秒を
 # 採った(ユーザー決定)。本作は60コマ/秒なので 18/12/6/0 コマになる。
 # 最強が0=打った瞬間に反応するのは原作どおり。
-const PRESET_WEAK := AB_ROLES | (18 << P_DELAY) | (40 << P_AIM) \
-	| (64 << P_MISS) | (26 << P_SWEET)
-const PRESET_NORMAL := (AB_PREDICT | AB_ROLES | AB_ATTACK) \
-	| (12 << P_DELAY) | (25 << P_AIM) \
-	| (13 << P_MISS) | (0 << P_SWEET) | (1 << P_TIQ)
-const PRESET_STRONG := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET \
-	| AB_SERVE_VAR | AB_BLOCK | AB_HAT) | (6 << P_DELAY) \
-	| (15 << P_AIM) | (13 << P_MISS) | (153 << P_SWEET) | (2 << P_DEPTH) | (2 << P_TIQ)
-const PRESET_MAX := (AB_PREDICT | AB_ROLES | AB_ATTACK | AB_SWEET | AB_SERVE_VAR | AB_BLOCK | AB_HAT) \
-	| (0 << P_DELAY) | (8 << P_AIM) | (8 << P_MISS) | (191 << P_SWEET) | (3 << P_DEPTH) | (3 << P_TIQ)
-const PRESETS: Array[int] = [PRESET_WEAK, PRESET_NORMAL, PRESET_STRONG, PRESET_MAX]
+const PRESET_WEAK := CpuProfile.PRESET_WEAK
+const PRESET_NORMAL := CpuProfile.PRESET_NORMAL
+const PRESET_STRONG := CpuProfile.PRESET_STRONG
+const PRESET_MAX := CpuProfile.PRESET_MAX
+const PRESETS := CpuProfile.PRESETS
 
 static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
-		depth: int, tiq: int) -> int:
-	return (ab & 0xFF) | ((delay & 0xFF) << P_DELAY) | ((aim & 0xFF) << P_AIM) \
-		| ((miss & 0xFF) << P_MISS) | ((sweet & 0xFF) << P_SWEET) \
-		| ((depth & 0xFF) << P_DEPTH) | ((tiq & 0xFF) << P_TIQ)
+		depth: int, tiq: int,
+		ground_special_policy: int = GROUND_SPECIAL_PROFILE) -> int:
+	return CpuProfile.make_profile(ab, delay, aim, miss, sweet, depth, tiq,
+		ground_special_policy)
 
 static func prof_byte(profile: int, shift: int) -> int:
+	# CPU思考のホットパス。ビット割当はCpuProfile、読み取りは呼出しを重ねず行う。
 	return (profile >> shift) & 0xFF
+
+static func ground_special_policy(profile: int) -> int:
+	return (profile >> P_GROUND_SPECIAL_POLICY_SHIFT) \
+		& GROUND_SPECIAL_POLICY_MASK
 
 # aitickは打球間で固定される。本作独自抽選を状態消費なしで用途・actorごとに分離する。
 static func _derived_roll(salt: int, s, actor: int) -> int:
@@ -725,7 +731,8 @@ static func decide(s, idx: int, cfg) -> int:
 		# DUOの吸引は通常打球圏外でも届く自己行動。味方球だけを対象にすることで
 		# サーブ、相手球への緊急守備、敵陣へのブロック判断を上書きしない。
 		if on_own_side and s.last_touch_team == team and p.on_ground == 0 \
-				and p.char_id == Chars.CHAR_DUO and _wants_special(s, idx, prof):
+				and p.char_id == Chars.CHAR_DUO \
+				and _profile_special_allowed(s, idx, prof):
 			var suction_input: int = SimInput.IN_ABILITY1 \
 				| (SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT)
 			if SpecialMoves.can_start_action(s, idx, suction_input, cfg):
@@ -1157,17 +1164,42 @@ static func _ticks_until_receive_at(s, p, cfg, receive_reach: int,
 			break
 	return 181
 
-static func _wants_special(s, idx: int, prof: int) -> bool:
+static func _profile_special_allowed(s, idx: int, prof: int) -> bool:
 	var ab: int = prof_byte(prof, P_AB)
 	if not (ab & AB_ATTACK) or not (ab & AB_SWEET):
 		return false
 	return prof_byte(prof, P_TIQ) >= 3 \
 		or _derived_roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
 
+static func _ground_hit_special_allowed(s, idx: int, prof: int) -> bool:
+	var policy: int = ground_special_policy(prof)
+	match policy:
+		GROUND_SPECIAL_PROFILE:
+			return _profile_special_allowed(s, idx, prof)
+		GROUND_SPECIAL_EASY:
+			return s.aitick % 8 == 0
+		GROUND_SPECIAL_NORMAL:
+			return s.rng % 4 == 0
+		GROUND_SPECIAL_HARD:
+			return s.aitick % 3 < 2
+		GROUND_SPECIAL_SUPER:
+			return s.rng % 4 < 3
+		_:
+			return false
+
+static func _hit_special_allowed(
+		s, idx: int, prof: int, contact: int) -> bool:
+	match contact:
+		Chars.SPECIAL_CONTACT_GROUND_HIT:
+			return _ground_hit_special_allowed(s, idx, prof)
+		Chars.SPECIAL_CONTACT_AIR_HIT:
+			return _profile_special_allowed(s, idx, prof)
+	return false
+
 # 既存テストと調整資料が参照する炎球専用の純粋判定。CPU入力はこの判定を
 # 特例として残しつつ、他キャラは下の共通カタログ走査へ合流する。
 static func _should_use_flame(s, idx: int, p, cfg, prof: int) -> bool:
-	if not _wants_special(s, idx, prof):
+	if not _profile_special_allowed(s, idx, prof):
 		return false
 	var flame_input: int = SimInput.IN_ABILITY1 | SimInput.IN_DOWN
 	return SpecialMoves.select_hit_special(s, idx, flame_input, cfg) \
@@ -1177,16 +1209,21 @@ static func _special_hit_input(s, idx: int, p, cfg, team: int, prof: int) -> int
 	# 守備の緊急接触を必殺へ置き換えない。CPUは入力候補を選ぶだけで、合法性、
 	# 費用、成立結果は人間と同じSpecialMovesへ委ねる。
 	if p.char_id < Chars.CHAR_TOME or p.char_id > Chars.CHAR_SEC2 \
-			or (s.last_touch_team >= 0 and s.last_touch_team != team) \
-			or not _wants_special(s, idx, prof):
+			or (s.last_touch_team >= 0 and s.last_touch_team != team):
+		return 0
+	var contact: int = SpecialMoves.hit_contact_for_player(p)
+	if not _hit_special_allowed(s, idx, prof, contact):
 		return 0
 	var d: int = SimInput.IN_ABILITY1
 	var candidates: Array[int]
-	if p.on_ground == 1:
-		candidates = [d | SimInput.IN_UP, d]
-	else:
-		var forward: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
-		candidates = [d | SimInput.IN_DOWN, d, d | forward]
+	match contact:
+		Chars.SPECIAL_CONTACT_GROUND_HIT:
+			candidates = [d | SimInput.IN_UP, d]
+		Chars.SPECIAL_CONTACT_AIR_HIT:
+			var forward: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
+			candidates = [d | SimInput.IN_DOWN, d, d | forward]
+		_:
+			return 0
 	for candidate: int in candidates:
 		if SpecialMoves.select_hit_special(s, idx, candidate, cfg) != 0:
 			return candidate

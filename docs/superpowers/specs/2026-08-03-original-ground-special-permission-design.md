@@ -11,6 +11,7 @@ CPUが地上必殺技を候補にできるかを、原作「VOLLEY BALL 2on2」�
 - 原作解析の正本: `docs/reference/original-vb22-cpu-ai.md` 200-208行
 - 過去の採用決定: `docs/tasks/84.md` 20-40行
 - 状態乱数の実装: `src/sim/sim_rng.gd` と `src/sim/simulation.gd`
+- CPUプロファイルの正本: 新設する `src/sim/cpu_profile.gd`
 - 原作キャラ必殺技の正式仕様: `docs/superpowers/specs/2026-08-02-original-character-special-moves-design.md`
 
 原作解析では、地上必殺技の許可に `aitick` と `RND` を難易度ごとに使い分ける。2026-07-27のユーザー決定により、率だけでなく変数の使い分けも移植対象である。
@@ -76,7 +77,7 @@ CPUの使用方針と必殺技の合法性は分離する。
 
 地上必殺技ゲートを `P_TIQ` から推測しない。`P_TIQ` は配球知能であり、難易度や必殺技方針の識別子ではない。
 
-既存のパック済みCPUプロファイルへ `P_GROUND_SPECIAL_POLICY_SHIFT = 56` と `GROUND_SPECIAL_POLICY_MASK = 0x7` を追加し、地上必殺技の許可方式を3bitで明示的に持たせる。
+パック済みCPUプロファイルを `src/sim/cpu_profile.gd` へ分離し、`P_GROUND_SPECIAL_POLICY_SHIFT = 56` と `GROUND_SPECIAL_POLICY_MASK = 0x7` を追加する。地上必殺技の許可方式を3bitで明示的に持たせる。
 
 既存フィールドは `P_TIQ = 48` の8bit、つまりbit 48から55までを使う。新フィールドはbit 56から58だけを使い、bit 59から62は未使用、bit 63の符号bitには触れない。読み出しは必ず次の式を使う。
 
@@ -145,12 +146,24 @@ static func hit_contact_for_player(p) -> int
 
 この関数は `p.on_ground == 1` なら `SPECIAL_CONTACT_GROUND_HIT`、`p.on_ground == 0` なら `SPECIAL_CONTACT_AIR_HIT`、それ以外なら `-1` を返す。乱数、球、内部フレーム状態を読まず、副作用を持たない。`select_hit_special()` とCPU方針選択は同じ関数を同じCPU判断中に使い、分類の重複をなくす。
 
-`src/sim/sim_cpu.gd` のCPUプロファイルへ次を追加する。
+`src/sim/cpu_profile.gd` を新設し、次をCPUプロファイルの正本として移す。
+
+- `AB_*` 能力フラグ
+- `P_*` シフト値
+- 4つの `PRESET_*` と `PRESETS`
+- `make_profile()` と `prof_byte()`
+- 地上必殺方針の3bit定義
+
+`src/sim/sim_cpu.gd` は互換APIとして `CpuProfile` の定数と関数を別名参照する。既存の呼び出し側を一斉変更せず、定義値の正本だけを分離する。
+
+`src/sim/sim_state.gd` は `CpuProfile.PRESET_MAX` をプレイヤーCPUの既定値に使う。巨大なプロファイル整数を複製しない。
+
+地上必殺方針として次を追加する。
 
 - `P_GROUND_SPECIAL_POLICY_SHIFT = 56`
 - `GROUND_SPECIAL_POLICY_MASK = 0x7`
 - 現行、原作イージー、原作ノーマル、原作ハード、原作スーパーの方針値
-- `make_profile()` の末尾に既定値付き方針引数
+- `CpuProfile.make_profile()` の末尾に既定値付き方針引数
 
 `src/sim/sim_cpu.gd` に次の純粋関数を置く。
 
@@ -180,6 +193,7 @@ DUO吸い込みと `_should_use_flame()` は `_profile_special_allowed()` を使
 - 相手の攻撃に対する守備接触を必殺技へ置き換えない。
 - 空中打球必殺、吸い込み、強化ブロックの判断結果を変えない。
 - 地上必殺技が不許可または不成立なら、通常接触へフォールバックする。
+- CPUプロファイルのビット割当、プリセット、既定値を複数ファイルへ数値で複製しない。
 
 ## 12. 検証
 
@@ -196,6 +210,7 @@ DUO吸い込みと `_should_use_flame()` は `_profile_special_allowed()` を使
 - 3bit以外の既存プロファイルbitとbit 63を変更しない。
 - `make_profile()` の既定値0は現行プロファイル判定へ戻る。
 - 未定義方針5から7は不許可になる。
+- `SimState.Player.cpu` の既定値が `CpuProfile.PRESET_MAX` と同じ正本を参照する。
 
 CPU入力テストでは次を確認する。
 
@@ -221,7 +236,8 @@ CPU入力テストでは次を確認する。
 6. 必殺技の合法性、費用、効果を変えない。
 7. 方針フィールドがbit 56から58だけを使用する。
 8. 不正な方針値と接触状態を無音で別方針へ丸めない。
-9. 対象テストと全件テストが成功する。
+9. CPUプロファイルの巨大な既定値リテラルを `SimState` に残さない。
+10. 対象テストと全件テストが成功する。
 
 ## 14. 停止条件
 

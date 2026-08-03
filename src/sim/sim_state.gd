@@ -2,6 +2,8 @@
 # フィールドを増やしたら必ずto_int_arrayにも足すこと(test_state_coverageが強制する)
 extends RefCounted
 
+const CpuProfile := preload("res://src/sim/cpu_profile.gd")
+
 const PLAYER_COUNT := 4
 
 const PHASE_SERVE := 0
@@ -118,9 +120,8 @@ class Player:
 	var last_health_multiplier_pct: int = 100
 	var last_stun_end_reason: int = STUN_END_NONE
 	var quake_stun: int = 0
-	# CPUプロファイル(8bit x 7欄: 能力/反応遅延/狙い誤差/ミス率/ジャスト率/予測深度/配球IQ)。
-	# 欄の割当はsim_cpu.gdのP_*。既定は最強プリセット(sim_cpu.PRESET_MAXと一致、テストで保証)
-	var cpu: int = 848543938510975
+	# パック済みCPUプロファイル。正本はcpu_profile.gd。既定は最強プリセット。
+	var cpu: int = CpuProfile.PRESET_MAX
 
 var tick: int = 0
 var rng: int = 0

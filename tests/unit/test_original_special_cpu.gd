@@ -11,6 +11,8 @@ const SpecialBall := preload("res://src/sim/special_ball.gd")
 const SpecialMoves := preload("res://src/sim/special_moves.gd")
 
 const D := SimInput.IN_ABILITY1
+const GROUND_POLICY_SHIFT := 56
+const GROUND_POLICY_MASK := 0x7
 
 const SPECIAL_CASES: Array[Array] = [
 	[Chars.CHAR_TOME, Chars.SUPER_GHOST_BALL, true],
@@ -46,6 +48,7 @@ func _world(char_id: int, ground: bool, drive: int = 100) -> Array:
 	s.last_touch_idx = 1
 	s.touches = 1
 	s.aitick = 37
+	s.rng = 0
 	var p = s.players[0]
 	p.cpu = SimCpu.PRESET_MAX
 	p.drive_gauge = drive
@@ -61,6 +64,78 @@ func _world(char_id: int, ground: bool, drive: int = 100) -> Array:
 	s.ball_special_id = 0
 	s.ball_attack_kind = SimState.BALL_ATTACK_NONE
 	return [s, cfg, p]
+
+func _profile_with_ground_policy(base: int, policy: int) -> int:
+	return (base & ~(GROUND_POLICY_MASK << GROUND_POLICY_SHIFT)) \
+		| ((policy & GROUND_POLICY_MASK) << GROUND_POLICY_SHIFT)
+
+func _check_ground_special_policy(profile: int, values: Array[int],
+		expected: Array[bool], use_aitick: bool, label: String) -> void:
+	check_eq(values.size(), expected.size(), label + "の入力数と期待数が一致")
+	for value_index in values.size():
+		var w := _world(Chars.CHAR_TOME, true)
+		var s = w[0]
+		var cfg = w[1]
+		var p = w[2]
+		p.cpu = profile
+		s.aitick = values[value_index] if use_aitick else 5
+		s.rng = 6 if use_aitick else values[value_index]
+		var before: Array[int] = s.to_int_array()
+		var input: int = SimCpu.decide(s, 0, cfg)
+		check_eq((input & D) != 0, expected[value_index],
+			"%sの剰余%d" % [label, values[value_index]])
+		check_eq(s.to_int_array(), before,
+			label + "の許可判定は同期状態を変更しない")
+
+func test_production_presets_encode_distinct_ground_special_policies() -> void:
+	var presets: Array[int] = [SimCpu.PRESET_WEAK, SimCpu.PRESET_NORMAL,
+		SimCpu.PRESET_STRONG, SimCpu.PRESET_MAX]
+	for index in presets.size():
+		check_eq((presets[index] >> GROUND_POLICY_SHIFT) & GROUND_POLICY_MASK,
+			index + 1, "本番プリセット%dは原作地上必殺方針%d" % [index, index + 1])
+
+func test_original_ground_special_policies_use_exact_source_residues_without_mutation() -> void:
+	_check_ground_special_policy(SimCpu.PRESET_WEAK,
+		[0, 1, 2, 3, 4, 5, 6, 7],
+		[true, false, false, false, false, false, false, false],
+		true, "イージーaitick%8")
+	_check_ground_special_policy(SimCpu.PRESET_NORMAL,
+		[0, 1, 2, 3], [true, false, false, false],
+		false, "ノーマルrng%4")
+	_check_ground_special_policy(SimCpu.PRESET_STRONG,
+		[0, 1, 2], [true, true, false],
+		true, "ハードaitick%3")
+	_check_ground_special_policy(SimCpu.PRESET_MAX,
+		[0, 1, 2, 3], [true, true, true, false],
+		false, "スーパーrng%4")
+
+func test_hit_special_policy_uses_contact_category_and_rejects_invalid_policy() -> void:
+	var base: int = SimCpu.make_profile(
+		SimCpu.AB_ATTACK | SimCpu.AB_SWEET, 0, 0, 0, 255, 3, 3)
+	var easy_profile: int = _profile_with_ground_policy(base, 1)
+	var ground := _world(Chars.CHAR_HITO, true)
+	ground[2].cpu = easy_profile
+	ground[0].aitick = 1
+	check_eq(SimCpu.decide(ground[0], 0, ground[1]) & D, 0,
+		"地上の消える球は原作イージーゲートで拒否")
+	var air := _world(Chars.CHAR_HITO, false)
+	air[2].cpu = easy_profile
+	air[0].aitick = 1
+	var air_input: int = SimCpu.decide(air[0], 0, air[1])
+	check((air_input & D) != 0, "同じ消える球の空中発火は現行プロファイル方針を維持")
+	check_eq(SpecialMoves.select_hit_special(air[0], 0, air_input, air[1]),
+		Chars.SUPER_DISAPPEARING_BALL, "空中発火も共有合法判定を通る")
+	var invalid := _world(Chars.CHAR_TOME, true)
+	invalid[2].cpu = _profile_with_ground_policy(SimCpu.PRESET_MAX, 5)
+	check_eq(SimCpu.decide(invalid[0], 0, invalid[1]) & D, 0,
+		"未定義の地上必殺方針5は現行方針へ黙って戻さない")
+
+func test_hit_selector_rejects_invalid_ground_state_instead_of_assuming_air() -> void:
+	var w := _world(Chars.CHAR_HITO, false)
+	w[2].on_ground = 2
+	check_eq(SpecialMoves.select_hit_special(
+		w[0], 0, D | SimInput.IN_DOWN, w[1]), 0,
+		"不正なon_groundは空中接触へ丸めない")
 
 func test_each_original_cpu_returns_a_legal_shared_special_input_deterministically() -> void:
 	check_eq(CPU_INPUT_GOLDEN.size(), SPECIAL_CASES.size(),

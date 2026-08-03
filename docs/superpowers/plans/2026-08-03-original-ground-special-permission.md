@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 正式仕様は `docs/superpowers/specs/2026-08-03-original-ground-special-permission-design.md` 234行、SHA-256 `2a5f2dd5d0059f83713e6a3b1ca631209d8fa476a346b4d0a5454ae42cefbcf1`。
+- 正式仕様は `docs/superpowers/specs/2026-08-03-original-ground-special-permission-design.md` 250行、SHA-256 `f18f034486b545c032315c512f3474c757fd18dc2555c2886179b5571f06ecff`。
 - 実装開始前と各コミット前に上記行数とSHA-256を照合し、不一致なら停止する。
 - 原作率は地上打球必殺だけへ適用する。
 - イージーは `aitick % 8 == 0`、ノーマルは `rng % 4 == 0`、ハードは `aitick % 3 < 2`、スーパーは `rng % 4 < 3`。
@@ -26,7 +26,10 @@
 ## File Structure
 
 - Modify: `src/sim/special_moves.gd` - 打球接触分類を一か所へ集約する。
-- Modify: `src/sim/sim_cpu.gd` - CPUプロファイル方針、原作地上ゲート、カテゴリ別方針を実装する。
+- Create: `src/sim/cpu_profile.gd` - CPUプロファイルのビット割当、プリセット、組立関数を一元管理する。
+- Modify: `src/sim/sim_cpu.gd` - プロファイル互換API、原作地上ゲート、カテゴリ別方針を実装する。
+- Modify: `src/sim/sim_state.gd` - CPU既定値の巨大な複製リテラルを正本参照へ置き換える。
+- Modify: `tests/unit/test_cpu.gd` - プロファイル正本と互換APIの往復を検査する。
 - Modify: `tests/unit/test_original_special_cpu.gd` - 原作率、カテゴリ分離、状態非破壊の回帰検査を置く。
 - Modify only if expected: `tests/unit/test_sync.gd` - プロファイル整数変更で同期ゴールデンだけが変わった場合に、原因を確認して更新する。
 
@@ -49,7 +52,7 @@ $f='docs/superpowers/specs/2026-08-03-original-ground-special-permission-design.
 (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant()
 ```
 
-Expected: `234` と `2a5f2dd5d0059f83713e6a3b1ca631209d8fa476a346b4d0a5454ae42cefbcf1`。
+Expected: `250` と `f18f034486b545c032315c512f3474c757fd18dc2555c2886179b5571f06ecff`。
 
 - [ ] **Step 2: 原作4方針を作るテスト用プロファイル補助を追加する**
 
@@ -130,7 +133,10 @@ Expected: 新しい原作ゲート検査が現行0/0/約59.8/常時のため失�
 
 **Files:**
 - Modify: `src/sim/special_moves.gd`
+- Create: `src/sim/cpu_profile.gd`
 - Modify: `src/sim/sim_cpu.gd`
+- Modify: `src/sim/sim_state.gd`
+- Modify: `tests/unit/test_cpu.gd`
 
 **Interfaces:**
 - Consumes: `Chars.SpecialContact`、`p.on_ground`、`s.aitick`、`s.rng`、パック済みCPUプロファイル
@@ -151,9 +157,9 @@ static func hit_contact_for_player(p) -> int:
 
 `select_hit_special()` の三項演算子をこの関数へ置き換える。`-1` はどのactivationにも一致しないため不正状態を拒否する。
 
-- [ ] **Step 2: CPUプロファイルへ3bit方針を追加する**
+- [ ] **Step 2: CPUプロファイルを専用正本へ分離する**
 
-`sim_cpu.gd` に追加する。
+`cpu_profile.gd` を作り、`sim_cpu.gd` から能力フラグ、ビットシフト、4プリセット、`make_profile()`、`prof_byte()` を移す。地上必殺方針は次の3bit定義を使う。
 
 ```gdscript
 const P_GROUND_SPECIAL_POLICY_SHIFT := 56
@@ -167,7 +173,36 @@ const GROUND_SPECIAL_SUPER := 4
 
 4プリセットへ1から4を設定する。`make_profile()` の末尾へ `ground_special_policy: int = GROUND_SPECIAL_PROFILE` を追加し、3bitだけをパックする。
 
-- [ ] **Step 3: 現行方針を名前付き関数として保存する**
+`sim_cpu.gd` は `CpuProfile` をpreloadし、既存公開名を次の形で参照する。
+
+```gdscript
+const AB_PREDICT := CpuProfile.AB_PREDICT
+const P_AB := CpuProfile.P_AB
+const PRESET_MAX := CpuProfile.PRESET_MAX
+const PRESETS := CpuProfile.PRESETS
+
+static func make_profile(ab: int, delay: int, aim: int, miss: int, sweet: int,
+		depth: int, tiq: int,
+		ground_special_policy: int = GROUND_SPECIAL_PROFILE) -> int:
+	return CpuProfile.make_profile(ab, delay, aim, miss, sweet, depth, tiq,
+		ground_special_policy)
+```
+
+互換APIには数値を複製しない。
+
+- [ ] **Step 3: SimStateの複製リテラルを正本参照へ置き換える**
+
+`sim_state.gd` で `CpuProfile` をpreloadし、`Player.cpu` を次へ変更する。
+
+```gdscript
+var cpu: int = CpuProfile.PRESET_MAX
+```
+
+コメントも8bit 7欄という旧説明から、3bit地上必殺方針を含むパック済みプロファイルへ更新する。
+
+`test_cpu.gd.test_profile_pack_roundtrip()` は強プリセットを組むとき `CpuProfile.GROUND_SPECIAL_HARD` 相当の引数を明示し、既定引数0が旧方針を保持する検査も追加する。
+
+- [ ] **Step 4: 現行方針を名前付き関数として保存する**
 
 現行 `_wants_special()` を `_profile_special_allowed()` へ改名し、本文を変えない。DUO吸い込み、`_should_use_flame()`、空中打球必殺はこの関数を使う。
 
@@ -180,7 +215,7 @@ static func _profile_special_allowed(s, idx: int, prof: int) -> bool:
 		or _derived_roll(SALT_SUPER, s, idx) % 256 < prof_byte(prof, P_SWEET)
 ```
 
-- [ ] **Step 4: 原作地上ゲートを純粋関数で実装する**
+- [ ] **Step 5: 原作地上ゲートを純粋関数で実装する**
 
 ```gdscript
 static func _ground_hit_special_allowed(s, idx: int, prof: int) -> bool:
@@ -203,7 +238,7 @@ static func _ground_hit_special_allowed(s, idx: int, prof: int) -> bool:
 
 この関数で状態を書き換えない。
 
-- [ ] **Step 5: 接触カテゴリで方針を選ぶ**
+- [ ] **Step 6: 接触カテゴリで方針を選ぶ**
 
 ```gdscript
 static func _hit_special_allowed(s, idx: int, prof: int, contact: int) -> bool:
@@ -217,7 +252,7 @@ static func _hit_special_allowed(s, idx: int, prof: int, contact: int) -> bool:
 
 `_special_hit_input()` は `SpecialMoves.hit_contact_for_player(p)` を一度取得し、この関数が許可した場合だけ既存候補を走査する。候補配列と `select_hit_special()` の合法判定は変えない。
 
-- [ ] **Step 6: GREENを確認する**
+- [ ] **Step 7: GREENを確認する**
 
 Run:
 
@@ -261,7 +296,7 @@ Expected: 機能検査、カテゴリ境界、乱数非破壊、同期検査はP
 
 レビュー依頼には次を含める。
 
-- 仕様書パス、234行、SHA-256
+- 仕様書パス、250行、SHA-256
 - 原作4ゲートと `aitick` / `rng` の使い分け
 - 接触カテゴリを正本にしたこと
 - bit 56から58以外を使わないこと
@@ -288,7 +323,7 @@ Run:
 git diff --check
 git status --short
 git diff --stat
-git diff -- src/sim/special_moves.gd src/sim/sim_cpu.gd tests/unit/test_original_special_cpu.gd tests/unit/test_sync.gd
+git diff -- src/sim/cpu_profile.gd src/sim/special_moves.gd src/sim/sim_cpu.gd src/sim/sim_state.gd tests/unit/test_cpu.gd tests/unit/test_original_special_cpu.gd tests/unit/test_sync.gd
 ```
 
 Expected: `vb2211/` 以外は仕様、計画、対象production、対象testだけ。対象外差分なし。
@@ -296,7 +331,7 @@ Expected: `vb2211/` 以外は仕様、計画、対象production、対象testだ�
 Commit:
 
 ```powershell
-git add -- src/sim/special_moves.gd src/sim/sim_cpu.gd tests/unit/test_original_special_cpu.gd tests/unit/test_sync.gd docs/superpowers/plans/2026-08-03-original-ground-special-permission.md
+git add -- src/sim/cpu_profile.gd src/sim/special_moves.gd src/sim/sim_cpu.gd src/sim/sim_state.gd tests/unit/test_cpu.gd tests/unit/test_original_special_cpu.gd tests/unit/test_sync.gd docs/superpowers/specs/2026-08-03-original-ground-special-permission-design.md docs/superpowers/plans/2026-08-03-original-ground-special-permission.md
 git commit -m "feat: CPU地上必殺技を原作許可率へ変更"
 ```
 

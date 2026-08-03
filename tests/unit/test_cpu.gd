@@ -583,7 +583,8 @@ func test_cpu_jumps_for_own_toss_with_cpu_mate() -> void:
 
 func test_profile_pack_roundtrip() -> void:
 	# プロファイルの詰め込み/取り出しが欄ごとに正しく往復する
-	var prof: int = SimCpu.make_profile(127, 6, 15, 13, 153, 2, 2)
+	var prof: int = SimCpu.make_profile(127, 6, 15, 13, 153, 2, 2,
+		SimCpu.GROUND_SPECIAL_HARD)
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AB), 127, "能力")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DELAY), 6, "遅延")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_AIM), 15, "誤差")
@@ -591,7 +592,12 @@ func test_profile_pack_roundtrip() -> void:
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_SWEET), 153, "ジャスト率")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_DEPTH), 2, "予測深度")
 	check_eq(SimCpu.prof_byte(prof, SimCpu.P_TIQ), 2, "配球IQ")
+	check_eq(SimCpu.ground_special_policy(prof), SimCpu.GROUND_SPECIAL_HARD,
+		"地上必殺方針")
 	check_eq(prof, SimCpu.PRESET_STRONG, "強プリセットと一致")
+	var legacy: int = SimCpu.make_profile(127, 6, 15, 13, 153, 2, 2)
+	check_eq(SimCpu.ground_special_policy(legacy), SimCpu.GROUND_SPECIAL_PROFILE,
+		"既定引数は既存プロファイル方針を維持")
 
 func test_normal_attacks_without_sweet_aim() -> void:
 	var abilities: int = SimCpu.prof_byte(SimCpu.PRESET_NORMAL, SimCpu.P_AB)

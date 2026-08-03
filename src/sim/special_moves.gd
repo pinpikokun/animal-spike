@@ -22,6 +22,13 @@ static func can_activate(s, actor: int, special_id: int, cfg) -> bool:
 		return false
 	return CombatResources.can_pay(p, CombatResources.special_drive_cost(cfg))
 
+static func hit_contact_for_player(p) -> int:
+	if p.on_ground == 1:
+		return Chars.SPECIAL_CONTACT_GROUND_HIT
+	if p.on_ground == 0:
+		return Chars.SPECIAL_CONTACT_AIR_HIT
+	return -1
+
 static func select_hit_special(s, actor: int, input: int, cfg) -> int:
 	if (input & SimInput.IN_ABILITY1) == 0:
 		return 0
@@ -30,8 +37,7 @@ static func select_hit_special(s, actor: int, input: int, cfg) -> int:
 	var p = s.players[actor]
 	var char_def: Dictionary = Chars.DEFS.get(p.char_id, {})
 	var supers: Dictionary = char_def.get("supers", {})
-	var required_contact: int = Chars.SPECIAL_CONTACT_GROUND_HIT \
-		if p.on_ground == 1 else Chars.SPECIAL_CONTACT_AIR_HIT
+	var required_contact: int = hit_contact_for_player(p)
 	for special_id in supers:
 		if not can_activate(s, actor, special_id, cfg):
 			continue
