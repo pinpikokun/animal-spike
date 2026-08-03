@@ -90,6 +90,17 @@ var roster: Array = []
 # ローカル本編の開始時乱数2ワード。rootがadd_child前に設定する。
 var rng_word: Variant = null
 var aitick_word: Variant = null
+
+static func result_animation_for(player_index: int, char_id: int,
+		winner: int, result_on: bool) -> String:
+	if not result_on:
+		return ""
+	if winner != 0 and winner != 1:
+		return ""
+	if Simulation.team_of(player_index) == winner:
+		return "victory"
+	return "defeat" if SpriteFactory.is_original_char(char_id) else ""
+
 func attach_external(cfg_in, state_ref) -> void:
 	# instantiate直後・add_child前に呼ぶこと(_readyがcfg/stateを自前生成しないため)
 	external_sim = true
@@ -409,12 +420,15 @@ func _sync_sprites() -> void:
 			elif _catch[i] > 0:
 				anim = "hat-catch"
 				_catch[i] -= 1
-		# 勝利: ゲームセット後、ボールが止まってから勝者チームが演出開始(全キャラ、
-		# 専用スプライトが無いキャラは代役ルールのvictoryが出る)
-		if not locked_status and _victory_on and Simulation.team_of(i) == state.winner:
-			anim = "victory"
-			if cid == Chars.CHAR_MARIO and spr.sprite_frames != _mario_hat:
-				spr.sprite_frames = _mario_hat
+		# 結果: 勝者は従来の勝利演出。原作8キャラの敗者だけセル22の敗北静止画。
+		# 状態異常表示の優先順位と、非原作キャラの敗者表示は従来どおり維持する。
+		if not locked_status:
+			var result_anim := result_animation_for(i, cid, state.winner, _victory_on)
+			if result_anim != "":
+				anim = result_anim
+				if anim == "victory" and cid == Chars.CHAR_MARIO \
+						and spr.sprite_frames != _mario_hat:
+					spr.sprite_frames = _mario_hat
 		# 向き: 移動中はvxの符号で更新、静止中は保持。
 		# ただしアタック(空中打撃)だけはネット(相手)側を向く
 		if p.vx > 0:

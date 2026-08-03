@@ -1,6 +1,7 @@
 extends "res://tests/test_case.gd"
 
 const SpriteFactory := preload("res://src/display/sprite_factory.gd")
+const Chars := preload("res://src/sim/chars.gd")
 
 const ORIGINAL_IDS := [4, 5, 6, 7, 8, 9, 10, 11]
 const ORIGINAL_CELL_ROWS := {
@@ -20,7 +21,8 @@ const ORIGINAL_CELL_ROWS := {
 	"burn": [16, 17],
 	"fly": [18, 19, 20, 19],
 	"fly_hover": [18],
-	"victory": [21, 22],
+	"victory": [21],
+	"defeat": [22],
 	"fall_special": [23],
 }
 const ORIGINAL_DURATIONS := {
@@ -32,7 +34,8 @@ const ORIGINAL_DURATIONS := {
 	"stun": [3.0, 3.0],
 	"burn": [3.0, 3.0],
 	"fly": [3.0, 3.0, 3.0, 3.0],
-	"victory": [1.0, 1.0],
+	"victory": [1.0],
+	"defeat": [1.0],
 }
 
 func _cell_indices(sf: SpriteFrames, anim: String) -> Array[int]:
@@ -94,6 +97,19 @@ func test_original_character_action_timing_matches_the_source_contract() -> void
 		for anim: String in ORIGINAL_DURATIONS:
 			check_eq(_frame_durations(sf, anim), ORIGINAL_DURATIONS[anim],
 				"ID %d の %s 保持tick" % [char_id, anim])
+
+func test_original_result_poses_are_single_non_looping_frames() -> void:
+	for char_id: int in ORIGINAL_IDS:
+		var sf: SpriteFrames = SpriteFactory.build_for(char_id)
+		for anim in ["victory", "defeat"]:
+			check_eq(sf.get_frame_count(anim), 1,
+				"ID %d の %s は静止画1コマ" % [char_id, anim])
+			check(not sf.get_animation_loop(anim),
+				"ID %d の %s は非ループ" % [char_id, anim])
+
+func test_mario_victory_animation_is_unchanged() -> void:
+	var sf: SpriteFrames = SpriteFactory.build_for(Chars.CHAR_MARIO)
+	check_eq(sf.get_frame_count("victory"), 17, "マリオの勝利アニメは17コマのまま")
 
 func test_piyo_uses_its_own_bubble_cell_and_other_originals_use_cell_twenty() -> void:
 	for char_id: int in ORIGINAL_IDS:

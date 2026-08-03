@@ -30,7 +30,7 @@ const M_CH := 29
 const ANIMATIONS: Array[String] = [
 	"idle", "run", "jump", "attack", "block", "receive_stance", "ground_swing",
 	"toss", "toss_fwd", "dive", "crouch", "brake", "hurt", "shock",
-	"stun", "burn", "fly", "fly_hover", "bubble", "victory", "fall_special",
+	"stun", "burn", "fly", "fly_hover", "bubble", "victory", "defeat", "fall_special",
 	"hat-throw", "hat-catch", "hipdrop", "wallcling",
 ]
 const FALLBACK := {
@@ -54,6 +54,7 @@ const FALLBACK := {
 	"fly_hover": ["fly", "jump", "idle"],
 	"bubble": ["hurt", "idle"],
 	"victory": ["jump", "idle"],
+	"defeat": ["hurt", "idle"],
 	"fall_special": ["hurt", "jump", "idle"],
 	"hat-throw": ["toss_fwd", "idle"],
 	"hat-catch": ["idle"],
@@ -204,7 +205,8 @@ static func build_original(sheet_path: String, bubble_cell: int = 20) -> SpriteF
 	_add_original_sheet(sf, "fly", sheet_path, [18, 19, 20, 19], [3, 3, 3, 3], true)
 	_add_original_sheet(sf, "fly_hover", sheet_path, [18], [1], false)
 	_add_original_sheet(sf, "bubble", sheet_path, [bubble_cell], [1], false)
-	_add_original_sheet(sf, "victory", sheet_path, [21, 22], [1, 1], true)
+	_add_original_sheet(sf, "victory", sheet_path, [21], [1], false)
+	_add_original_sheet(sf, "defeat", sheet_path, [22], [1], false)
 	_add_original_sheet(sf, "fall_special", sheet_path, [23], [1], false)
 	return sf
 

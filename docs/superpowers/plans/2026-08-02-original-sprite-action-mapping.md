@@ -1,5 +1,8 @@
 # Original Sprite Action Mapping Implementation Plan
 
+> **2026-08-03訂正:** 当初はセル21と22を勝利アニメと誤認していた。
+> 結果ポーズ部分は `2026-08-03-original-result-poses.md` が優先される。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 原作8キャラの全24セルを正しいアニメ資産として完成させ、実装済みのブロック、トス、アタック、レシーブ、横っ飛びへ正しく接続する。
@@ -10,7 +13,8 @@
 
 ## Global Constraints
 
-- 承認設計は `docs/superpowers/specs/2026-08-02-original-sprite-action-mapping-design.md` の147行、SHA-256 `6cab4115dc0dde490259fba59f917d0144b7f498228165d7407767cd267c9428`。
+- 当時の承認設計は `docs/superpowers/specs/2026-08-02-original-sprite-action-mapping-design.md` の147改行、SHA-256 `6cab4115dc0dde490259fba59f917d0144b7f498228165d7407767cd267c9428`。
+- 結果ポーズ訂正後の承認設計は160行、SHA-256 `e2d2b1b68dbddf495906ca7ae6d9f41ae077da1be5ae78318ad9070826738cb1`。
 - 正本は `00_sprite-sample/スプライトセル対応表.txt`。
 - 原作8キャラ以外の画像ファイルとセル割り当てを変えない。
 - 打球物理、入力、当たり判定、ゲージ、乱数を変えない。
@@ -43,17 +47,17 @@ const ORIGINAL_CELL_ROWS := {
 	"toss_fwd": [9, 8, 7, 6], "dive": [11, 10, 7, 0],
 	"hurt": [12], "shock": [12, 13], "stun": [14, 15],
 	"burn": [16, 17], "fly": [18, 19, 20, 19],
-	"fly_hover": [18], "victory": [21, 22], "fall_special": [23],
+	"fly_hover": [18], "victory": [21], "defeat": [22], "fall_special": [23],
 }
 ```
 
-各 `AtlasTexture.region` から `(region.position.y / 32) * 12 + region.position.x / 32` を手計算し、上表と一致させる。`bubble` はPIYOだけ4、他7体は20と別検査にする。`attack`、`ground_swing`、`dive`、`shock`、`stun`、`burn`、`fly`、`victory` の `frame_duration` もリテラルで検査する。
+各 `AtlasTexture.region` から `(region.position.y / 32) * 12 + region.position.x / 32` を手計算し、上表と一致させる。`bubble` はPIYOだけ4、他7体は20と別検査にする。`attack`、`ground_swing`、`dive`、`shock`、`stun`、`burn`、`fly`、`victory`、`defeat` の `frame_duration` もリテラルで検査する。
 
 - [ ] **Step 2: 正規入口を実行してREDを確認する**
 
 Run: `powershell -ExecutionPolicy Bypass -File .\run_tests.ps1`
 
-Expected: `ground_swing`、`toss_fwd`、`fly_hover`、PIYOの`bubble`、`stun`、`burn`、`victory`のいずれかでFAIL。パースエラーではなく現行契約との差で失敗すること。
+Expected: `ground_swing`、`toss_fwd`、`fly_hover`、PIYOの`bubble`、`stun`、`burn`、`victory`、`defeat`のいずれかでFAIL。パースエラーではなく現行契約との差で失敗すること。
 
 - [ ] **Step 3: 最小のセル登録修正を行う**
 
@@ -78,7 +82,8 @@ _add_original_sheet(sf, "stun", sheet_path, [14, 15], [3, 3], true)
 _add_original_sheet(sf, "burn", sheet_path, [16, 17], [3, 3], true)
 _add_original_sheet(sf, "fly_hover", sheet_path, [18], [1], false)
 _add_original_sheet(sf, "bubble", sheet_path, [bubble_cell], [1], false)
-_add_original_sheet(sf, "victory", sheet_path, [21, 22], [1, 1], true)
+_add_original_sheet(sf, "victory", sheet_path, [21], [1], false)
+_add_original_sheet(sf, "defeat", sheet_path, [22], [1], false)
 ```
 
 `fly_hover` を `ANIMATIONS` と `FALLBACK` に追加し、原作以外では `fly`、`jump`、`idle` の順に代用する。
