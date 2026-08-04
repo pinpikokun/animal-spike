@@ -18,7 +18,7 @@ const BASE_ABILITIES: Array[String] = [
 
 const RANK_NAMES: Array[String] = ["A", "B", "C", "D", "E"]
 const POWER_PCT: Array[int] = [150, 125, 100, 75, 50]
-const JUMP_HEIGHT_PX: Array[int] = [155, 145, 135, 120, 100]
+const JUMP_HEIGHT_PX: Array[int] = [200, 170, 140, 120, 110]
 const SPEED_PCT: Array[int] = [120, 110, 100, 90, 80]
 const BRAKE_DISTANCE_PCT: Array[int] = [60, 80, 100, 125, 150]
 const STANDARD_WEIGHT_PCT := 100

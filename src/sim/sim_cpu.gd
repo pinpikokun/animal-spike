@@ -19,6 +19,7 @@ const SimRng := preload("res://src/sim/sim_rng.gd")
 const Chars := preload("res://src/sim/chars.gd")
 const HitResolver := preload("res://src/sim/hit_resolver.gd")
 const BallPhysics := preload("res://src/sim/ball_physics.gd")
+const JumpArc := preload("res://src/sim/jump_arc.gd")
 const PlayerMovement := preload("res://src/sim/player_movement.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const SpecialMoves := preload("res://src/sim/special_moves.gd")
@@ -340,6 +341,47 @@ static func _clears_net(x: int, y: int, vx: int, vy: int, cfg) -> bool:
 			return false
 	return false
 
+
+# アタック候補専用。着地点とネット通過は同じ鉛直弧を使うため1回で積分する。
+# xの着地予測は壁反射あり、ネット判定は従来_clears_net同様に反射なしで追う。
+static func _candidate_flight(
+		x: int, y: int, vx: int, vy: int, cfg, already_crossed: bool) -> Vector2i:
+	var landing_x: int = x
+	var landing_vx: int = vx
+	var net_probe_x: int = x
+	var net_checked: bool = already_crossed
+	var net_clear: bool = already_crossed
+	var left: int = cfg.ball_radius
+	var right: int = cfg.court_width - cfg.ball_radius
+	var bounces: int = 0
+	var target_y: int = cfg.floor_y - cfg.ball_radius
+	if y >= target_y and vy >= 0:
+		return Vector2i(clampi(landing_x, left, right), 1 if net_clear else 0)
+	for _tick in 240:
+		var prev_net_x: int = net_probe_x
+		vy += cfg.gravity
+		landing_x += landing_vx
+		net_probe_x += vx
+		y += vy
+		if not net_checked and (prev_net_x < cfg.net_x) != (net_probe_x < cfg.net_x):
+			net_checked = true
+			net_clear = y <= cfg.net_top_y - cfg.ball_radius
+		if landing_x < left:
+			if bounces >= 3:
+				break
+			bounces += 1
+			landing_x = left + (left - landing_x)
+			landing_vx = BallPhysics.wall_reflect_vx(landing_vx, cfg)
+		elif landing_x > right:
+			if bounces >= 3:
+				break
+			bounces += 1
+			landing_x = right - (landing_x - right)
+			landing_vx = BallPhysics.wall_reflect_vx(landing_vx, cfg)
+		if y >= target_y and vy > 0:
+			break
+	return Vector2i(clampi(landing_x, left, right), 1 if net_clear else 0)
+
 # 今ジャンプしたらリーチ(半径limit)でボールと会合できるか(双方の弾道を並走積分)
 static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 	var bx: int = s.ball_x
@@ -349,16 +391,12 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 	var py: int = p.y
 	# player_movementのランク別・上昇下降別ジャンプ物理と同じ軌道で会合を予測する。
 	# 旧cfg.jump_speedでは実際の跳躍と予測がずれ、45%芯へ到達しなかった。
-	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
-	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
-	var up_ticks: int = PlayerMovement._jump_ticks(true)
-	var up_gravity: int = PlayerMovement._jump_gravity(jump_height, up_ticks, true)
-	var down_ticks: int = PlayerMovement._jump_ticks(false)
-	var down_gravity: int = PlayerMovement._jump_gravity(
-		jump_height, down_ticks, false)
-	var pvy: int = -up_gravity * up_ticks
-	for t in 48:
-		pvy += up_gravity if pvy < 0 else down_gravity
+	var jump_height: int = Chars.jump_height_px(p.char_id)
+	var pvy: int = JumpArc.launch_velocity(jump_height)
+	var jump_horizon: int = JumpArc.ticks(jump_height, true) \
+		+ JumpArc.ticks(jump_height, false)
+	for t in jump_horizon:
+		pvy = JumpArc.advance_velocity(pvy, true)
 		py += pvy
 		if py >= cfg.floor_y and pvy > 0:
 			break
@@ -378,18 +416,14 @@ static func _jump_will_meet(s, p, cfg, limit: int) -> bool:
 # prefer_highestはサーブ用。同じ芯会合候補から最も高い球位置を優先する。
 static func _sweet_jump_plan(s, p, cfg, sweet_r: int,
 		prefer_highest: bool = false) -> Array[int]:
-	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
-	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
-	var up_ticks: int = PlayerMovement._jump_ticks(true)
-	var up_gravity: int = PlayerMovement._jump_gravity(jump_height, up_ticks, true)
-	var down_ticks: int = PlayerMovement._jump_ticks(false)
-	var down_gravity: int = PlayerMovement._jump_gravity(
-		jump_height, down_ticks, false)
+	var jump_height: int = Chars.jump_height_px(p.char_id)
 	var jump_y: Array[int] = []
 	var py: int = cfg.floor_y
-	var pvy: int = -up_gravity * up_ticks
-	for age in 48:
-		pvy += up_gravity if pvy < 0 else down_gravity
+	var pvy: int = JumpArc.launch_velocity(jump_height)
+	var jump_horizon: int = JumpArc.ticks(jump_height, true) \
+		+ JumpArc.ticks(jump_height, false)
+	for age in jump_horizon:
+		pvy = JumpArc.advance_velocity(pvy, true)
 		py += pvy
 		if py >= cfg.floor_y and pvy > 0:
 			break
@@ -476,12 +510,11 @@ static func _air_will_meet_sweet(s, p, cfg, sweet_r: int) -> bool:
 	var bvy: int = s.ball_vy
 	var py: int = p.y
 	var pvy: int = p.vy
-	var jump_rank: int = Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP)
-	var jump_height: int = PlayerMovement._jump_height_px(jump_rank)
-	for tick in 48:
-		var gravity: int = PlayerMovement._jump_gravity(
-			jump_height, PlayerMovement._jump_ticks(pvy < 0), pvy < 0)
-		pvy += gravity
+	var jump_height: int = Chars.jump_height_px(p.char_id)
+	var jump_horizon: int = JumpArc.ticks(jump_height, true) \
+		+ JumpArc.ticks(jump_height, false)
+	for tick in jump_horizon:
+		pvy = JumpArc.advance_velocity(pvy, true)
 		py += pvy
 		if py >= cfg.floor_y:
 			break
@@ -544,7 +577,7 @@ static func _decide_serve(s, idx: int, cfg, prof: int) -> int:
 		if dx * dx + dy_n * dy_n <= reach * reach:
 			if attack_serve and p.on_ground == 0:
 				return _pick_air_shot(s, idx, cfg, s.serving_team, true,
-					dx * dx + dy_n * dy_n, TRIAL_BAND_CURRENT_STEPS)
+					TRIAL_BAND_CURRENT_STEPS)
 			return SimInput.IN_ACTION | fwd
 		var land: int = _land_x_from(s.ball_x, s.ball_y, s.ball_vx, s.ball_vy, cfg,
 			cfg.floor_y - cfg.player_reach_up / 2, 0)
@@ -583,27 +616,65 @@ static func _trial_band_velocities(actual: Vector2i, k: int) -> Array[Vector3i]:
 				absi(ix) + absi(iy)))
 	return out
 
+static func _air_input_for_tick(p, input: int) -> int:
+	if p.on_ground == 0 and p.vy < 0:
+		return input | SimInput.IN_JUMP
+	return input
+
+
+# simulationの本番順序は「入力決定 -> 選手移動 -> 接触」。方向キーは空中移動と
+# 打ち分けを兼ねるため、候補も同じ1tick移動後の姿勢と距離で評価する。
 static func _air_spike_candidate(
-		s, actor: int, cfg, team: int, input: int, d2: int,
+		s, actor: int, cfg, team: int, input: int,
 		k: int = TRIAL_BAND_CURRENT_STEPS) -> Array[int]:
+	var player = s.players[actor]
+	var effective_input: int = _air_input_for_tick(player, input)
+	var contact_position: Vector2i = PlayerMovement.predict_air_contact_position(
+		player, effective_input, cfg, team)
+	return _air_spike_candidate_at_contact(
+		s, actor, cfg, team, effective_input, contact_position, k)
+
+
+static func _air_spike_candidate_at_contact(
+		s, actor: int, cfg, team: int, effective_input: int,
+		contact_position: Vector2i, k: int) -> Array[int]:
+	var dx: int = s.ball_x - contact_position.x
+	var dy: int = s.ball_y - contact_position.y
+	var dy_n: int = dy * cfg.player_reach / cfg.player_reach_up
+	var d2: int = dx * dx + dy_n * dy_n
 	var actual_velocity: Vector2i = HitResolver.preview_air_spike_velocity(
-		s, actor, cfg, input, d2)
-	var already_crossed: bool = s.ball_x > cfg.net_x if team == 0 else s.ball_x < cfg.net_x
+		s, actor, cfg, effective_input, d2)
+	var already_crossed: bool = s.ball_x > cfg.net_x \
+		if team == 0 else s.ball_x < cfg.net_x
+	# 本番契約k=0は中心実球1点だけ。幅配列を作らず同じ判定を直行し、
+	# 毎tick最大3候補を走査する通常経路の固定費を抑える。
+	if k == 0:
+		var actual_flight: Vector2i = _candidate_flight(
+			s.ball_x, s.ball_y, actual_velocity.x, actual_velocity.y, cfg,
+			already_crossed)
+		var actual_land: int = actual_flight.x
+		var actual_in_opponent_court: bool = actual_land > cfg.net_x \
+			if team == 0 else actual_land < cfg.net_x
+		if not actual_in_opponent_court:
+			return []
+		if actual_flight.y == 0:
+			return []
+		return [effective_input, actual_land]
 	var best: Array[int] = []
 	var best_distance := 0x7FFFFFFFFFFFFFFF
 	for point in _trial_band_velocities(actual_velocity, k):
-		var land: int = _land_x_from(
+		var flight: Vector2i = _candidate_flight(
 			s.ball_x, s.ball_y, point.x, point.y, cfg,
-			cfg.floor_y - cfg.ball_radius, 3)
+			already_crossed)
+		var land: int = flight.x
 		var in_opponent_court: bool = land > cfg.net_x \
 			if team == 0 else land < cfg.net_x
 		if not in_opponent_court:
 			continue
-		if not already_crossed \
-				and not _clears_net(s.ball_x, s.ball_y, point.x, point.y, cfg):
+		if flight.y == 0:
 			continue
 		if point.z < best_distance:
-			best = [input, land]
+			best = [effective_input, land]
 			best_distance = point.z
 	return best
 
@@ -615,9 +686,10 @@ static func _cpu_attack_vertical(p, cfg) -> int:
 
 
 static func _pick_air_shot(
-		s, actor: int, cfg, team: int, can_spike: bool, d2: int,
+		s, actor: int, cfg, team: int, can_spike: bool,
 		k: int = TRIAL_BAND_CURRENT_STEPS) -> int:
-	var toss_input: int = SimInput.IN_ACTION
+	var toss_input: int = _air_input_for_tick(
+		s.players[actor], SimInput.IN_ACTION)
 	if not can_spike:
 		return toss_input
 	var policy: int = _air_shot_policy(s)
@@ -626,19 +698,24 @@ static func _pick_air_shot(
 	var fwd_key: int = SimInput.IN_RIGHT if team == 0 else SimInput.IN_LEFT
 	var back_key: int = SimInput.IN_LEFT if team == 0 else SimInput.IN_RIGHT
 	var vertical_key: int = _cpu_attack_vertical(s.players[actor], cfg)
+	var jump_hold: int = toss_input & SimInput.IN_JUMP
 	var inputs: Array[int] = [
-		SimInput.IN_ACTION | vertical_key | back_key,
-		SimInput.IN_ACTION | vertical_key,
-		SimInput.IN_ACTION | vertical_key | fwd_key,
+		SimInput.IN_ACTION | vertical_key | back_key | jump_hold,
+		SimInput.IN_ACTION | vertical_key | jump_hold,
+		SimInput.IN_ACTION | vertical_key | fwd_key | jump_hold,
 	]
 	var indices: Array[int] = [2]
 	if policy != 1:
 		indices = [0, 1, 2]
+	var contact_positions: Array[Vector2i] = \
+		PlayerMovement.predict_air_contact_positions(
+			s.players[actor], inputs, cfg, team)
 	var best_input: int = toss_input
 	var best_score: int = -1
 	for candidate_index in indices:
-		var candidate: Array[int] = _air_spike_candidate(
-			s, actor, cfg, team, inputs[candidate_index], d2, k)
+		var candidate: Array[int] = _air_spike_candidate_at_contact(
+			s, actor, cfg, team, inputs[candidate_index],
+			contact_positions[candidate_index], k)
 		if candidate.is_empty():
 			continue
 		if policy == 0 or policy == 1:
@@ -662,8 +739,7 @@ static func decide(s, idx: int, cfg) -> int:
 	var deadzone: int = cfg.player_reach / 2
 	if s.phase == SimStateScript.PHASE_SERVE:
 		var serve_in: int = _decide_serve(s, idx, cfg, prof)
-		if p.on_ground == 0 and p.vy < 0:
-			serve_in |= SimInput.IN_JUMP
+		serve_in = _air_input_for_tick(p, serve_in)
 		if serve_in != 0:
 			return serve_in
 		# サーブ準備中でも棒立ちしない: 受け手チームの味方CPUは相棒(人間)と反対側へ
@@ -738,18 +814,16 @@ static func decide(s, idx: int, cfg) -> int:
 			if SpecialMoves.can_start_action(s, idx, suction_input, cfg):
 				input = suction_input
 	# ヒット判定(simulation.gdの_resolve_hitと同じ楕円)。凍結中も腕は出る
-	var dx: int = s.ball_x - p.x
+	var hit_x: int = p.x
 	var hit_y: int = p.y
 	if p.on_ground == 0:
-		# simulationは入力決定後にプレイヤー移動、それからヒット判定を行う。
-		# 上昇中のCPUはIN_JUMPを保持するため失速させず、同じ重力でyだけ先読みする。
-		var hit_vy: int = p.vy
-		var jump_height: int = PlayerMovement._jump_height_px(
-			Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
-		var jump_ticks: int = PlayerMovement._jump_ticks(hit_vy < 0)
-		hit_vy += PlayerMovement._jump_gravity(
-			jump_height, jump_ticks, hit_vy < 0)
-		hit_y += hit_vy
+		# simulationは入力決定後に選手を移動し、それから接触を解決する。
+		# 横方向も打ち分け入力で動くため、本番と同じ予測窓口から次の姿勢を得る。
+		var contact_position: Vector2i = PlayerMovement.predict_air_contact_position(
+			p, _air_input_for_tick(p, input), cfg, team)
+		hit_x = contact_position.x
+		hit_y = contact_position.y
+	var dx: int = s.ball_x - hit_x
 	var dy: int = s.ball_y - hit_y
 	var planned_hit_input: int = SimInput.IN_ACTION
 	if p.on_ground == 1:
@@ -813,8 +887,7 @@ static func decide(s, idx: int, cfg) -> int:
 		input &= ~SimInput.IN_ACTION
 	# 可変ジャンプ対応: 打撃tickも含め、上昇中はジャンプキーを保持し続ける。
 	# 空中では再ジャンプせず、打ち分けもIN_JUMPを読まない。
-	if p.on_ground == 0 and p.vy < 0:
-		input |= SimInput.IN_JUMP
+	input = _air_input_for_tick(p, input)
 	return input
 
 # 地上ヒット時の入力選択。相手球は下レシーブ、自チーム球は横3トス。
@@ -950,8 +1023,9 @@ static func _decide_positioning(s, idx: int, p, cfg, team: int, prof: int, deadz
 			# 旧12tick上限は高いトスの離陸前に通常ジャンプへ落としていた。
 			# 高いトスは頂点前から会合を予約する。上昇中だけでなく着地までの
 			# ジャンプ弧内なら通常ジャンプへ落とさず、芯会合tickまで地上で待つ。
-			var precision_horizon: int = PlayerMovement._jump_ticks(true) \
-				+ PlayerMovement._jump_ticks(false)
+			var jump_height: int = Chars.jump_height_px(p.char_id)
+			var precision_horizon: int = JumpArc.ticks(jump_height, true) \
+				+ JumpArc.ticks(jump_height, false)
 			if plan[0] >= 0 and plan[0] <= precision_horizon:
 				precision_committed = true
 				input = _walk_to(p, plan[1], sweet_r / 2)
@@ -1245,4 +1319,4 @@ static func _decide_air_hit(s, idx: int, p, cfg, team: int, prof: int, d2: int, 
 	if use_sweet and d2 > sweet_r * sweet_r \
 			and _air_will_meet_sweet(s, p, cfg, sweet_r):
 		return 0
-	return _pick_air_shot(s, idx, cfg, team, can_spike, d2)
+	return _pick_air_shot(s, idx, cfg, team, can_spike)

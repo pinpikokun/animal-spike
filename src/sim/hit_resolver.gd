@@ -259,7 +259,7 @@ static func opponent_return_vx(ball_x: int, ball_y: int, incoming_vx: int,
 	# 6.4.2の500px/s実測式は、既存520px/s地上球と470px/s空中球の
 	# 共通安全帯から外れた。6.4.5の全組合せ検査で引き直した安全側の帯。
 	var lower_px_s: int = 25 + d_px * 7 / 5
-	var upper_px_s: int = 248 + d_px * 9 / 8 - (h_px - 20) / 2
+	var upper_px_s: int = 248 + d_px * 9 / 8 - (h_px - 20) * 13 / 25
 	upper_px_s = maxi(upper_px_s, lower_px_s)
 	var lower: int = FP.from_int(lower_px_s) / cfg.tick_rate
 	var upper: int = FP.from_int(upper_px_s) / cfg.tick_rate

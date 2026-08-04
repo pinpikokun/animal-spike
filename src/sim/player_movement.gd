@@ -4,6 +4,7 @@ extends RefCounted
 const FP := preload("res://src/sim/fp.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
+const JumpArc := preload("res://src/sim/jump_arc.gd")
 const CombatResources := preload("res://src/sim/combat_resources.gd")
 const SimStateScript := preload("res://src/sim/sim_state.gd")
 const PlayerStatus := preload("res://src/sim/player_status.gd")
@@ -22,8 +23,6 @@ const RUN_DECAY := 3      # ニュートラル時の走行カウンタ減衰/tic
 const DASH_TAP_WINDOW := 12  # ダブルタップ受付窓(tick)。1回目の押し始めからこの間に2回目
 const DASH_TICKS := 14       # ダッシュ持続tick(CA_DASH固有技)
 const DASH_SPD_PCT := 175    # ダッシュ中の移動速度%
-const JUMP_RISE_TICKS := 25
-const JUMP_FALL_TICKS := 27
 const PLAYER_HALF_W_PX := 8    # 体の半幅。ネット面へは体表面で止まる(めり込み防止)
 # ノックバック/反動(push): 残りtickに比例した速度で滑り、線形減衰する。
 # 量は重さ%で伸縮(重いキャラはどっしり、軽いキャラは飛ばされる)
@@ -32,17 +31,6 @@ const PUSH_DECAY := 8        # 速度換算の分母
 const HIP_HOVER_TICKS := 36  # ヒップアタックの空中静止(回転)時間
 const HIP_DROP_PX := 12    # ヒップアタック急降下の速度(px/tick)
 const CLING_SLIDE_PX := 1  # 壁張り付きのずるずる降下速度(px/tick)
-
-static func _jump_height_px(rank: int) -> int:
-	return Chars.Profile.jump_height_px(rank)
-
-static func _jump_ticks(rising: bool) -> int:
-	var base := JUMP_RISE_TICKS if rising else JUMP_FALL_TICKS
-	return base
-
-static func _jump_gravity(height_px: int, ticks: int, rising: bool) -> int:
-	var den := ticks * (ticks - 1) if rising else ticks * (ticks + 1)
-	return FP.from_int(height_px * 2) / den
 
 static func _step_player(p, input: int, cfg, team: int,
 		state_tick: int = 0, actor: int = 0, rng: int = 0) -> void:
@@ -204,22 +192,12 @@ static func _step_player_unlocked(p, input: int, cfg, team: int) -> void:
 	if (input & IN_JUMP) and p.on_ground == 1 and not (input & IN_ABILITY1):
 		# 上はジャンプ専用。Dは必殺技の方向モディファイアなので、
 		# 上+Dだけは地上技判定まで接地を維持する。
-		var height_px := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
-		var rise_ticks := _jump_ticks(true)
-		p.vy = -_jump_gravity(height_px, rise_ticks, true) * rise_ticks
+		p.vy = JumpArc.launch_velocity(Chars.jump_height_px(p.char_id))
 		p.on_ground = 0
 	if p.on_ground == 0:
 		# 可変ジャンプ: 上昇中に上キーを離すとその場で失速して落下に転じる
 		# (毎tick半減の減衰。intの/2はゼロ方向切り捨てで決定論)
-		if p.vy < 0 and not (input & IN_JUMP):
-			p.vy = p.vy / 2
-		var jump_height := _jump_height_px(Chars.rank(p.char_id, Chars.Profile.ABILITY_JUMP))
-		if p.vy < 0:
-			var up_ticks := _jump_ticks(true)
-			p.vy += _jump_gravity(jump_height, up_ticks, true)
-		else:
-			var down_ticks := _jump_ticks(false)
-			p.vy += _jump_gravity(jump_height, down_ticks, false)
+		p.vy = JumpArc.advance_velocity(p.vy, (input & IN_JUMP) != 0)
 	if p.hit_cooldown > 0:
 		p.hit_cooldown -= 1
 	# ヒップアタック(固有技CA_HIP): 空中で下+Dの明示入力により発動。
@@ -259,3 +237,60 @@ static func _step_player_unlocked(p, input: int, cfg, team: int) -> void:
 		p.on_ground = 1
 		p.hip = 0
 		p.cling = 0
+
+
+# CPUが「この入力を出した同tickの接触位置」を読むための決定論的な予測窓口。
+# 通常の行動可能な空中選手を対象にし、_step_player_unlockedの入力移動、可変ジャンプ、
+# push、hip、cling、コート境界を同じ順序で反映する。状態自体は変更しない。
+static func predict_air_contact_positions(
+		p, inputs: Array[int], cfg, team: int) -> Array[Vector2i]:
+	var dash_after: int = maxi(p.dash - 1, 0)
+	var speed: int = cfg.move_speed * Chars.stat(p.char_id, "speed") / 100
+	if dash_after > 0:
+		speed = speed * DASH_SPD_PCT / 100
+	var min_x: int = 0
+	var max_x: int = cfg.court_width
+	if team == 0:
+		max_x = cfg.net_x - cfg.net_half_w - FP.from_int(PLAYER_HALF_W_PX)
+	else:
+		min_x = cfg.net_x + cfg.net_half_w + FP.from_int(PLAYER_HALF_W_PX)
+	var push_vx: int = 0
+	if p.push != 0:
+		push_vx = signi(p.push) * FP.from_int(PUSH_UNIT_PX) \
+			* absi(p.push) / PUSH_DECAY
+	var can_cling: bool = Chars.has_ability(p.char_id, Chars.CA_CLING)
+	var result: Array[Vector2i] = []
+	for input in inputs:
+		var in_dir: int = 0
+		if input & IN_LEFT:
+			in_dir -= 1
+		if input & IN_RIGHT:
+			in_dir += 1
+		var vx: int = in_dir * speed + push_vx
+		var vy: int = JumpArc.advance_velocity(p.vy, (input & IN_JUMP) != 0)
+		var hip_after: int = p.hip
+		if hip_after > 0:
+			vx = 0
+			vy = 0
+			hip_after -= 1
+		elif hip_after == -1:
+			vx = 0
+			vy = FP.from_int(HIP_DROP_PX)
+		if hip_after == 0 and can_cling:
+			var at_left: bool = team == 0 \
+				and (input & IN_LEFT) != 0 and p.x <= min_x
+			var at_right: bool = team == 1 \
+				and (input & IN_RIGHT) != 0 and p.x >= max_x
+			if at_left or at_right:
+				vx = 0
+				vy = FP.from_int(CLING_SLIDE_PX)
+		var next_x: int = clampi(p.x + vx, min_x, max_x)
+		var next_y: int = p.y + vy
+		if next_y >= cfg.floor_y:
+			next_y = cfg.floor_y
+		result.append(Vector2i(next_x, next_y))
+	return result
+
+
+static func predict_air_contact_position(p, input: int, cfg, team: int) -> Vector2i:
+	return predict_air_contact_positions(p, [input], cfg, team)[0]

@@ -6,7 +6,6 @@ const St := preload("res://src/sim/sim_state.gd")
 const Sim := preload("res://src/sim/simulation.gd")
 const SimInput := preload("res://src/sim/sim_input.gd")
 const Chars := preload("res://src/sim/chars.gd")
-const PlayerMovement := preload("res://src/sim/player_movement.gd")
 
 func _rally():
 	var cfg = Cfg.new()
@@ -30,8 +29,8 @@ func test_speed_stat_scales_movement() -> void:
 	check_eq(fast, base * 130 / 100, "speed130で移動が1.3倍")
 
 func test_jump_level_scales_height() -> void:
-	check(PlayerMovement._jump_height_px(Chars.Profile.RANK_A)
-		> PlayerMovement._jump_height_px(Chars.Profile.RANK_E),
+	check(Chars.Profile.jump_height_px(Chars.Profile.RANK_A)
+		> Chars.Profile.jump_height_px(Chars.Profile.RANK_E),
 		"ジャンプランクが高いほど最高高度が高い")
 
 func test_character_rank_does_not_change_max_health() -> void:
@@ -91,14 +90,41 @@ func test_jump_level_targets_foot_height() -> void:
 	var panda := _measure_full_jump(Chars.CHAR_PANDA)
 	var mario := _measure_full_jump(Chars.CHAR_MARIO)
 	var frog := _measure_full_jump(Chars.CHAR_FROG)
-	check(absi(panda[0] - 135) <= 2, "パンダのジャンプCは135px: actual=%d" % panda[0])
-	check(absi(mario[0] - 135) <= 2, "マリオのジャンプCは135px: actual=%d" % mario[0])
-	check(absi(frog[0] - 135) <= 2, "カエルのジャンプCは135px: actual=%d" % frog[0])
+	check(absi(panda[0] - 140) <= 2, "パンダのジャンプCは140px: actual=%d" % panda[0])
+	check(absi(mario[0] - 140) <= 2, "マリオのジャンプCは140px: actual=%d" % mario[0])
+	check(absi(frog[0] - 140) <= 2, "カエルのジャンプCは140px: actual=%d" % frog[0])
+
+func test_original_character_full_jump_uses_shared_rank_height() -> void:
+	var expected := {
+		Chars.CHAR_TOME: 200,
+		Chars.CHAR_HITO: 140,
+		Chars.CHAR_PIYO: 140,
+		Chars.CHAR_UME: 110,
+		Chars.CHAR_CARBY: 170,
+		Chars.CHAR_DUO: 140,
+		Chars.CHAR_SEC1: 140,
+		Chars.CHAR_SEC2: 140,
+	}
+	for cid in expected:
+		var measured := _measure_full_jump(cid)
+		check(absi(measured[0] - expected[cid]) <= 2,
+			"%sの足元最高点は%dpx: actual=%d" \
+			% [Chars.NAMES[cid], expected[cid], measured[0]])
+
+func test_original_jump_extremes_stay_playable_on_court() -> void:
+	var cfg = Cfg.new()
+	var tome := _measure_full_jump(Chars.CHAR_TOME)
+	check(FP.to_int(cfg.floor_y) - tome[0] >= 0,
+		"最高ジャンプTOMEの足元は画面上端を越えない")
+	var ume := _measure_full_jump(Chars.CHAR_UME)
+	var ume_hand_y := FP.to_int(cfg.floor_y) - ume[0] - FP.to_int(cfg.player_reach_up)
+	check(ume_hand_y <= FP.to_int(cfg.net_top_y),
+		"最低ジャンプEのUMEも上リーチがネット上へ届く: hand_y=%d" % ume_hand_y)
 
 func test_jump_level_height_table() -> void:
-	var expected := [155, 145, 135, 120, 100]
+	var expected := [200, 170, 140, 120, 110]
 	for i in expected.size():
-		check_eq(PlayerMovement._jump_height_px(i), expected[i],
+		check_eq(Chars.Profile.jump_height_px(i), expected[i],
 			"ジャンプ%sの指定高度" % Chars.Profile.rank_name(i))
 
 func test_standard_weight_gives_same_airtime() -> void:

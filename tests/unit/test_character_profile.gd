@@ -5,11 +5,11 @@ const Chars := preload("res://src/sim/chars.gd")
 
 func test_rank_tables_match_accepted_values() -> void:
 	var expected := {
-		Profile.RANK_A: [150, 155, 120, 60],
-		Profile.RANK_B: [125, 145, 110, 80],
-		Profile.RANK_C: [100, 135, 100, 100],
+		Profile.RANK_A: [150, 200, 120, 60],
+		Profile.RANK_B: [125, 170, 110, 80],
+		Profile.RANK_C: [100, 140, 100, 100],
 		Profile.RANK_D: [75, 120, 90, 125],
-		Profile.RANK_E: [50, 100, 80, 150],
+		Profile.RANK_E: [50, 110, 80, 150],
 	}
 	for rank in expected:
 		check_eq(Profile.power_pct(rank), expected[rank][0], "パワー%s" % Profile.rank_name(rank))
@@ -49,6 +49,26 @@ func test_original_character_rank_assignments() -> void:
 				"%sの%sランク" % [Chars.NAMES[cid], Profile.BASE_ABILITIES[i]])
 		check_eq(Profile.traits(cid), [], "%sの付与能力は空" % Chars.NAMES[cid])
 		check_eq(Profile.weight_pct(cid), 100, "%sの重量は標準" % Chars.NAMES[cid])
+
+func test_every_selectable_character_uses_shared_jump_rank_height() -> void:
+	# キャラ別の上書きが復活すれば、共通ランク表と異なる実高度を検出する。
+	var expected := {
+		Chars.CHAR_PANDA: 140,
+		Chars.CHAR_MARIO: 140,
+		Chars.CHAR_FOX: 140,
+		Chars.CHAR_FROG: 140,
+		Chars.CHAR_TOME: 200,
+		Chars.CHAR_HITO: 140,
+		Chars.CHAR_PIYO: 140,
+		Chars.CHAR_UME: 110,
+		Chars.CHAR_CARBY: 170,
+		Chars.CHAR_DUO: 140,
+		Chars.CHAR_SEC1: 140,
+		Chars.CHAR_SEC2: 140,
+	}
+	for cid in expected:
+		check_eq(Chars.jump_height_px(cid), expected[cid],
+			"%sは共通ランク表のジャンプ高度" % Chars.NAMES[cid])
 
 func test_trait_catalog_reserves_all_accepted_ids() -> void:
 	var expected_names := [

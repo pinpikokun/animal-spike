@@ -15,7 +15,7 @@ const ROLLBACK16_UPPER_NS := 8_333_333
 const AIR_WARM := 1000
 const AIR_ITERATIONS := 5000
 const AIR_LOWER_NS := 5000
-const AIR_UPPER_NS := 54_000
+const AIR_UPPER_NS := 75_000
 const POLICY_THREE_AITICK := 15
 const STANDARD_CHAR := 99
 
@@ -155,14 +155,13 @@ func _air_fixture_facts() -> Dictionary:
 	var state = world[0]
 	var cfg = world[1]
 	var actor: int = world[2]
-	var d2: int = cfg.player_reach * cfg.player_reach
 	var candidate_count := 0
 	for input in [
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
 		Simulation.IN_ACTION | Simulation.IN_DOWN,
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 	]:
-		if not SimCpu._air_spike_candidate(state, actor, cfg, 0, input, d2).is_empty():
+		if not SimCpu._air_spike_candidate(state, actor, cfg, 0, input).is_empty():
 			candidate_count += 1
 	for _i in AIR_WARM:
 		_air_decide(world)

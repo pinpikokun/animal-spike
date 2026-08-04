@@ -131,9 +131,9 @@ func test_trial_band_candidate_adopts_believed_point_but_hits_real_net() -> void
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 	]
 	var before: Array[int] = s.to_int_array()
-	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[0], d2, 3), [],
+	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[0], 3), [],
 		"①手前はk3でも無効")
-	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[1], d2, 3), [],
+	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[1], 3), [],
 		"②中央はk3でも無効")
 	var actual: Vector2i = HitResolver.preview_air_spike_velocity(
 		s, actor, cfg, inputs[2], d2)
@@ -143,7 +143,7 @@ func test_trial_band_candidate_adopts_believed_point_but_hits_real_net() -> void
 	check(actual_land > cfg.net_x, "中心実球は着地点だけなら相手コート")
 	check(not SimCpu._clears_net(s.ball_x, s.ball_y, actual.x, actual.y, cfg),
 		"中心実球はネットへ衝突する")
-	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], d2, 0), [],
+	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], 0), [],
 		"k0の中心実球は無効")
 	var step_y: int = absi(actual.y) * SimCpu.TRIAL_BAND_STEP_PCT / 100
 	var believed_velocity := Vector2i(actual.x, actual.y - step_y)
@@ -151,25 +151,25 @@ func test_trial_band_candidate_adopts_believed_point_but_hits_real_net() -> void
 		s.ball_x, s.ball_y, believed_velocity.x, believed_velocity.y, cfg,
 		cfg.floor_y - cfg.ball_radius, 3)
 	var selected: Array = SimCpu._air_spike_candidate(
-		s, actor, cfg, 0, inputs[2], d2, 3)
+		s, actor, cfg, 0, inputs[2], 3)
 	check_eq(selected, [inputs[2], believed_land],
 		"k3は最小距離・走査順先着の幅点を信じる")
 	if selected.size() != 2:
 		return
 	for k in range(1, 4):
-		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], d2, k),
+		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], k),
 			selected, "最短幅点が入った後はkを増やしても選択不変")
-	check_eq(SimCpu._pick_air_shot(s, actor, cfg, 0, true, d2, 3), inputs[2],
+	check_eq(SimCpu._pick_air_shot(s, actor, cfg, 0, true, 3), inputs[2],
 		"政策1は幅点を信じて③奥の実入力を採用する")
-	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], d2, -1), [],
+	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], -1), [],
 		"負のkは候補無効")
-	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], d2, 4), [],
+	check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, inputs[2], 4), [],
 		"最大超過kは候補無効")
 	check_eq(s.to_int_array(), before, "非ゼロ幅の候補選択は同期状態を変更しない")
 	var restored = SimState.new()
 	restored.load_int_array(before)
 	check_eq(SimCpu._air_spike_candidate(
-		restored, actor, cfg, 0, inputs[2], d2, 3),
+		restored, actor, cfg, 0, inputs[2], 3),
 		selected, "snapshot復元後も同じ幅点を信じる")
 	var hit_state = SimState.new()
 	hit_state.load_int_array(before)
@@ -192,7 +192,7 @@ func test_trial_band_candidate_adopts_believed_point_but_hits_real_net() -> void
 	var right_input: int = Simulation.IN_ACTION | Simulation.IN_DOWN \
 		| Simulation.IN_LEFT
 	var right_selected: Array = SimCpu._air_spike_candidate(
-		rs, ractor, rcfg, 1, right_input, d2, 3)
+		rs, ractor, rcfg, 1, right_input, 3)
 	check_eq(right_selected.size(), 2, "右チームも有効候補を返す")
 	if right_selected.size() != 2:
 		return
@@ -205,24 +205,23 @@ func test_trial_band_candidate_is_monotonic_and_k0_exact() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var actor: int = w[2]
-	var d2: int = cfg.player_reach * cfg.player_reach
 	for input in [
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
 		Simulation.IN_ACTION | Simulation.IN_DOWN,
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 	]:
 		var old_center: Array[int] = SimCpu._air_spike_candidate(
-			s, actor, cfg, 0, input, d2)
-		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, input, d2, 0),
+			s, actor, cfg, 0, input)
+		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, input, 0),
 			old_center, "k0は旧中心1点判定と完全一致")
 		var previous_valid := false
 		for k in 4:
 			var current: Array = SimCpu._air_spike_candidate(
-				s, actor, cfg, 0, input, d2, k)
+				s, actor, cfg, 0, input, k)
 			if previous_valid:
 				check(not current.is_empty(), "kを増やしても既存有効候補が消えない")
 			previous_valid = not current.is_empty()
-		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, input, d2, 3),
+		check_eq(SimCpu._air_spike_candidate(s, actor, cfg, 0, input, 3),
 			old_center, "中心有効ならk3でも中心landを信じる")
 
 func _jump_serve_contact_world(team: int, residue: int) -> Array:
@@ -448,10 +447,10 @@ func test_all_invalid_candidates_use_same_toss_as_policy_kou() -> void:
 	s.ball_y = cfg.net_top_y + FP.from_int(80)
 	s.players[actor].x = s.ball_x
 	var safety: int = SimCpu._pick_air_shot(
-		s, actor, cfg, 0, true, cfg.player_reach * cfg.player_reach)
+		s, actor, cfg, 0, true)
 	s.aitick = AITICK_BY_RESIDUE[9]
 	var policy_kou: int = SimCpu._pick_air_shot(
-		s, actor, cfg, 0, true, cfg.player_reach * cfg.player_reach)
+		s, actor, cfg, 0, true)
 	check_eq(safety, Simulation.IN_ACTION, "全候補無効なら安全弁トス")
 	check_eq(safety, policy_kou, "安全弁と政策甲は同じトス入力")
 
@@ -478,10 +477,10 @@ func test_selection_series_ignores_actor_tick_and_profile() -> void:
 	var d2: int = cfg.player_reach * cfg.player_reach
 	s.players[1].char_id = s.players[0].char_id
 	s.players[1].drive_gauge = cfg.drive_gauge_max
-	var expected: int = SimCpu._pick_air_shot(s, 0, cfg, 0, true, d2)
+	var expected: int = SimCpu._pick_air_shot(s, 0, cfg, 0, true)
 	s.tick += 777
 	s.players[1].cpu = SimCpu.PRESET_WEAK
-	var actual: int = SimCpu._pick_air_shot(s, 1, cfg, 0, true, d2)
+	var actual: int = SimCpu._pick_air_shot(s, 1, cfg, 0, true)
 	check_eq(actual, expected, "actor・tick・難易度だけでは選択系列が変わらない")
 
 func test_air_hit_replaces_positioning_direction_bits() -> void:
@@ -541,7 +540,7 @@ func test_ball_already_over_net_can_be_selected_and_hit_inside_ellipse() -> void
 			s.ball_x, s.ball_y, velocity.x, velocity.y, cfg),
 			"通過済み球はネット再通過判定だけなら偽になる")
 		check(not SimCpu._air_spike_candidate(
-			s, actor, cfg, team, spike_input, 0).is_empty(),
+			s, actor, cfg, team, spike_input).is_empty(),
 			"通過済み球は相手コート着地なら有効候補")
 		var input: int = SimCpu.decide(s, actor, cfg)
 		check((input & Simulation.IN_ACTION) != 0,
@@ -596,10 +595,10 @@ func test_deep_in_ellipse_attack_uses_valid_candidate() -> void:
 	var actor: int = w[2]
 	var expected := Simulation.IN_ACTION | Simulation.IN_DOWN
 	check(SimCpu._air_spike_candidate(s, actor, cfg, 0,
-		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT,
-		0).is_empty(), "政策1の①手前候補は無効")
+		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_LEFT
+		).is_empty(), "政策1の①手前候補は無効")
 	check(not SimCpu._air_spike_candidate(
-		s, actor, cfg, 0, expected, 0).is_empty(),
+		s, actor, cfg, 0, expected).is_empty(),
 		"120px超でも中央候補は独立に有効")
 	check_eq(SimCpu._decide_air_hit(
 		s, actor, s.players[actor], cfg, 0, s.players[actor].cpu, 0, 0),
@@ -610,7 +609,7 @@ func test_deep_outside_ellipse_does_not_hit() -> void:
 	var s = w[0]
 	var cfg = w[1]
 	var actor: int = w[2]
-	s.ball_x = s.players[actor].x + cfg.player_reach + 1
+	s.ball_x = s.players[actor].x + cfg.player_reach + cfg.move_speed + 1
 	check_eq(SimCpu.decide(s, actor, cfg) & Simulation.IN_ACTION, 0,
 		"120px超でも楕円外なら打撃入力なし")
 	var forced: Array[int] = [0, 0, 0, 0]
@@ -631,7 +630,7 @@ func test_deep_all_invalid_candidates_fall_back_to_toss() -> void:
 		Simulation.IN_ACTION | Simulation.IN_DOWN | Simulation.IN_RIGHT,
 	]:
 		check(SimCpu._air_spike_candidate(
-			s, actor, cfg, 0, input, 0).is_empty(),
+			s, actor, cfg, 0, input).is_empty(),
 			"120px超の低い打点では全候補無効 input=" + str(input))
 	check_eq(SimCpu._decide_air_hit(
 		s, actor, s.players[actor], cfg, 0, s.players[actor].cpu, 0, 0),

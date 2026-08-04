@@ -376,7 +376,7 @@ func _check_attack_serve(profile: int, label: String) -> void:
 	p.y = s.ball_y
 	var hit_input: int = SimCpu.decide(s, 0, cfg)
 	check(hit_input & Simulation.IN_ACTION, label + "は空中でサーブを打つ")
-	check_eq(hit_input, SimCpu._pick_air_shot(s, 0, cfg, 0, true, 0),
+	check_eq(hit_input, SimCpu._pick_air_shot(s, 0, cfg, 0, true),
 		label + "は空中サーブで共通候補・政策を使う")
 
 func test_strong_cpu_uses_shared_jump_serve_on_successful_profile_roll() -> void:

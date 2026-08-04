@@ -296,6 +296,9 @@ static func stat(char_id: int, key: String) -> int:
 static func rank(char_id: int, ability: String) -> int:
 	return Profile.rank(char_id, ability)
 
+static func jump_height_px(char_id: int) -> int:
+	return Profile.jump_height_px(rank(char_id, Profile.ABILITY_JUMP))
+
 static func traits(char_id: int) -> Array:
 	return Profile.traits(char_id)
 
