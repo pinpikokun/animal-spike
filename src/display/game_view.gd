@@ -655,13 +655,6 @@ func draw_fx(c: CanvasItem) -> void:
 
 func _draw_drive_feedback(c: CanvasItem) -> void:
 	# simカウンタだけから導出するため、ロールバック後も同じtickは同じ表示になる。
-	var burnout_screen_flash: bool = false
-	for p in state.players:
-		burnout_screen_flash = burnout_screen_flash \
-			or p.burnout_ticks > cfg.burnout_recovery_ticks - 2
-	var screen_rect := Rect2(-position, Vector2(640.0, 360.0))
-	if burnout_screen_flash:
-		c.draw_rect(screen_rect, Color(0.75, 0.08, 0.08, 0.38))
 	var font := ThemeDB.fallback_font
 	for i in state.players.size():
 		var p = state.players[i]

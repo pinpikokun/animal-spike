@@ -33,6 +33,13 @@ func test_burnout_blink_reads_only_remaining_ticks_and_state_tick() -> void:
 	check_eq(helper.call(1, 0), true, "残り正かつ明滅位相0は暗くする")
 	check_eq(helper.call(1, 5), false, "同じ残り値でもtick位相だけで明滅する")
 
+func test_burnout_has_no_full_screen_red_flash() -> void:
+	var source := FileAccess.get_file_as_string("res://src/display/game_view.gd")
+	check(not source.contains("burnout_screen_flash"),
+		"バーンアウト突入時に全画面フラッシュを発火しない")
+	check(not source.contains("Color(0.75, 0.08, 0.08, 0.38)"),
+		"目に強い全画面赤レイヤーを描画しない")
+
 func test_development_meter_exposes_resource_and_resolution_diagnostics() -> void:
 	var helper := Callable(DebugView, "combat_debug_text")
 	check(helper.is_valid(), "戦闘リソース開発表示の純粋helperが存在する")
